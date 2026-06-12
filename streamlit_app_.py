@@ -5,7 +5,7 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 
 st.set_page_config(
-    page_title="ML Концепции",
+    page_title="ML Концепции — Интерактивно",
     page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -35,67 +35,55 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ── Catalogue ────────────────────────────────────────────────────────────────
-# (key, name, icon, short description)
-CATALOGUE = [
-    ("activation", "Активационни функции",     "🎯", "ReLU, Sigmoid, Tanh и свойствата им"),
-    ("backprop",   "Backpropagation",           "🔄", "Как грешката се разпространява назад"),
-    ("gradient",   "Градиент & Descent",        "🏔️", "Посока и стъпка на обучение"),
-    ("linear_reg", "Линейна регресия",          "📊", "Намиране на права линия през данните"),
-    ("loss",       "Loss функция",              "📉", "Как измерваме грешката на модела"),
-    ("overfit",    "Overfitting / Underfitting","⚖️", "Прекалено много или малко обучение"),
-]
-# alphabetical order for the sidebar index
-ALPHA = sorted(CATALOGUE, key=lambda x: x[1].lower())
+# ── Sidebar navigation ──────────────────────────────────────────────────────
 
-# ── State ────────────────────────────────────────────────────────────────────
-if "section" not in st.session_state:
-    st.session_state["section"] = "home"
+SECTIONS = {
+    "🏠 Начало": "home",
+    "📉 Loss функция": "loss",
+    "🏔️ Градиент & Descent": "gradient",
+    "🔄 Backpropagation": "backprop",
+    "⚖️ Overfitting / Underfitting": "overfit",
+    "🎯 Активационни функции": "activation",
+    "📊 Линейна регресия": "linear_reg",
+}
 
-def go_to(key):
-    st.session_state["section"] = key
-
-# ── Sidebar — alphabetical index ─────────────────────────────────────────────
 with st.sidebar:
     st.title("🧠 ML Концепции")
     st.caption("Интерактивно ръководство")
     st.divider()
-
-    if st.button("🏠  Начало", use_container_width=True):
-        go_to("home")
-
-    st.markdown("**Азбучен индекс**")
-    for key, name, icon, _ in ALPHA:
-        if st.button(f"{icon} {name}", key=f"sb_{key}", use_container_width=True):
-            go_to(key)
-
+    selection = st.radio("Раздел", list(SECTIONS.keys()), label_visibility="collapsed")
     st.divider()
     st.caption("Всичко работи локално — без интернет")
 
-section = st.session_state["section"]
+section = SECTIONS[selection]
 
 # ═══════════════════════════════════════════════════════════════════════════
-# HOME — clickable cards
+# HOME
 # ═══════════════════════════════════════════════════════════════════════════
 if section == "home":
     st.title("Интерактивно ръководство по машинно обучение")
-    st.markdown("Избери понятие от картите по-долу или от азбучния индекс вляво.")
+    st.markdown("Избери раздел от менюто вляво, за да разгледаш концепция интерактивно.")
     st.divider()
 
     cols = st.columns(3)
-    for i, (key, name, icon, desc) in enumerate(CATALOGUE):
+    cards = [
+        ("📉", "Loss функция", "Как измерваме грешката на модела"),
+        ("🏔️", "Градиент & Descent", "Как моделът се учи стъпка по стъпка"),
+        ("🔄", "Backpropagation", "Как грешката се разпространява назад"),
+        ("⚖️", "Overfitting", "Твърде много или твърде малко обучение"),
+        ("🎯", "Активационни функции", "ReLU, Sigmoid, Tanh и техните свойства"),
+        ("📊", "Линейна регресия", "Намиране на права линия през данните"),
+    ]
+    for i, (icon, title, desc) in enumerate(cards):
         with cols[i % 3]:
             st.markdown(f"""
             <div style="border:0.5px solid #d3d1c7;border-radius:12px;
-                        padding:1.2rem;margin-bottom:0.4rem;min-height:100px">
+                        padding:1.2rem;margin-bottom:1rem;min-height:110px">
                 <div style="font-size:2rem">{icon}</div>
-                <div style="font-weight:500;margin:6px 0 4px">{name}</div>
+                <div style="font-weight:500;margin:6px 0 4px">{title}</div>
                 <div style="font-size:0.85rem;color:#5F5E5A">{desc}</div>
             </div>
             """, unsafe_allow_html=True)
-            if st.button("Отвори →", key=f"card_{key}", use_container_width=True):
-                go_to(key)
-                st.rerun()
 
 # ═══════════════════════════════════════════════════════════════════════════
 # LOSS FUNCTION
