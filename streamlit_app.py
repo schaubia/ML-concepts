@@ -38,23 +38,24 @@ st.markdown("""
 # ── Catalogue ────────────────────────────────────────────────────────────────
 # (key, name, icon, short description)
 CATALOGUE = [
-    ("activation",    "Activation Functions",        "🎯", "ReLU, Sigmoid, Tanh and their properties"),
-    ("backprop",      "Backpropagation",              "🔄", "How the error propagates backwards"),
-    ("batch_size",    "Batch Size & Gradient Noise", "🎲", "How batch size affects gradient quality"),
-    ("bias_var",      "Bias-Variance Tradeoff",       "↔️", "Decomposing prediction error into bias and variance"),
-    ("confusion",     "Confusion Matrix & Metrics",   "🔢", "Precision, recall, F1 and the threshold effect"),
-    ("dropout",       "Dropout",                      "💧", "Randomly zeroing neurons to prevent overfitting"),
-    ("gradient",      "Gradient & Descent",           "🏔️", "Direction and step size of learning"),
-    ("knn",           "K-Nearest Neighbors",          "🔵", "Classify by majority vote of closest points"),
-    ("linear_reg",    "Linear Regression",            "📊", "Finding the best-fit line through data"),
-    ("logistic_reg",  "Logistic Regression",          "🔀", "Binary classification with sigmoid output"),
-    ("loss",          "Loss Function",                "📉", "How we measure model error"),
-    ("lr_schedule",   "Learning Rate Schedulers",     "📅", "Step decay, cosine annealing and warmup"),
-    ("neural_net",    "Neural Network Architecture",  "🧬", "Layers, parameters and forward pass"),
-    ("normalization", "Normalization",                 "📐", "Batch norm, layer norm and feature scaling"),
-    ("optimizers",    "Optimizers",                   "🚀", "SGD, Momentum, RMSProp and Adam compared"),
-    ("overfit",       "Overfitting / Underfitting",   "⚖️", "Too much or too little training"),
-    ("regularization","Regularization",               "🔒", "L1 and L2 penalty to prevent overfitting"),
+    ("activation",    "Activation Functions",          "🎯", "ReLU, Sigmoid, Tanh and their properties"),
+    ("backprop",      "Backpropagation",                "🔄", "How the error propagates backwards"),
+    ("batch_size",    "Batch Size & Gradient Noise",   "🎲", "How batch size affects gradient quality"),
+    ("bias_var",      "Bias-Variance Tradeoff",         "↔️", "Decomposing prediction error into bias and variance"),
+    ("confusion",     "Confusion Matrix & Metrics",     "🔢", "Precision, recall, F1 and the threshold effect"),
+    ("dropout",       "Dropout",                        "💧", "Randomly zeroing neurons to prevent overfitting"),
+    ("gradient",      "Gradient & Descent",             "🏔️", "Direction and step size of learning"),
+    ("knn",           "K-Nearest Neighbors",            "🔵", "Classify by majority vote of closest points"),
+    ("linear_reg",    "Linear Regression",              "📊", "Finding the best-fit line through data"),
+    ("logistic_reg",  "Logistic Regression",            "🔀", "Binary classification with sigmoid output"),
+    ("loss",          "Loss Function",                  "📉", "How we measure model error"),
+    ("lr_schedule",   "Learning Rate Schedulers",       "📅", "Step decay, cosine annealing and warmup"),
+    ("neural_net",    "Neural Network Architecture",    "🧬", "Layers, parameters and forward pass"),
+    ("neuron",        "Neuron (Perceptron)",             "🔬", "The single computational unit at the core of every network"),
+    ("normalization", "Normalization",                   "📐", "Batch norm, layer norm and feature scaling"),
+    ("optimizers",    "Optimizers",                     "🚀", "SGD, Momentum, RMSProp and Adam compared"),
+    ("overfit",       "Overfitting / Underfitting",     "⚖️", "Too much or too little training"),
+    ("regularization","Regularization",                 "🔒", "L1 and L2 penalty to prevent overfitting"),
     ("vanishing_grad","Vanishing & Exploding Gradients","⚡", "Signal death in deep networks and fixes"),
 ]
 # alphabetical order for the sidebar index
@@ -1961,4 +1962,282 @@ elif section == "vanishing_grad":
         - **Gradient clipping** — cap gradient norm at a threshold (common in RNNs)
         - **Batch Normalisation** — keeps activations well-scaled at each layer
         - **ReLU** instead of Sigmoid/Tanh — derivative is 1 for x>0, not squashed
+        """)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SINGLE NEURON / PERCEPTRON
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "neuron":
+    st.title("🔬 Neuron (Perceptron)")
+    st.markdown("""
+    <div class="concept-card">
+    A single neuron is the fundamental building block of every neural network.
+    It takes a set of inputs, multiplies each by a learned <b>weight</b>, adds a <b>bias</b>,
+    then passes the result through an <b>activation function</b> to produce an output.
+    Everything in deep learning is just many of these stacked together.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs([
+        "Live computation diagram",
+        "What weights and bias do",
+        "One learning step"
+    ])
+
+    # ── TAB 1: live computation diagram ──────────────────────────────────
+    with tab1:
+        st.markdown("Adjust the inputs, weights and bias — watch every value in the equation update live.")
+
+        col_ctrl, col_diag = st.columns([1, 2])
+        with col_ctrl:
+            st.markdown("**Inputs**")
+            x1 = st.slider("x₁", -3.0, 3.0, 1.0, step=0.1, key="n_x1")
+            x2 = st.slider("x₂", -3.0, 3.0, 0.5, step=0.1, key="n_x2")
+            x3 = st.slider("x₃", -3.0, 3.0, -1.0, step=0.1, key="n_x3")
+            st.markdown("**Weights**")
+            w1 = st.slider("w₁", -3.0, 3.0, 0.8, step=0.1, key="n_w1")
+            w2 = st.slider("w₂", -3.0, 3.0, -0.5, step=0.1, key="n_w2")
+            w3 = st.slider("w₃", -3.0, 3.0, 1.2, step=0.1, key="n_w3")
+            st.markdown("**Bias & activation**")
+            bias = st.slider("bias b", -3.0, 3.0, 0.3, step=0.1, key="n_b")
+            act_n = st.selectbox("Activation", ["ReLU", "Sigmoid", "Tanh", "None (linear)"], key="n_act")
+
+        # compute
+        z = w1*x1 + w2*x2 + w3*x3 + bias
+        act_fns = {
+            "ReLU":          lambda v: max(0.0, v),
+            "Sigmoid":       lambda v: 1/(1+np.exp(-v)),
+            "Tanh":          lambda v: float(np.tanh(v)),
+            "None (linear)": lambda v: v,
+        }
+        output_n = act_fns[act_n](z)
+
+        with col_diag:
+            # ── build the diagram with plotly shapes + annotations ──
+            fig = go.Figure()
+            fig.update_layout(
+                xaxis=dict(visible=False, range=[0, 10]),
+                yaxis=dict(visible=False, range=[0, 10]),
+                height=460, margin=dict(l=10, r=10, t=10, b=10),
+                plot_bgcolor="white",
+            )
+
+            inputs  = [(x1,"x₁",w1,"w₁"), (x2,"x₂",w2,"w₂"), (x3,"x₃",w3,"w₃")]
+            ys_in   = [7.5, 5.0, 2.5]
+            x_in, x_sum, x_act, x_out = 1.0, 4.2, 6.8, 9.2
+
+            node_style  = dict(fillcolor="#eeedfe", line=dict(color="#534AB7", width=2))
+            sum_style   = dict(fillcolor="#fff8e8", line=dict(color="#EF9F27", width=2))
+            act_style   = dict(fillcolor="#e8f8f2", line=dict(color="#1D9E75", width=2))
+            out_style   = dict(fillcolor="#fdecea", line=dict(color="#E24B4A", width=2.5))
+
+            r = 0.55  # node radius
+
+            # input nodes
+            for (xv, xl, wv, wl), yi in zip(inputs, ys_in):
+                fig.add_shape(type="circle", x0=x_in-r, y0=yi-r, x1=x_in+r, y1=yi+r, **node_style)
+                fig.add_annotation(x=x_in, y=yi, text=f"<b>{xl}</b><br>{xv:.1f}",
+                    showarrow=False, font=dict(size=11))
+
+                # connection line to summation node
+                contrib = xv * wv
+                lw = min(abs(contrib)*1.5 + 0.5, 5)
+                lc = "#534AB7" if contrib >= 0 else "#E24B4A"
+                fig.add_shape(type="line", x0=x_in+r, y0=yi, x1=x_sum-r, y1=5.0,
+                    line=dict(color=lc, width=lw))
+                # weight label on the line
+                mx, my = (x_in+r + x_sum-r)/2, (yi + 5.0)/2
+                fig.add_annotation(x=mx, y=my,
+                    text=f"{wl}={wv:.1f}<br>→{contrib:.2f}",
+                    showarrow=False, font=dict(size=9, color=lc),
+                    bgcolor="rgba(255,255,255,0.75)", borderpad=2)
+
+            # summation node  Σ
+            fig.add_shape(type="circle", x0=x_sum-r, y0=5.0-r, x1=x_sum+r, y1=5.0+r, **sum_style)
+            fig.add_annotation(x=x_sum, y=5.5, text="<b>Σ</b>", showarrow=False,
+                font=dict(size=18, color="#b8860b"))
+            fig.add_annotation(x=x_sum, y=4.6,
+                text=f"z={z:.3f}", showarrow=False, font=dict(size=10, color="#5a4a00"))
+
+            # bias arrow (comes from below)
+            fig.add_shape(type="line", x0=x_sum, y0=5.0-r-1.0, x1=x_sum, y1=5.0-r,
+                line=dict(color="#888", width=1.5, dash="dot"))
+            fig.add_annotation(x=x_sum, y=5.0-r-1.2,
+                text=f"b={bias:.1f}", showarrow=False, font=dict(size=10, color="#555"))
+
+            # line: Σ → activation
+            fig.add_shape(type="line", x0=x_sum+r, y0=5.0, x1=x_act-r, y1=5.0,
+                line=dict(color="#EF9F27", width=2))
+            fig.add_annotation(x=(x_sum+r+x_act-r)/2, y=5.35,
+                text=f"z={z:.2f}", showarrow=False, font=dict(size=9, color="#b8860b"))
+
+            # activation node
+            short = {"ReLU":"ReLU","Sigmoid":"σ","Tanh":"tanh","None (linear)":"—"}
+            fig.add_shape(type="rect", x0=x_act-r*1.3, y0=5.0-r, x1=x_act+r*1.3, y1=5.0+r, **act_style)
+            fig.add_annotation(x=x_act, y=5.0,
+                text=f"<b>{short[act_n]}</b>", showarrow=False, font=dict(size=14, color="#0f6e56"))
+
+            # line: activation → output
+            fig.add_shape(type="line", x0=x_act+r*1.3, y0=5.0, x1=x_out-r, y1=5.0,
+                line=dict(color="#E24B4A", width=2.5))
+
+            # output node
+            fig.add_shape(type="circle", x0=x_out-r, y0=5.0-r, x1=x_out+r, y1=5.0+r, **out_style)
+            fig.add_annotation(x=x_out, y=5.5, text="<b>ŷ</b>", showarrow=False,
+                font=dict(size=15, color="#a32d2d"))
+            fig.add_annotation(x=x_out, y=4.6,
+                text=f"{output_n:.4f}", showarrow=False, font=dict(size=10, color="#a32d2d"))
+
+            st.plotly_chart(fig, use_container_width=True)
+
+        # live equation below the diagram
+        st.markdown("**Equation for this neuron right now:**")
+        eq_parts = f"w₁·x₁ + w₂·x₂ + w₃·x₃ + b = ({w1:.1f})({x1:.1f}) + ({w2:.1f})({x2:.1f}) + ({w3:.1f})({x3:.1f}) + ({bias:.1f}) = {z:.4f}"
+        st.markdown(f'<div class="formula-box">z = {eq_parts}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="formula-box">output = {act_n}(z) = {act_n}({z:.4f}) = <b>{output_n:.4f}</b></div>',
+            unsafe_allow_html=True)
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Weighted sum z", f"{z:.4f}")
+        m2.metric(f"{act_n}(z)", f"{output_n:.4f}")
+        m3.metric("Contributions",
+            f"x₁:{w1*x1:.2f}  x₂:{w2*x2:.2f}  x₃:{w3*x3:.2f}  b:{bias:.2f}")
+
+    # ── TAB 2: what weights and bias do ──────────────────────────────────
+    with tab2:
+        st.markdown("### Weight = slope of sensitivity. Bias = where the neuron 'turns on'.")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**Effect of weight magnitude and sign (single input)**")
+            x_range = np.linspace(-3, 3, 200)
+            weights_demo = [2.0, 1.0, 0.3, -1.0, -2.0]
+            fig = go.Figure()
+            colors_w = ['#534AB7','#1D9E75','#888780','#EF9F27','#E24B4A']
+            for wv, cv in zip(weights_demo, colors_w):
+                z_line = wv * x_range + 0.0
+                out_line = np.array([float(np.tanh(zv)) for zv in z_line])
+                fig.add_trace(go.Scatter(x=x_range, y=out_line,
+                    name=f"w={wv}", line=dict(color=cv, width=2)))
+            fig.update_layout(xaxis_title="Input x", yaxis_title="Output (tanh)",
+                title="Changing weight — same bias (b=0)",
+                height=300, legend=dict(orientation='h', y=1.15))
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            st.markdown("**Effect of bias — shifts the activation threshold**")
+            biases_demo = [-2.0, -1.0, 0.0, 1.0, 2.0]
+            fig = go.Figure()
+            for bv, cv in zip(biases_demo, colors_w):
+                z_line = 1.5 * x_range + bv
+                out_line = np.array([1/(1+np.exp(-zv)) for zv in z_line])
+                fig.add_trace(go.Scatter(x=x_range, y=out_line,
+                    name=f"b={bv}", line=dict(color=cv, width=2)))
+            fig.add_hline(y=0.5, line_dash="dash", line_color="gray",
+                annotation_text="threshold p=0.5")
+            fig.update_layout(xaxis_title="Input x", yaxis_title="Output (sigmoid)",
+                title="Changing bias — same weight (w=1.5)",
+                height=300, legend=dict(orientation='h', y=1.15))
+            st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("""
+        - A **large positive weight** makes the neuron very sensitive to that input — it fires strongly when x is high.  
+        - A **negative weight** makes the neuron *inhibited* by that input — like an "off switch."  
+        - The **bias** shifts the curve left or right, controlling the threshold at which the neuron activates, independently of any input.
+        """)
+
+    # ── TAB 3: one learning step ─────────────────────────────────────────
+    with tab3:
+        st.markdown("### Full learning step — forward pass → loss → gradient → weight update")
+        st.markdown("A single neuron learning to output a target value from one input.")
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            x_learn  = st.slider("Input x", -3.0, 3.0, 1.5, step=0.1, key="nl_x")
+            y_target_n = st.slider("Target output y", -2.0, 2.0, 1.0, step=0.1, key="nl_y")
+            w_learn  = st.slider("Current weight w", -3.0, 3.0, -1.0, step=0.1, key="nl_w")
+            b_learn  = st.slider("Current bias b",   -3.0, 3.0,  0.0, step=0.1, key="nl_b")
+            lr_learn = st.select_slider("Learning rate", [0.01,0.05,0.1,0.3,0.5,1.0], value=0.1, key="nl_lr")
+            act_learn = st.selectbox("Activation", ["None (linear)", "ReLU", "Tanh"], key="nl_act2")
+
+        def fwd(w, b, x, act):
+            z = w*x + b
+            if act == "ReLU":          return max(0.0, z), z
+            elif act == "Tanh":        return float(np.tanh(z)), z
+            else:                      return z, z
+
+        def act_deriv(z, act):
+            if act == "ReLU":    return 1.0 if z > 0 else 0.0
+            elif act == "Tanh":  return 1.0 - float(np.tanh(z))**2
+            else:                return 1.0
+
+        y_hat, z_learn = fwd(w_learn, b_learn, x_learn, act_learn)
+        loss_learn = 0.5*(y_hat - y_target_n)**2
+        dl_dyhat   = y_hat - y_target_n
+        dyhat_dz   = act_deriv(z_learn, act_learn)
+        dz_dw      = x_learn
+        dz_db      = 1.0
+        grad_w = dl_dyhat * dyhat_dz * dz_dw
+        grad_b = dl_dyhat * dyhat_dz * dz_db
+        w_new  = w_learn - lr_learn * grad_w
+        b_new  = b_learn - lr_learn * grad_b
+        y_hat_new, _ = fwd(w_new, b_new, x_learn, act_learn)
+        loss_new = 0.5*(y_hat_new - y_target_n)**2
+
+        with col2:
+            st.markdown("**Step-by-step breakdown**")
+            st.code(f"""
+FORWARD PASS
+────────────
+z    = w·x + b  =  {w_learn:.2f}·{x_learn:.2f} + {b_learn:.2f}  =  {z_learn:.4f}
+ŷ    = {act_learn}(z)  =  {y_hat:.4f}
+Loss = ½·(ŷ − y)²  =  ½·({y_hat:.4f} − {y_target_n:.2f})²  =  {loss_learn:.4f}
+
+BACKWARD PASS (chain rule)
+──────────────────────────
+dL/dŷ  = ŷ − y          =  {dl_dyhat:.4f}
+dŷ/dz  = {act_learn}'(z)   =  {dyhat_dz:.4f}
+dz/dw  = x               =  {dz_dw:.4f}
+dz/db  = 1               =  1.0000
+
+grad_w = dL/dŷ · dŷ/dz · dz/dw  =  {grad_w:.4f}
+grad_b = dL/dŷ · dŷ/dz · dz/db  =  {grad_b:.4f}
+
+WEIGHT UPDATE  (lr = {lr_learn})
+────────────────────────────────
+w_new = {w_learn:.4f} − {lr_learn}·({grad_w:.4f})  =  {w_new:.4f}
+b_new = {b_learn:.4f} − {lr_learn}·({grad_b:.4f})  =  {b_new:.4f}
+
+RESULT
+──────
+Loss before: {loss_learn:.4f}
+Loss after:  {loss_new:.4f}   {'✅ improved' if loss_new < loss_learn else '⚠️ got worse (lr too large?)'}
+""", language="text")
+
+        # show loss landscape and where we moved
+        w_range = np.linspace(-3, 3, 200)
+        loss_curve = np.array([0.5*(fwd(wv, b_learn, x_learn, act_learn)[0] - y_target_n)**2
+                                for wv in w_range])
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=w_range, y=loss_curve,
+            name="Loss vs w", line=dict(color='#AFA9EC', width=2.5)))
+        fig.add_scatter(x=[w_learn], y=[loss_learn], mode='markers',
+            marker=dict(color='#E24B4A', size=14, symbol='circle'), name='Current w')
+        fig.add_annotation(x=w_learn, y=loss_learn, text=f"  before<br>  w={w_learn:.2f}",
+            showarrow=True, arrowhead=2, ax=30, ay=-30, font=dict(color='#E24B4A'))
+        fig.add_scatter(x=[w_new], y=[loss_new], mode='markers',
+            marker=dict(color='#1D9E75', size=14, symbol='star'), name='Updated w')
+        fig.add_annotation(x=w_new, y=loss_new, text=f"  after<br>  w={w_new:.2f}",
+            showarrow=True, arrowhead=2, ax=30, ay=30, font=dict(color='#1D9E75'))
+        fig.add_shape(type='line', x0=w_learn, y0=loss_learn, x1=w_new, y1=loss_new,
+            line=dict(color='#EF9F27', width=2, dash='dash'))
+        fig.update_layout(xaxis_title="Weight w", yaxis_title="Loss",
+            height=340, legend=dict(orientation='h', y=1.12))
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("""
+        > **This is the full loop:** forward pass computes the output and loss;
+        > the chain rule decomposes how much each weight contributed to the error;
+        > the update nudges every weight in the direction that reduces loss.
+        > Repeat this millions of times across many neurons — that's training a neural network.
         """)
