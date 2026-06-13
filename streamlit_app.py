@@ -38,18 +38,24 @@ st.markdown("""
 # ── Catalogue ────────────────────────────────────────────────────────────────
 # (key, name, icon, short description)
 CATALOGUE = [
-    ("activation",    "Activation Functions",       "🎯", "ReLU, Sigmoid, Tanh and their properties"),
-    ("backprop",      "Backpropagation",             "🔄", "How the error propagates backwards"),
-    ("bias_var",      "Bias-Variance Tradeoff",      "🎯", "Decomposing prediction error into bias and variance"),
-    ("confusion",     "Confusion Matrix & Metrics",  "🔢", "Precision, recall, F1 and the threshold effect"),
-    ("gradient",      "Gradient & Descent",          "🏔️", "Direction and step size of learning"),
-    ("knn",           "K-Nearest Neighbors",         "🔵", "Classify by majority vote of closest points"),
-    ("linear_reg",    "Linear Regression",           "📊", "Finding the best-fit line through data"),
-    ("loss",          "Loss Function",               "📉", "How we measure model error"),
-    ("lr_schedule",   "Learning Rate Schedulers",    "📅", "Step decay, cosine annealing and warmup"),
-    ("normalization", "Normalization",                "📐", "Batch norm, layer norm and feature scaling"),
-    ("overfit",       "Overfitting / Underfitting",  "⚖️", "Too much or too little training"),
-    ("regularization","Regularization",              "🔒", "L1 and L2 penalty to prevent overfitting"),
+    ("activation",    "Activation Functions",        "🎯", "ReLU, Sigmoid, Tanh and their properties"),
+    ("backprop",      "Backpropagation",              "🔄", "How the error propagates backwards"),
+    ("batch_size",    "Batch Size & Gradient Noise", "🎲", "How batch size affects gradient quality"),
+    ("bias_var",      "Bias-Variance Tradeoff",       "↔️", "Decomposing prediction error into bias and variance"),
+    ("confusion",     "Confusion Matrix & Metrics",   "🔢", "Precision, recall, F1 and the threshold effect"),
+    ("dropout",       "Dropout",                      "💧", "Randomly zeroing neurons to prevent overfitting"),
+    ("gradient",      "Gradient & Descent",           "🏔️", "Direction and step size of learning"),
+    ("knn",           "K-Nearest Neighbors",          "🔵", "Classify by majority vote of closest points"),
+    ("linear_reg",    "Linear Regression",            "📊", "Finding the best-fit line through data"),
+    ("logistic_reg",  "Logistic Regression",          "🔀", "Binary classification with sigmoid output"),
+    ("loss",          "Loss Function",                "📉", "How we measure model error"),
+    ("lr_schedule",   "Learning Rate Schedulers",     "📅", "Step decay, cosine annealing and warmup"),
+    ("neural_net",    "Neural Network Architecture",  "🧬", "Layers, parameters and forward pass"),
+    ("normalization", "Normalization",                 "📐", "Batch norm, layer norm and feature scaling"),
+    ("optimizers",    "Optimizers",                   "🚀", "SGD, Momentum, RMSProp and Adam compared"),
+    ("overfit",       "Overfitting / Underfitting",   "⚖️", "Too much or too little training"),
+    ("regularization","Regularization",               "🔒", "L1 and L2 penalty to prevent overfitting"),
+    ("vanishing_grad","Vanishing & Exploding Gradients","⚡", "Signal death in deep networks and fixes"),
 ]
 # alphabetical order for the sidebar index
 ALPHA = sorted(CATALOGUE, key=lambda x: x[1].lower())
@@ -1224,3 +1230,735 @@ elif section == "normalization":
             fig_bn.update_layout(height=340)
             st.plotly_chart(fig_bn, use_container_width=True)
             st.caption("Each box = one feature column. Batch Norm centres each feature; Layer Norm centres each sample.")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# LOGISTIC REGRESSION
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "logistic_reg":
+    st.title("🔀 Logistic Regression")
+    st.markdown("""
+    <div class="concept-card">
+    Logistic regression predicts a <b>probability</b> between 0 and 1 by passing a linear
+    combination of inputs through the <b>sigmoid function</b>. It is the simplest classifier
+    and the building block of neural network output layers.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["Sigmoid & decision boundary", "Training with gradient descent", "Multi-feature decision boundary"])
+
+    with tab1:
+        st.markdown('<div class="formula-box">p = σ(w·x + b) = 1 / (1 + e^(−(w·x+b)))</div>', unsafe_allow_html=True)
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            w_lg = st.slider("Weight w", -5.0, 5.0, 2.0, step=0.1, key="lg_w")
+            b_lg = st.slider("Bias b", -5.0, 5.0, 0.0, step=0.1, key="lg_b")
+            threshold_lg = st.slider("Decision threshold", 0.1, 0.9, 0.5, step=0.05)
+            decision_boundary = -b_lg / (w_lg + 1e-9)
+            st.metric("Decision boundary x*", f"{decision_boundary:.2f}")
+            st.info("The boundary is where p = threshold, i.e. w·x + b = 0 (for threshold 0.5).")
+
+        with col2:
+            x_lg = np.linspace(-6, 6, 300)
+            p_lg = 1 / (1 + np.exp(-(w_lg * x_lg + b_lg)))
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=x_lg, y=p_lg, name='p(x)',
+                line=dict(color='#534AB7', width=2.5)))
+            fig.add_hline(y=threshold_lg, line_dash='dash', line_color='#EF9F27',
+                annotation_text=f"threshold={threshold_lg}")
+            fig.add_vline(x=decision_boundary, line_dash='dot', line_color='#E24B4A',
+                annotation_text=f"x*={decision_boundary:.2f}")
+            fig.add_hrect(y0=threshold_lg, y1=1.05, fillcolor='rgba(29,158,117,0.08)', line_width=0)
+            fig.add_hrect(y0=-0.05, y1=threshold_lg, fillcolor='rgba(226,75,74,0.08)', line_width=0)
+            fig.update_layout(xaxis_title="x", yaxis_title="Predicted probability p",
+                yaxis_range=[-0.05, 1.05], height=360,
+                legend=dict(orientation='h', y=1.1))
+            st.plotly_chart(fig, use_container_width=True)
+
+    with tab2:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            n_lg = st.slider("Training points", 20, 100, 50, key="lg_n")
+            sep = st.slider("Class separation", 0.5, 4.0, 2.0, step=0.1)
+            lr_lg = st.select_slider("Learning rate", [0.01, 0.05, 0.1, 0.3, 0.5], value=0.1, key="lg_lr")
+            epochs_lg = st.slider("Epochs", 10, 200, 80, key="lg_ep")
+
+        np.random.seed(42)
+        X_lg = np.concatenate([np.random.randn(n_lg//2) - sep/2,
+                                np.random.randn(n_lg//2) + sep/2])
+        y_lg = np.array([0]*(n_lg//2) + [1]*(n_lg//2), dtype=float)
+
+        def sigmoid(z): return 1 / (1 + np.exp(-np.clip(z, -50, 50)))
+
+        w_t, b_t = 0.0, 0.0
+        loss_hist_lg, w_hist, b_hist = [], [], []
+        for _ in range(epochs_lg):
+            p = sigmoid(w_t * X_lg + b_t)
+            loss_v = -np.mean(y_lg * np.log(p + 1e-9) + (1 - y_lg) * np.log(1 - p + 1e-9))
+            loss_hist_lg.append(loss_v)
+            w_hist.append(w_t); b_hist.append(b_t)
+            dw = np.mean((p - y_lg) * X_lg)
+            db = np.mean(p - y_lg)
+            w_t -= lr_lg * dw
+            b_t -= lr_lg * db
+
+        with col2:
+            fig = make_subplots(rows=1, cols=2,
+                subplot_titles=["Training loss", "Final decision boundary"])
+            fig.add_trace(go.Scatter(y=loss_hist_lg, name='BCE Loss',
+                line=dict(color='#E24B4A', width=2)), row=1, col=1)
+
+            x_range_lg = np.linspace(X_lg.min()-0.5, X_lg.max()+0.5, 200)
+            p_final = sigmoid(w_t * x_range_lg + b_t)
+            fig.add_trace(go.Scatter(x=X_lg[y_lg==0], y=np.zeros(n_lg//2),
+                mode='markers', name='Class 0',
+                marker=dict(color='#534AB7', size=8, symbol='circle'), showlegend=True), row=1, col=2)
+            fig.add_trace(go.Scatter(x=X_lg[y_lg==1], y=np.ones(n_lg//2),
+                mode='markers', name='Class 1',
+                marker=dict(color='#E24B4A', size=8, symbol='circle'), showlegend=True), row=1, col=2)
+            fig.add_trace(go.Scatter(x=x_range_lg, y=p_final,
+                name='p(x)', line=dict(color='#1D9E75', width=2.5)), row=1, col=2)
+            fig.add_hline(y=0.5, line_dash='dash', line_color='#EF9F27', row=1, col=2)
+            fig.update_xaxes(title_text="Epoch", row=1, col=1)
+            fig.update_xaxes(title_text="x", row=1, col=2)
+            fig.update_yaxes(title_text="Loss", row=1, col=1)
+            fig.update_yaxes(title_text="p(x)", row=1, col=2)
+            fig.update_layout(height=360, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, use_container_width=True)
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Final w", f"{w_t:.3f}")
+        c2.metric("Final b", f"{b_t:.3f}")
+        final_acc = np.mean(((sigmoid(w_t * X_lg + b_t) >= 0.5).astype(float)) == y_lg)
+        c3.metric("Accuracy", f"{final_acc:.1%}")
+
+    with tab3:
+        st.markdown("Decision boundary with **two features** — a line in 2D space.")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            sep2 = st.slider("Class separation (2D)", 0.5, 3.0, 1.5, step=0.1, key="lg2_sep")
+            n_2d = st.slider("Points per class", 20, 80, 40, key="lg2_n")
+            epochs_2d = st.slider("Training epochs", 50, 500, 200, key="lg2_ep")
+            lr_2d = st.select_slider("Learning rate", [0.01,0.05,0.1,0.3], value=0.1, key="lg2_lr")
+
+        np.random.seed(7)
+        X0 = np.random.randn(n_2d, 2) - sep2/2
+        X1 = np.random.randn(n_2d, 2) + sep2/2
+        X2d = np.vstack([X0, X1])
+        y2d = np.array([0]*n_2d + [1]*n_2d, dtype=float)
+
+        w2d = np.zeros(2); b2d = 0.0
+        for _ in range(epochs_2d):
+            z = X2d @ w2d + b2d
+            p2 = sigmoid(z)
+            dw = X2d.T @ (p2 - y2d) / len(y2d)
+            db = np.mean(p2 - y2d)
+            w2d -= lr_2d * dw
+            b2d -= lr_2d * db
+
+        with col2:
+            xx2, yy2 = np.meshgrid(np.linspace(-4,4,100), np.linspace(-4,4,100))
+            grid2 = np.c_[xx2.ravel(), yy2.ravel()]
+            Z2 = sigmoid(grid2 @ w2d + b2d).reshape(xx2.shape)
+
+            fig = go.Figure()
+            fig.add_trace(go.Contour(x=np.linspace(-4,4,100), y=np.linspace(-4,4,100),
+                z=Z2, colorscale=[[0,'rgba(83,74,183,0.15)'],[0.5,'white'],[1,'rgba(226,75,74,0.15)']],
+                showscale=False, contours=dict(showlabels=False)))
+            fig.add_trace(go.Scatter(x=X0[:,0], y=X0[:,1], mode='markers',
+                name='Class 0', marker=dict(color='#534AB7', size=8)))
+            fig.add_trace(go.Scatter(x=X1[:,0], y=X1[:,1], mode='markers',
+                name='Class 1', marker=dict(color='#E24B4A', size=8)))
+            if abs(w2d[1]) > 1e-9:
+                x_bd = np.linspace(-4, 4, 100)
+                y_bd = -(w2d[0]*x_bd + b2d) / w2d[1]
+                mask = (y_bd > -4) & (y_bd < 4)
+                fig.add_trace(go.Scatter(x=x_bd[mask], y=y_bd[mask],
+                    name='Decision boundary', line=dict(color='#1D9E75', width=2.5)))
+            fig.update_layout(xaxis_title="Feature 1", yaxis_title="Feature 2",
+                xaxis_range=[-4,4], yaxis_range=[-4,4],
+                height=400, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, use_container_width=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# NEURAL NETWORK ARCHITECTURE
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "neural_net":
+    st.title("🧬 Neural Network Architecture")
+    st.markdown("""
+    <div class="concept-card">
+    A neural network is a stack of <b>layers</b>, each performing a linear transformation
+    followed by an activation function. The number of layers and neurons determines
+    the model's capacity — and its parameter count.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Architecture explorer", "Forward pass visualised"])
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.markdown("**Design your network**")
+            input_size = st.slider("Input features", 1, 16, 4)
+            n_hidden = st.slider("Number of hidden layers", 1, 6, 3)
+            hidden_sizes = []
+            for i in range(n_hidden):
+                h = st.slider(f"Hidden layer {i+1} neurons", 1, 128, [64,32,16,8,4,2][min(i,5)])
+                hidden_sizes.append(h)
+            output_size = st.slider("Output neurons", 1, 10, 1)
+            activation_nn = st.selectbox("Activation", ["ReLU", "Sigmoid", "Tanh"])
+
+        layer_sizes = [input_size] + hidden_sizes + [output_size]
+        total_params = sum(layer_sizes[i]*layer_sizes[i+1] + layer_sizes[i+1]
+                           for i in range(len(layer_sizes)-1))
+
+        with col2:
+            # Draw network diagram as SVG-like plotly figure
+            fig = go.Figure()
+            max_neurons = max(min(n, 8) for n in layer_sizes)
+            n_layers = len(layer_sizes)
+            x_positions = np.linspace(0.1, 0.9, n_layers)
+            layer_colors = ['#1D9E75'] + ['#534AB7']*n_hidden + ['#E24B4A']
+
+            node_positions = []
+            for li, (lx, n_neurons) in enumerate(zip(x_positions, layer_sizes)):
+                display_n = min(n_neurons, 8)
+                y_positions = np.linspace(0.1, 0.9, display_n)
+                node_positions.append((lx, y_positions, n_neurons, display_n))
+
+                # draw connections to next layer
+                if li < n_layers - 1:
+                    next_lx, next_ypos, _, next_dn = x_positions[li+1], \
+                        np.linspace(0.1, 0.9, min(layer_sizes[li+1], 8)), \
+                        layer_sizes[li+1], min(layer_sizes[li+1], 8)
+                    for yi in y_positions:
+                        for yj in np.linspace(0.1, 0.9, min(layer_sizes[li+1], 8)):
+                            fig.add_shape(type='line', x0=lx, y0=yi, x1=next_lx, y1=yj,
+                                line=dict(color='rgba(150,150,150,0.15)', width=1))
+
+                # draw neurons
+                for yi in y_positions:
+                    fig.add_shape(type='circle',
+                        x0=lx-0.03, y0=yi-0.035, x1=lx+0.03, y1=yi+0.035,
+                        fillcolor=layer_colors[li], line=dict(color='white', width=1.5))
+                if n_neurons > 8:
+                    fig.add_annotation(x=lx, y=0.02, text=f"+{n_neurons-8} more",
+                        showarrow=False, font=dict(size=9, color='gray'))
+
+                # layer label
+                lname = "Input" if li == 0 else ("Output" if li == n_layers-1 else f"Hidden {li}")
+                fig.add_annotation(x=lx, y=1.0, text=f"<b>{lname}</b><br>{n_neurons}",
+                    showarrow=False, font=dict(size=11))
+
+            fig.update_layout(xaxis=dict(visible=False, range=[0,1]),
+                yaxis=dict(visible=False, range=[-0.05,1.1]),
+                height=400, plot_bgcolor='white',
+                margin=dict(l=10, r=10, t=40, b=10))
+            st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("### Parameter count breakdown")
+        param_data = []
+        for i in range(len(layer_sizes)-1):
+            w_count = layer_sizes[i] * layer_sizes[i+1]
+            b_count = layer_sizes[i+1]
+            param_data.append({
+                "Layer": f"Layer {i+1} → {i+2}",
+                "Input neurons": layer_sizes[i],
+                "Output neurons": layer_sizes[i+1],
+                "Weights": w_count,
+                "Biases": b_count,
+                "Total": w_count + b_count
+            })
+        import pandas as pd
+        df_params = pd.DataFrame(param_data)
+        st.dataframe(df_params, use_container_width=True, hide_index=True)
+        st.metric("Total trainable parameters", f"{total_params:,}")
+
+    with tab2:
+        st.markdown("Watch a single input flow through the network layer by layer.")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            inp_vals = []
+            for i in range(min(input_size, 4)):
+                v = st.slider(f"Input x{i+1}", -3.0, 3.0, float(i*0.5 - 0.5), step=0.1, key=f"nn_inp_{i}")
+                inp_vals.append(v)
+            while len(inp_vals) < input_size:
+                inp_vals.append(0.0)
+            inp_arr = np.array(inp_vals)
+
+        def act_fn(x, name):
+            if name == "ReLU": return np.maximum(0, x)
+            if name == "Sigmoid": return 1/(1+np.exp(-np.clip(x,-50,50)))
+            return np.tanh(x)
+
+        np.random.seed(99)
+        activations = [inp_arr]
+        layer_inputs = []
+        cur = inp_arr
+        for i in range(len(layer_sizes)-1):
+            W = np.random.randn(layer_sizes[i], layer_sizes[i+1]) * 0.5
+            b_layer = np.zeros(layer_sizes[i+1])
+            z = W.T @ cur + b_layer
+            layer_inputs.append(z)
+            cur = act_fn(z, activation_nn) if i < len(layer_sizes)-2 else z
+            activations.append(cur)
+
+        with col2:
+            fig = go.Figure()
+            for li, (act, lsize) in enumerate(zip(activations, layer_sizes)):
+                display = act[:min(len(act), 12)]
+                lname = "Input" if li == 0 else ("Output" if li == len(layer_sizes)-1 else f"H{li}")
+                fig.add_trace(go.Bar(
+                    x=[f"{lname}[{j}]" for j in range(len(display))],
+                    y=display,
+                    name=lname,
+                    marker_color=['#1D9E75' if li==0 else '#E24B4A' if li==len(layer_sizes)-1 else '#534AB7']*len(display),
+                    opacity=0.8
+                ))
+            fig.update_layout(barmode='group', height=380,
+                xaxis_title="Neuron", yaxis_title="Activation value",
+                legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, use_container_width=True)
+        st.caption("Weights are random (seed=99). Change inputs to see activations shift.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# OPTIMIZERS
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "optimizers":
+    st.title("🚀 Optimizers")
+    st.markdown("""
+    <div class="concept-card">
+    Optimizers determine <em>how</em> the gradient is used to update weights.
+    Plain SGD can be slow and noisy; modern optimizers like <b>Adam</b> adapt the
+    learning rate per-parameter and add momentum to accelerate convergence.
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    | Optimizer | Update rule | Key idea |
+    |---|---|---|
+    | **SGD** | w ← w − lr·g | Plain gradient step |
+    | **Momentum** | v ← β·v + g, w ← w − lr·v | Accumulate velocity |
+    | **RMSProp** | s ← β·s + (1-β)·g², w ← w − lr·g/√s | Adapt per-parameter lr |
+    | **Adam** | Momentum + RMSProp with bias correction | Best of both worlds |
+    """)
+
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        lr_opt = st.select_slider("Learning rate", [0.001,0.005,0.01,0.05,0.1,0.2], value=0.05)
+        n_opt_steps = st.slider("Steps", 20, 150, 60)
+        beta1 = st.slider("β₁ (Momentum decay)", 0.5, 0.99, 0.9, step=0.01)
+        beta2 = st.slider("β₂ (RMSProp decay)", 0.9, 0.999, 0.999, step=0.001)
+        surface_type = st.selectbox("Loss surface",
+            ["Elongated bowl", "Ravine (ill-conditioned)", "Saddle point"])
+        optimizers_sel = st.multiselect("Show optimizers",
+            ["SGD", "Momentum", "RMSProp", "Adam"],
+            default=["SGD", "Momentum", "Adam"])
+        start_w1 = st.slider("Start w₁", -3.0, 3.0, 2.5, step=0.1)
+        start_w2 = st.slider("Start w₂", -3.0, 3.0, 2.5, step=0.1)
+
+    if surface_type == "Elongated bowl":
+        def loss_surf(w): return w[0]**2 * 0.2 + w[1]**2 * 5.0
+        def grad_surf(w): return np.array([0.4*w[0], 10.0*w[1]])
+    elif surface_type == "Ravine (ill-conditioned)":
+        def loss_surf(w): return (w[0] - w[1])**2 * 10 + (w[0] + w[1])**2 * 0.1
+        def grad_surf(w): return np.array([
+            20*(w[0]-w[1]) + 0.2*(w[0]+w[1]),
+            -20*(w[0]-w[1]) + 0.2*(w[0]+w[1])])
+    else:  # saddle
+        def loss_surf(w): return w[0]**2 - w[1]**2 + 0.1*(w[0]**3)
+        def grad_surf(w): return np.array([2*w[0] + 0.3*w[0]**2, -2*w[1]])
+
+    opt_colors = {"SGD": '#E24B4A', "Momentum": '#534AB7', "RMSProp": '#EF9F27', "Adam": '#1D9E75'}
+
+    def run_optimizer(name, steps):
+        w = np.array([start_w1, start_w2], dtype=float)
+        path = [w.copy()]
+        losses = []
+        v = np.zeros(2); s = np.zeros(2); t = 0
+        eps = 1e-8
+        for _ in range(steps):
+            g = grad_surf(w)
+            losses.append(loss_surf(w))
+            t += 1
+            if name == "SGD":
+                w = w - lr_opt * g
+            elif name == "Momentum":
+                v = beta1 * v + g
+                w = w - lr_opt * v
+            elif name == "RMSProp":
+                s = beta2 * s + (1-beta2) * g**2
+                w = w - lr_opt * g / (np.sqrt(s) + eps)
+            elif name == "Adam":
+                v = beta1 * v + (1-beta1) * g
+                s = beta2 * s + (1-beta2) * g**2
+                v_hat = v / (1 - beta1**t)
+                s_hat = s / (1 - beta2**t)
+                w = w - lr_opt * v_hat / (np.sqrt(s_hat) + eps)
+            w = np.clip(w, -6, 6)
+            path.append(w.copy())
+        losses.append(loss_surf(w))
+        return np.array(path), losses
+
+    trajectories = {name: run_optimizer(name, n_opt_steps) for name in optimizers_sel}
+
+    w1r = np.linspace(-4, 4, 80)
+    w2r = np.linspace(-4, 4, 80)
+    WW, BB = np.meshgrid(w1r, w2r)
+    ZZ = np.array([[loss_surf(np.array([w, b])) for w in w1r] for b in w2r])
+
+    with col2:
+        fig = make_subplots(rows=1, cols=2,
+            subplot_titles=["Trajectories on loss surface", "Loss over steps"])
+
+        fig.add_trace(go.Contour(x=w1r, y=w2r, z=ZZ,
+            colorscale='RdPu', opacity=0.6, showscale=False,
+            contours=dict(showlabels=False)), row=1, col=1)
+
+        for name, (path, losses) in trajectories.items():
+            c = opt_colors[name]
+            fig.add_trace(go.Scatter(x=path[:,0], y=path[:,1],
+                mode='lines+markers', name=name,
+                line=dict(color=c, width=2),
+                marker=dict(size=4, color=c)), row=1, col=1)
+            fig.add_trace(go.Scatter(y=losses, name=name,
+                line=dict(color=c, width=2), showlegend=False), row=1, col=2)
+
+        fig.update_xaxes(title_text="w₁", row=1, col=1)
+        fig.update_yaxes(title_text="w₂", row=1, col=1)
+        fig.update_xaxes(title_text="Step", row=1, col=2)
+        fig.update_yaxes(title_text="Loss", row=1, col=2)
+        fig.update_layout(height=420, legend=dict(orientation='h', y=1.12))
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("**Tip:** try the *Ravine* surface — SGD zigzags badly while Adam cuts straight through.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DROPOUT
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "dropout":
+    st.title("💧 Dropout")
+    st.markdown("""
+    <div class="concept-card">
+    During training, dropout <b>randomly sets a fraction of neurons to zero</b> at each step.
+    This forces the network to learn redundant representations and acts as a strong
+    regularizer, significantly reducing overfitting.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["How dropout works", "Effect on overfitting"])
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            dropout_rate = st.slider("Dropout rate p", 0.0, 0.9, 0.5, step=0.05,
+                help="Fraction of neurons set to zero")
+            n_neurons_do = st.slider("Neurons in layer", 8, 32, 16)
+            seed_do = st.slider("Random seed (= one training step)", 0, 20, 3)
+            st.markdown("---")
+            st.markdown(f"**Expected active neurons:** {n_neurons_do * (1-dropout_rate):.1f} / {n_neurons_do}")
+            st.markdown(f"**Scale factor at inference:** ×{1/(1-dropout_rate+1e-9):.2f}")
+            st.info("At **inference** time, dropout is disabled and weights are scaled by (1-p) to compensate.")
+
+        np.random.seed(seed_do)
+        activations_do = np.random.randn(n_neurons_do) * 2
+        mask = (np.random.rand(n_neurons_do) > dropout_rate).astype(float)
+        dropped = activations_do * mask
+        # inverted dropout scaling (as used in practice)
+        scaled = dropped / (1 - dropout_rate + 1e-9)
+
+        with col2:
+            fig = go.Figure()
+            colors_do = ['#E24B4A' if m == 0 else '#534AB7' for m in mask]
+            fig.add_trace(go.Bar(x=list(range(n_neurons_do)), y=activations_do,
+                name='Original', marker_color='#AFA9EC', opacity=0.5))
+            fig.add_trace(go.Bar(x=list(range(n_neurons_do)), y=scaled,
+                name='After dropout + scale',
+                marker_color=colors_do, opacity=0.9))
+            fig.update_layout(barmode='overlay', xaxis_title="Neuron index",
+                yaxis_title="Activation value", height=360,
+                legend=dict(orientation='h', y=1.1))
+            st.plotly_chart(fig, use_container_width=True)
+            active = int(mask.sum())
+            st.markdown(f"🔴 **{n_neurons_do - active} neurons dropped** &nbsp;|&nbsp; 🟣 **{active} neurons active**")
+
+    with tab2:
+        st.markdown("Simulated train/test loss curves with and without dropout on an overfit-prone network.")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            do_rate_sim = st.slider("Dropout rate (simulation)", 0.0, 0.8, 0.4, step=0.05, key="do_sim")
+            epochs_do = st.slider("Training epochs", 30, 200, 100, key="do_ep")
+            capacity = st.slider("Model capacity (higher = more overfit risk)", 1, 5, 3)
+
+        np.random.seed(0)
+        ep_range = np.arange(epochs_do)
+        overfit_strength = capacity * 0.015
+
+        # Without dropout
+        train_no = 0.8 * np.exp(-ep_range * 0.06) + 0.05 + np.random.randn(epochs_do)*0.01
+        test_no  = train_no + overfit_strength * ep_range + np.random.randn(epochs_do)*0.015
+
+        # With dropout
+        train_do_sim = 0.9 * np.exp(-ep_range * 0.05) + 0.08 + np.random.randn(epochs_do)*0.015
+        gap_reduction = (1 - do_rate_sim) * overfit_strength
+        test_do_sim  = train_do_sim + gap_reduction * ep_range + np.random.randn(epochs_do)*0.01
+
+        train_no = np.clip(train_no, 0.04, 1)
+        test_no  = np.clip(test_no,  0.04, 2)
+        train_do_sim = np.clip(train_do_sim, 0.04, 1)
+        test_do_sim  = np.clip(test_do_sim,  0.04, 2)
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=ep_range, y=train_no, name='Train (no dropout)',
+                line=dict(color='#534AB7', width=2, dash='dash')))
+            fig.add_trace(go.Scatter(x=ep_range, y=test_no, name='Test (no dropout)',
+                line=dict(color='#E24B4A', width=2, dash='dash')))
+            fig.add_trace(go.Scatter(x=ep_range, y=train_do_sim, name=f'Train (p={do_rate_sim})',
+                line=dict(color='#534AB7', width=2.5)))
+            fig.add_trace(go.Scatter(x=ep_range, y=test_do_sim, name=f'Test (p={do_rate_sim})',
+                line=dict(color='#1D9E75', width=2.5)))
+            fig.update_layout(xaxis_title="Epoch", yaxis_title="Loss",
+                height=380, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, use_container_width=True)
+        st.caption("Dashed = no dropout. Solid = with dropout. The gap between train and test loss is the overfit signal.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# BATCH SIZE & GRADIENT NOISE
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "batch_size":
+    st.title("🎲 Batch Size & Gradient Noise")
+    st.markdown("""
+    <div class="concept-card">
+    A <b>batch</b> is the subset of training data used to compute one gradient update.
+    Large batches give accurate, smooth gradients. Small batches are noisy but can
+    generalise better and require less memory.
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    | Batch size | Gradient quality | Memory | Generalisation | Typical use |
+    |---|---|---|---|---|
+    | 1 (SGD) | Very noisy | Minimal | Often good | Online learning |
+    | 8–64 | Moderate noise | Low | Good | Standard DL |
+    | 256–2048 | Smooth | High | Can be worse | Large-scale / TPUs |
+    | Full dataset | Exact | Huge | Sometimes poor | Classical ML |
+    """)
+
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        n_total = st.slider("Total training samples", 100, 500, 200)
+        batch_size_sim = st.select_slider("Batch size",
+            [1, 4, 8, 16, 32, 64, 128, 200], value=16)
+        lr_batch = st.select_slider("Learning rate", [0.001,0.005,0.01,0.05,0.1], value=0.01)
+        n_epochs_b = st.slider("Epochs", 5, 50, 20)
+        seed_b = st.slider("Seed", 0, 10, 0)
+
+    np.random.seed(seed_b)
+    X_b = np.random.randn(n_total, 2)
+    true_w_b = np.array([1.5, -0.8])
+    y_b = X_b @ true_w_b + np.random.randn(n_total) * 0.5
+
+    def run_batch_gd(batch_sz, lr, epochs):
+        w = np.zeros(2)
+        loss_per_step = []
+        for ep in range(epochs):
+            idx = np.random.permutation(n_total)
+            X_sh, y_sh = X_b[idx], y_b[idx]
+            for start in range(0, n_total, batch_sz):
+                Xb = X_sh[start:start+batch_sz]
+                yb = y_sh[start:start+batch_sz]
+                g = 2 * Xb.T @ (Xb @ w - yb) / len(yb)
+                w = w - lr * g
+                loss_per_step.append(np.mean((X_b @ w - y_b)**2))
+        return w, loss_per_step
+
+    np.random.seed(seed_b)
+    w_final, losses_b = run_batch_gd(batch_size_sim, lr_batch, n_epochs_b)
+
+    # compare multiple batch sizes
+    batch_sizes_cmp = [1, 16, 64, n_total]
+    all_losses = {}
+    for bs in batch_sizes_cmp:
+        np.random.seed(seed_b)
+        _, ls = run_batch_gd(bs, lr_batch, n_epochs_b)
+        all_losses[bs] = ls
+
+    with col2:
+        fig = make_subplots(rows=1, cols=2,
+            subplot_titles=[f"Loss trajectory (batch={batch_size_sim})",
+                            "Smoothness comparison (same epochs)"])
+
+        fig.add_trace(go.Scatter(y=losses_b, name=f'batch={batch_size_sim}',
+            line=dict(color='#534AB7', width=1.5)), row=1, col=1)
+
+        cmp_colors = ['#E24B4A', '#534AB7', '#EF9F27', '#1D9E75']
+        max_steps = max(len(v) for v in all_losses.values())
+        for (bs, ls), col_c in zip(all_losses.items(), cmp_colors):
+            fig.add_trace(go.Scatter(y=ls,
+                name=f'B={bs}' if bs < n_total else 'Full batch',
+                line=dict(color=col_c, width=1.8)), row=1, col=2)
+
+        fig.update_xaxes(title_text="Gradient step", row=1, col=1)
+        fig.update_xaxes(title_text="Gradient step", row=1, col=2)
+        fig.update_yaxes(title_text="MSE", row=1, col=1)
+        fig.update_yaxes(title_text="MSE", row=1, col=2)
+        fig.update_layout(height=380, legend=dict(orientation='h', y=1.12))
+        st.plotly_chart(fig, use_container_width=True)
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Steps per epoch", int(np.ceil(n_total / batch_size_sim)))
+    c2.metric("Total gradient steps", len(losses_b))
+    c3.metric("Final MSE", f"{losses_b[-1]:.4f}" if losses_b else "—")
+
+    st.markdown("**Noise in small batches can actually help** — it acts like implicit regularization, "
+                "helping the optimizer escape sharp minima that generalise poorly.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# VANISHING & EXPLODING GRADIENTS
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "vanishing_grad":
+    st.title("⚡ Vanishing & Exploding Gradients")
+    st.markdown("""
+    <div class="concept-card">
+    During backpropagation through many layers, gradients are multiplied together.
+    If weights are small, the gradient <b>vanishes</b> (→ 0) and early layers stop learning.
+    If weights are large, the gradient <b>explodes</b> (→ ∞) and training becomes unstable.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Gradient magnitude through layers", "Fixes: initialisation & residuals"])
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            n_layers_vg = st.slider("Number of layers", 2, 30, 10)
+            weight_scale = st.slider("Average weight magnitude |w|", 0.1, 2.0, 1.0, step=0.05)
+            act_vg = st.selectbox("Activation", ["Sigmoid", "Tanh", "ReLU"], key="vg_act")
+            st.markdown("---")
+            if weight_scale < 0.9:
+                st.error("🔴 **Vanishing gradient** — signal dies before reaching early layers")
+            elif weight_scale > 1.1:
+                st.warning("🟡 **Exploding gradient** — signal grows exponentially")
+            else:
+                st.success("🟢 **Stable** — gradient magnitude stays reasonable")
+
+        # Simulate gradient magnitude through layers
+        np.random.seed(42)
+        grad_mags = [1.0]
+        act_deriv_avg = {'Sigmoid': 0.25, 'Tanh': 0.42, 'ReLU': 0.5}
+        d_act = act_deriv_avg[act_vg]
+
+        layer_grad_mags = []
+        g = 1.0
+        for l in range(n_layers_vg):
+            w_sample = np.random.randn(8, 8) * weight_scale
+            g = g * np.mean(np.abs(w_sample)) * d_act
+            layer_grad_mags.append(g)
+
+        layers_axis = list(range(1, n_layers_vg + 1))
+
+        with col2:
+            fig = go.Figure()
+            colors_vg = ['#E24B4A' if g < 1e-3 else '#EF9F27' if g > 100 else '#1D9E75'
+                         for g in layer_grad_mags]
+            fig.add_trace(go.Bar(x=layers_axis, y=layer_grad_mags,
+                marker_color=colors_vg, name='Gradient magnitude'))
+            fig.add_hline(y=1e-3, line_dash='dash', line_color='#E24B4A',
+                annotation_text="vanishing zone")
+            fig.add_hline(y=100, line_dash='dash', line_color='#EF9F27',
+                annotation_text="exploding zone")
+            fig.update_layout(xaxis_title="Layer (from output → input)",
+                yaxis_title="Gradient magnitude",
+                yaxis_type='log', height=380)
+            st.plotly_chart(fig, use_container_width=True)
+
+        # Also show on linear scale for small networks
+        st.markdown("### Gradient magnitude table (first 10 layers)")
+        import pandas as pd
+        df_vg = pd.DataFrame({
+            "Layer (from output)": layers_axis[:10],
+            "Gradient magnitude": [f"{g:.2e}" for g in layer_grad_mags[:10]],
+            "Status": ["🔴 Vanished" if g < 1e-3 else "🟡 Exploding" if g > 100 else "🟢 OK"
+                       for g in layer_grad_mags[:10]]
+        })
+        st.dataframe(df_vg, use_container_width=True, hide_index=True)
+
+    with tab2:
+        st.markdown("### How to fix vanishing/exploding gradients")
+        st.markdown("""
+        **1. Weight Initialisation**
+        - **Xavier/Glorot** (for Sigmoid, Tanh): initialise weights with std = √(2 / (n_in + n_out))
+        - **He initialisation** (for ReLU): initialise weights with std = √(2 / n_in)
+        """)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**Xavier vs He vs Naive initialisation**")
+            n_in_init = st.slider("Layer input size", 4, 512, 64)
+            n_out_init = st.slider("Layer output size", 4, 512, 64)
+
+            naive_std  = 1.0
+            xavier_std = np.sqrt(2 / (n_in_init + n_out_init))
+            he_std     = np.sqrt(2 / n_in_init)
+
+            np.random.seed(42)
+            w_naive  = np.random.randn(n_in_init, n_out_init) * naive_std
+            w_xavier = np.random.randn(n_in_init, n_out_init) * xavier_std
+            w_he     = np.random.randn(n_in_init, n_out_init) * he_std
+
+            fig2 = go.Figure()
+            for w_arr, name, col_c in [(w_naive.ravel(), 'Naive (std=1)', '#E24B4A'),
+                                       (w_xavier.ravel(), f'Xavier (std={xavier_std:.3f})', '#534AB7'),
+                                       (w_he.ravel(), f'He (std={he_std:.3f})', '#1D9E75')]:
+                fig2.add_trace(go.Histogram(x=w_arr, name=name, opacity=0.6,
+                    marker_color=col_c, nbinsx=40))
+            fig2.update_layout(barmode='overlay', xaxis_title="Weight value",
+                yaxis_title="Count", height=300, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig2, use_container_width=True)
+
+        with col2:
+            st.markdown("**2. Residual connections (skip connections)**")
+            st.markdown("""
+            ResNets add a shortcut that bypasses one or more layers:
+
+            ```
+            output = F(x, W) + x
+            ```
+
+            The gradient can now flow directly through the skip connection,
+            bypassing the non-linearity entirely — solving vanishing gradients
+            in very deep networks (100+ layers).
+            """)
+
+            n_res_layers = st.slider("Network depth", 2, 20, 8, key="res_layers")
+            with_residual = st.checkbox("Show with residual connections", value=True)
+
+            w_res = 0.85
+            g_no_res = [1.0]
+            g_with_res = [1.0]
+            for l in range(n_res_layers):
+                g_no_res.append(g_no_res[-1] * w_res * 0.25)  # sigmoid-like
+                g_with_res.append(g_with_res[-1] * (w_res * 0.25 + 1.0) / 2)  # skip helps
+
+            fig3 = go.Figure()
+            fig3.add_trace(go.Scatter(y=g_no_res, name='Without residual',
+                line=dict(color='#E24B4A', width=2.5), mode='lines+markers'))
+            if with_residual:
+                fig3.add_trace(go.Scatter(y=g_with_res, name='With residual',
+                    line=dict(color='#1D9E75', width=2.5), mode='lines+markers'))
+            fig3.update_layout(xaxis_title="Layer (from output)",
+                yaxis_title="Gradient magnitude",
+                height=280, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig3, use_container_width=True)
+
+        st.markdown("""
+        **3. Other fixes:**
+        - **Gradient clipping** — cap gradient norm at a threshold (common in RNNs)
+        - **Batch Normalisation** — keeps activations well-scaled at each layer
+        - **ReLU** instead of Sigmoid/Tanh — derivative is 1 for x>0, not squashed
+        """)

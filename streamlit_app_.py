@@ -38,12 +38,18 @@ st.markdown("""
 # ── Catalogue ────────────────────────────────────────────────────────────────
 # (key, name, icon, short description)
 CATALOGUE = [
-    ("activation", "Activation Functions",      "🎯", "ReLU, Sigmoid, Tanh and their properties"),
-    ("backprop",   "Backpropagation",            "🔄", "How the error propagates backwards"),
-    ("gradient",   "Gradient & Descent",         "🏔️", "Direction and step size of learning"),
-    ("linear_reg", "Linear Regression",          "📊", "Finding the best-fit line through data"),
-    ("loss",       "Loss Function",              "📉", "How we measure model error"),
-    ("overfit",    "Overfitting / Underfitting", "⚖️", "Too much or too little training"),
+    ("activation",    "Activation Functions",       "🎯", "ReLU, Sigmoid, Tanh and their properties"),
+    ("backprop",      "Backpropagation",             "🔄", "How the error propagates backwards"),
+    ("bias_var",      "Bias-Variance Tradeoff",      "🎯", "Decomposing prediction error into bias and variance"),
+    ("confusion",     "Confusion Matrix & Metrics",  "🔢", "Precision, recall, F1 and the threshold effect"),
+    ("gradient",      "Gradient & Descent",          "🏔️", "Direction and step size of learning"),
+    ("knn",           "K-Nearest Neighbors",         "🔵", "Classify by majority vote of closest points"),
+    ("linear_reg",    "Linear Regression",           "📊", "Finding the best-fit line through data"),
+    ("loss",          "Loss Function",               "📉", "How we measure model error"),
+    ("lr_schedule",   "Learning Rate Schedulers",    "📅", "Step decay, cosine annealing and warmup"),
+    ("normalization", "Normalization",                "📐", "Batch norm, layer norm and feature scaling"),
+    ("overfit",       "Overfitting / Underfitting",  "⚖️", "Too much or too little training"),
+    ("regularization","Regularization",              "🔒", "L1 and L2 penalty to prevent overfitting"),
 ]
 # alphabetical order for the sidebar index
 ALPHA = sorted(CATALOGUE, key=lambda x: x[1].lower())
@@ -595,3 +601,626 @@ elif section == "linear_reg":
             height=400, legend=dict(orientation='h', y=1.1))
         st.plotly_chart(fig3, use_container_width=True)
         st.caption("The green star is the MSE minimum — the optimal w and b.")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# REGULARIZATION
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "regularization":
+    st.title("🔒 Regularization")
+    st.markdown("""
+    <div class="concept-card">
+    Regularization adds a <b>penalty term</b> to the loss to discourage the model from fitting
+    noise. It keeps weights small, which generally means a simpler, more generalisable model.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["L1 vs L2 penalty", "Effect on weights"])
+
+    with tab1:
+        st.markdown('<div class="formula-box">L2: Loss + λ·Σw²&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;L1: Loss + λ·Σ|w|</div>', unsafe_allow_html=True)
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            lam = st.slider("Regularization strength λ", 0.0, 2.0, 0.5, step=0.05)
+            reg_type = st.radio("Type", ["L2 (Ridge)", "L1 (Lasso)", "None"])
+            st.markdown("---")
+            st.markdown("**Key difference:**")
+            st.markdown("- **L2** shrinks weights smoothly toward zero")
+            st.markdown("- **L1** drives many weights to exactly zero (sparse model)")
+        with col2:
+            w_vals = np.linspace(-3, 3, 300)
+            base_loss = w_vals**2 * 0.3 + 1
+            if reg_type == "L2 (Ridge)":
+                penalty = lam * w_vals**2
+                pen_label = f"L2 penalty (λ={lam})"
+            elif reg_type == "L1 (Lasso)":
+                penalty = lam * np.abs(w_vals)
+                pen_label = f"L1 penalty (λ={lam})"
+            else:
+                penalty = np.zeros_like(w_vals)
+                pen_label = "No penalty"
+            total = base_loss + penalty
+            opt_w = w_vals[np.argmin(total)]
+
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=w_vals, y=base_loss, name="Base loss",
+                line=dict(color='#AFA9EC', width=2, dash='dash')))
+            fig.add_trace(go.Scatter(x=w_vals, y=penalty, name=pen_label,
+                line=dict(color='#EF9F27', width=2)))
+            fig.add_trace(go.Scatter(x=w_vals, y=total, name="Total loss",
+                line=dict(color='#E24B4A', width=2.5)))
+            fig.add_vline(x=opt_w, line_dash='dot', line_color='#1D9E75',
+                annotation_text=f"optimal w = {opt_w:.2f}")
+            fig.update_layout(xaxis_title="Weight w", yaxis_title="Loss",
+                height=380, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, use_container_width=True)
+
+    with tab2:
+        st.markdown("Train a small linear model with different regularization — watch the weights:")
+        np.random.seed(42)
+        n_reg = 30
+        X_reg = np.random.randn(n_reg, 8)
+        true_coef = np.array([2.0, -1.5, 0.0, 0.0, 0.8, 0.0, 0.0, -0.3])
+        y_reg = X_reg @ true_coef + np.random.randn(n_reg) * 0.5
+
+        lambdas = np.logspace(-3, 1, 60)
+        l2_paths, l1_paths = [], []
+
+        for lv in lambdas:
+            # Ridge closed form
+            I = np.eye(8)
+            w_ridge = np.linalg.solve(X_reg.T @ X_reg + lv * I, X_reg.T @ y_reg)
+            l2_paths.append(w_ridge)
+            # Lasso via coordinate descent (simple)
+            w_lasso = np.zeros(8)
+            for _ in range(200):
+                for j in range(8):
+                    r = y_reg - X_reg @ w_lasso + X_reg[:, j] * w_lasso[j]
+                    rho = X_reg[:, j] @ r / n_reg
+                    w_lasso[j] = np.sign(rho) * max(abs(rho) - lv / 2, 0)
+            l1_paths.append(w_lasso.copy())
+
+        l2_paths = np.array(l2_paths)
+        l1_paths = np.array(l1_paths)
+
+        reg_choice = st.radio("Regularization type", ["L2 (Ridge)", "L1 (Lasso)"], horizontal=True)
+        paths = l2_paths if reg_choice == "L2 (Ridge)" else l1_paths
+        colors8 = ['#534AB7','#E24B4A','#1D9E75','#EF9F27','#D4537E','#2196F3','#9C27B0','#FF5722']
+
+        fig2 = go.Figure()
+        for j in range(8):
+            fig2.add_trace(go.Scatter(x=lambdas, y=paths[:, j],
+                name=f"w{j+1} (true={true_coef[j]})",
+                line=dict(color=colors8[j], width=2)))
+        fig2.update_layout(xaxis_type='log', xaxis_title="λ (log scale)",
+            yaxis_title="Weight value", height=360,
+            legend=dict(orientation='h', y=1.15, font=dict(size=11)))
+        st.plotly_chart(fig2, use_container_width=True)
+        st.caption("As λ increases, weights shrink. L1 reaches exactly 0 (sparse); L2 approaches 0 smoothly.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# K-NEAREST NEIGHBORS
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "knn":
+    st.title("🔵 K-Nearest Neighbors (KNN)")
+    st.markdown("""
+    <div class="concept-card">
+    KNN classifies a new point by looking at the <b>K closest training examples</b>
+    and taking a majority vote. No training is needed — all the work happens at prediction time.
+    </div>
+    """, unsafe_allow_html=True)
+
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        k = st.slider("K (number of neighbors)", 1, 15, 3, step=2)
+        n_per_class = st.slider("Points per class", 10, 40, 20)
+        seed_knn = st.slider("Dataset seed", 0, 20, 7)
+        test_x = st.slider("Test point X", -3.0, 3.0, 0.5, step=0.1)
+        test_y = st.slider("Test point Y", -3.0, 3.0, 0.5, step=0.1)
+
+    np.random.seed(seed_knn)
+    X_a = np.random.randn(n_per_class, 2) + np.array([-1.2, 0.8])
+    X_b = np.random.randn(n_per_class, 2) + np.array([1.2, -0.8])
+    X_c = np.random.randn(n_per_class, 2) + np.array([0.0, -1.8])
+    X_all = np.vstack([X_a, X_b, X_c])
+    y_all = np.array([0]*n_per_class + [1]*n_per_class + [2]*n_per_class)
+    class_names = ["Class A", "Class B", "Class C"]
+    class_colors = ['#534AB7', '#E24B4A', '#1D9E75']
+
+    test_pt = np.array([test_x, test_y])
+    dists = np.linalg.norm(X_all - test_pt, axis=1)
+    neighbor_idx = np.argsort(dists)[:k]
+    neighbor_labels = y_all[neighbor_idx]
+    votes = np.bincount(neighbor_labels, minlength=3)
+    prediction = np.argmax(votes)
+
+    with col2:
+        fig = go.Figure()
+        for cls, cname, col in zip([0,1,2], class_names, class_colors):
+            mask = y_all == cls
+            fig.add_trace(go.Scatter(x=X_all[mask,0], y=X_all[mask,1],
+                mode='markers', name=cname,
+                marker=dict(color=col, size=8, opacity=0.7)))
+
+        # draw radius circle
+        radius = dists[neighbor_idx[-1]] * 1.02
+        theta = np.linspace(0, 2*np.pi, 120)
+        fig.add_trace(go.Scatter(x=test_x + radius*np.cos(theta),
+            y=test_y + radius*np.sin(theta),
+            mode='lines', line=dict(color='#EF9F27', width=1.5, dash='dot'),
+            name='KNN radius', showlegend=True))
+
+        # highlight neighbors
+        for ni in neighbor_idx:
+            fig.add_shape(type='line', x0=test_x, y0=test_y,
+                x1=X_all[ni,0], y1=X_all[ni,1],
+                line=dict(color='#EF9F27', width=1, dash='dot'))
+
+        # test point
+        fig.add_trace(go.Scatter(x=[test_x], y=[test_y], mode='markers',
+            name=f'Test point → {class_names[prediction]}',
+            marker=dict(color=class_colors[prediction], size=16,
+                symbol='star', line=dict(color='black', width=1.5))))
+
+        fig.update_layout(xaxis_title="X", yaxis_title="Y", height=420,
+            legend=dict(orientation='h', y=1.12))
+        st.plotly_chart(fig, use_container_width=True)
+
+    c1, c2, c3 = st.columns(3)
+    for i, (cname, col) in enumerate(zip(class_names, class_colors)):
+        c = [c1, c2, c3][i]
+        c.metric(f"{cname} votes", votes[i])
+
+    pred_col = class_colors[prediction]
+    st.markdown(f"**Prediction: {class_names[prediction]}** ({votes[prediction]}/{k} votes)")
+
+    st.markdown("### Decision boundaries — how K changes the border")
+    st.markdown("Low K → jagged boundaries (high variance). High K → smooth boundaries (high bias).")
+
+    from sklearn.neighbors import KNeighborsClassifier
+    xx, yy = np.meshgrid(np.linspace(-4,4,120), np.linspace(-4,4,120))
+    grid = np.c_[xx.ravel(), yy.ravel()]
+
+    fig2 = make_subplots(rows=1, cols=3, subplot_titles=["K=1", "K=5", "K=15"])
+    for col_idx, kv in enumerate([1, 5, 15]):
+        clf = KNeighborsClassifier(n_neighbors=kv)
+        clf.fit(X_all, y_all)
+        Z = clf.predict(grid).reshape(xx.shape)
+        for cls, c in enumerate(class_colors):
+            mask_g = Z == cls
+            fig2.add_trace(go.Scatter(
+                x=xx.ravel()[mask_g.ravel()], y=yy.ravel()[mask_g.ravel()],
+                mode='markers', marker=dict(color=c, size=3, opacity=0.15),
+                showlegend=False), row=1, col=col_idx+1)
+        for cls, c in enumerate(class_colors):
+            mask = y_all == cls
+            fig2.add_trace(go.Scatter(x=X_all[mask,0], y=X_all[mask,1],
+                mode='markers', marker=dict(color=c, size=6),
+                showlegend=False), row=1, col=col_idx+1)
+    fig2.update_layout(height=320)
+    st.plotly_chart(fig2, use_container_width=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CONFUSION MATRIX & METRICS
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "confusion":
+    st.title("🔢 Confusion Matrix & Metrics")
+    st.markdown("""
+    <div class="concept-card">
+    A confusion matrix breaks down predictions into <b>TP, FP, FN, TN</b>.
+    From these we derive precision, recall, F1 and accuracy — each tells a different story
+    about where the model succeeds and fails.
+    </div>
+    """, unsafe_allow_html=True)
+
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        threshold = st.slider("Classification threshold", 0.01, 0.99, 0.5, step=0.01)
+        n_conf = st.slider("Dataset size", 50, 300, 150)
+        imbalance = st.slider("Class imbalance (% positive)", 5, 50, 30)
+        seed_c = st.slider("Seed", 0, 20, 3)
+
+    np.random.seed(seed_c)
+    n_pos = int(n_conf * imbalance / 100)
+    n_neg = n_conf - n_pos
+    scores_pos = np.clip(np.random.beta(5, 2, n_pos), 0, 1)
+    scores_neg = np.clip(np.random.beta(2, 5, n_neg), 0, 1)
+    scores = np.concatenate([scores_pos, scores_neg])
+    labels = np.array([1]*n_pos + [0]*n_neg)
+    preds = (scores >= threshold).astype(int)
+
+    TP = np.sum((preds == 1) & (labels == 1))
+    FP = np.sum((preds == 1) & (labels == 0))
+    FN = np.sum((preds == 0) & (labels == 1))
+    TN = np.sum((preds == 0) & (labels == 0))
+
+    precision = TP / (TP + FP + 1e-9)
+    recall    = TP / (TP + FN + 1e-9)
+    f1        = 2 * precision * recall / (precision + recall + 1e-9)
+    accuracy  = (TP + TN) / n_conf
+
+    with col2:
+        cm = np.array([[TP, FP], [FN, TN]])
+        labels_cm = [["TP", "FP"], ["FN", "TN"]]
+        text = [[f"<b>{labels_cm[i][j]}</b><br>{cm[i,j]}" for j in range(2)] for i in range(2)]
+
+        fig = go.Figure(go.Heatmap(
+            z=cm, x=["Predicted Positive","Predicted Negative"],
+            y=["Actual Positive","Actual Negative"],
+            colorscale=[[0,'#f0effe'],[0.5,'#AFA9EC'],[1,'#534AB7']],
+            text=text, texttemplate="%{text}", textfont=dict(size=18),
+            showscale=False))
+        fig.update_layout(height=320, xaxis_title="Predicted", yaxis_title="Actual")
+        st.plotly_chart(fig, use_container_width=True)
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Precision", f"{precision:.3f}", help="TP / (TP+FP) — of all positive predictions, how many were correct?")
+    c2.metric("Recall", f"{recall:.3f}", help="TP / (TP+FN) — of all actual positives, how many did we catch?")
+    c3.metric("F1 Score", f"{f1:.3f}", help="Harmonic mean of precision and recall")
+    c4.metric("Accuracy", f"{accuracy:.3f}", help="(TP+TN) / total")
+
+    st.markdown("### Precision–Recall tradeoff across thresholds")
+    thresholds = np.linspace(0.01, 0.99, 200)
+    precs, recs, f1s = [], [], []
+    for t in thresholds:
+        p_ = (scores >= t).astype(int)
+        tp_ = np.sum((p_==1) & (labels==1))
+        fp_ = np.sum((p_==1) & (labels==0))
+        fn_ = np.sum((p_==0) & (labels==1))
+        pr = tp_ / (tp_ + fp_ + 1e-9)
+        rc = tp_ / (tp_ + fn_ + 1e-9)
+        precs.append(pr); recs.append(rc)
+        f1s.append(2*pr*rc/(pr+rc+1e-9))
+
+    fig2 = make_subplots(rows=1, cols=2,
+        subplot_titles=["Precision & Recall vs Threshold", "Precision-Recall curve"])
+    fig2.add_trace(go.Scatter(x=thresholds, y=precs, name='Precision',
+        line=dict(color='#534AB7', width=2)), row=1, col=1)
+    fig2.add_trace(go.Scatter(x=thresholds, y=recs, name='Recall',
+        line=dict(color='#E24B4A', width=2)), row=1, col=1)
+    fig2.add_trace(go.Scatter(x=thresholds, y=f1s, name='F1',
+        line=dict(color='#1D9E75', width=2)), row=1, col=1)
+    fig2.add_vline(x=threshold, line_dash='dash', line_color='#EF9F27',
+        annotation_text=f"t={threshold:.2f}", row=1, col=1)
+    fig2.add_trace(go.Scatter(x=recs, y=precs, mode='lines',
+        name='PR curve', line=dict(color='#534AB7', width=2.5),
+        showlegend=False), row=1, col=2)
+    # mark current threshold on PR curve
+    cur_idx = np.argmin(np.abs(thresholds - threshold))
+    fig2.add_trace(go.Scatter(x=[recs[cur_idx]], y=[precs[cur_idx]],
+        mode='markers', marker=dict(color='#EF9F27', size=12, symbol='circle'),
+        name='Current threshold', showlegend=False), row=1, col=2)
+    fig2.update_xaxes(title_text="Threshold", row=1, col=1)
+    fig2.update_xaxes(title_text="Recall", row=1, col=2)
+    fig2.update_yaxes(title_text="Score", row=1, col=1)
+    fig2.update_yaxes(title_text="Precision", row=1, col=2)
+    fig2.update_layout(height=340, legend=dict(orientation='h', y=1.12))
+    st.plotly_chart(fig2, use_container_width=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# BIAS-VARIANCE TRADEOFF
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "bias_var":
+    st.title("🎯 Bias-Variance Tradeoff")
+    st.markdown("""
+    <div class="concept-card">
+    Total prediction error = <b>Bias²</b> + <b>Variance</b> + <b>Irreducible noise</b>.<br>
+    A model that is too simple has high bias (underfits). A model that is too complex has
+    high variance (overfits). The goal is to find the sweet spot.
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('<div class="formula-box">MSE = Bias² + Variance + σ²</div>', unsafe_allow_html=True)
+
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        complexity = st.slider("Model complexity", 1, 15, 4,
+            help="Higher = more flexible model (higher degree polynomial)")
+        noise_bv = st.slider("Irreducible noise σ", 0.1, 2.0, 0.8, step=0.1)
+        n_datasets = st.slider("Number of datasets (for variance)", 5, 20, 10)
+        seed_bv = st.slider("Seed", 0, 10, 0)
+
+    np.random.seed(seed_bv)
+    x_bv = np.linspace(-3, 3, 300)
+    true_fn = np.sin(x_bv)
+
+    x_eval = np.linspace(-3, 3, 80)
+    all_preds = []
+    for i in range(n_datasets):
+        x_tr_bv = np.random.uniform(-3, 3, 25)
+        y_tr_bv = np.sin(x_tr_bv) + np.random.randn(25) * noise_bv
+        try:
+            coef = np.polyfit(x_tr_bv, y_tr_bv, complexity)
+            pred = np.polyval(coef, x_eval)
+            all_preds.append(np.clip(pred, -10, 10))
+        except Exception:
+            pass
+    all_preds = np.array(all_preds)
+    mean_pred = all_preds.mean(axis=0)
+    variance_curve = all_preds.var(axis=0)
+    true_at_eval = np.sin(x_eval)
+    bias_sq_curve = (mean_pred - true_at_eval)**2
+
+    avg_bias_sq = float(bias_sq_curve.mean())
+    avg_variance = float(variance_curve.mean())
+    avg_noise    = float(noise_bv**2)
+    total_err    = avg_bias_sq + avg_variance + avg_noise
+
+    with col2:
+        fig = go.Figure()
+        for i, pred in enumerate(all_preds):
+            fig.add_trace(go.Scatter(x=x_eval, y=pred, mode='lines',
+                line=dict(color='rgba(83,74,183,0.18)', width=1),
+                showlegend=(i == 0), name='Individual model'))
+        fig.add_trace(go.Scatter(x=x_eval, y=mean_pred, name='Mean prediction',
+            line=dict(color='#534AB7', width=2.5)))
+        fig.add_trace(go.Scatter(x=x_eval, y=true_at_eval, name='True function',
+            line=dict(color='#1D9E75', width=2, dash='dash')))
+        fig.update_layout(xaxis_title="x", yaxis_title="y",
+            yaxis_range=[-4, 4], height=360,
+            legend=dict(orientation='h', y=1.12))
+        st.plotly_chart(fig, use_container_width=True)
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Bias²", f"{avg_bias_sq:.3f}")
+    c2.metric("Variance", f"{avg_variance:.3f}")
+    c3.metric("Noise σ²", f"{avg_noise:.3f}")
+    c4.metric("Total Error", f"{total_err:.3f}")
+
+    st.markdown("### How each component changes with model complexity")
+    complexities = list(range(1, 16))
+    bias_vals, var_vals = [], []
+    for c_val in complexities:
+        preds_c = []
+        for i in range(n_datasets):
+            np.random.seed(i + seed_bv * 100)
+            x_tr_c = np.random.uniform(-3, 3, 25)
+            y_tr_c = np.sin(x_tr_c) + np.random.randn(25) * noise_bv
+            try:
+                coef = np.polyfit(x_tr_c, y_tr_c, c_val)
+                preds_c.append(np.clip(np.polyval(coef, x_eval), -15, 15))
+            except Exception:
+                pass
+        if preds_c:
+            ap = np.array(preds_c)
+            bias_vals.append(float(((ap.mean(axis=0) - true_at_eval)**2).mean()))
+            var_vals.append(float(ap.var(axis=0).mean()))
+        else:
+            bias_vals.append(None); var_vals.append(None)
+
+    noise_line = [noise_bv**2] * len(complexities)
+    total_line = [b + v + noise_bv**2 if b is not None else None
+                  for b, v in zip(bias_vals, var_vals)]
+
+    fig2 = go.Figure()
+    fig2.add_trace(go.Scatter(x=complexities, y=bias_vals, name='Bias²',
+        line=dict(color='#534AB7', width=2.5), mode='lines+markers'))
+    fig2.add_trace(go.Scatter(x=complexities, y=var_vals, name='Variance',
+        line=dict(color='#E24B4A', width=2.5), mode='lines+markers'))
+    fig2.add_trace(go.Scatter(x=complexities, y=noise_line, name='Noise σ²',
+        line=dict(color='#888780', width=1.5, dash='dash')))
+    fig2.add_trace(go.Scatter(x=complexities, y=total_line, name='Total Error',
+        line=dict(color='#1D9E75', width=2.5), mode='lines+markers'))
+    fig2.add_vline(x=complexity, line_dash='dot', line_color='#EF9F27',
+        annotation_text=f"complexity={complexity}")
+    fig2.update_layout(xaxis_title="Model complexity", yaxis_title="Error",
+        yaxis_range=[0, min(max(bias_vals + var_vals + [2]), 8)],
+        height=320, legend=dict(orientation='h', y=1.12))
+    st.plotly_chart(fig2, use_container_width=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# LEARNING RATE SCHEDULERS
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "lr_schedule":
+    st.title("📅 Learning Rate Schedulers")
+    st.markdown("""
+    <div class="concept-card">
+    A fixed learning rate is rarely optimal throughout training. <b>Schedulers</b> reduce
+    the learning rate over time so the model takes large steps early (explore) and
+    small steps later (refine).
+    </div>
+    """, unsafe_allow_html=True)
+
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        lr0 = st.slider("Initial learning rate", 0.01, 1.0, 0.1, step=0.01)
+        total_epochs = st.slider("Total epochs", 20, 200, 100)
+        warmup_epochs = st.slider("Warmup epochs", 0, 20, 5)
+        step_size = st.slider("Step decay — drop every N epochs", 5, 40, 20)
+        step_gamma = st.slider("Step decay — drop factor", 0.1, 0.9, 0.5, step=0.05)
+
+        schedules_sel = st.multiselect("Show schedules",
+            ["Constant", "Step Decay", "Exponential Decay", "Cosine Annealing", "Warmup + Cosine"],
+            default=["Step Decay", "Cosine Annealing", "Warmup + Cosine"])
+
+    epochs = np.arange(total_epochs)
+
+    def step_decay(e):
+        return lr0 * (step_gamma ** (e // step_size))
+
+    def exp_decay(e):
+        return lr0 * np.exp(-3 * e / total_epochs)
+
+    def cosine(e):
+        return lr0 * 0.5 * (1 + np.cos(np.pi * e / total_epochs))
+
+    def warmup_cosine(e):
+        if e < warmup_epochs:
+            return lr0 * (e + 1) / max(warmup_epochs, 1)
+        t = (e - warmup_epochs) / max(total_epochs - warmup_epochs, 1)
+        return lr0 * 0.5 * (1 + np.cos(np.pi * t))
+
+    schedule_fns = {
+        "Constant":           lambda e: lr0,
+        "Step Decay":         step_decay,
+        "Exponential Decay":  exp_decay,
+        "Cosine Annealing":   cosine,
+        "Warmup + Cosine":    warmup_cosine,
+    }
+    sched_colors = {
+        "Constant":          '#888780',
+        "Step Decay":        '#534AB7',
+        "Exponential Decay": '#D85A30',
+        "Cosine Annealing":  '#1D9E75',
+        "Warmup + Cosine":   '#E24B4A',
+    }
+
+    with col2:
+        fig = go.Figure()
+        for name in schedules_sel:
+            fn = schedule_fns[name]
+            lr_vals = [fn(e) for e in epochs]
+            fig.add_trace(go.Scatter(x=epochs, y=lr_vals, name=name,
+                line=dict(color=sched_colors[name], width=2.5)))
+        if warmup_epochs > 0 and "Warmup + Cosine" in schedules_sel:
+            fig.add_vline(x=warmup_epochs, line_dash='dot', line_color='#EF9F27',
+                annotation_text="warmup end")
+        fig.update_layout(xaxis_title="Epoch", yaxis_title="Learning rate",
+            height=380, legend=dict(orientation='h', y=1.12))
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("### Simulated training loss with each schedule")
+    np.random.seed(42)
+    base_noise = np.random.randn(total_epochs) * 0.03
+
+    fig2 = go.Figure()
+    for name in schedules_sel:
+        fn = schedule_fns[name]
+        loss_sim = []
+        l = 1.0
+        for e in range(total_epochs):
+            lr_e = fn(e)
+            l = l * (1 - lr_e * 0.15) + abs(base_noise[e]) * lr_e
+            loss_sim.append(max(l, 0.01))
+        fig2.add_trace(go.Scatter(x=epochs, y=loss_sim, name=name,
+            line=dict(color=sched_colors[name], width=2)))
+    fig2.update_layout(xaxis_title="Epoch", yaxis_title="Simulated loss",
+        height=300, legend=dict(orientation='h', y=1.12))
+    st.plotly_chart(fig2, use_container_width=True)
+    st.caption("Simulated — illustrates the qualitative effect of each schedule, not a real training run.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# NORMALIZATION
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "normalization":
+    st.title("📐 Normalization")
+    st.markdown("""
+    <div class="concept-card">
+    Normalization rescales inputs or activations to keep values in a useful range.
+    This stabilises training, speeds up convergence and reduces sensitivity to weight initialisation.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Feature Scaling", "Batch / Layer Norm"])
+
+    with tab1:
+        st.markdown("### Effect of feature scaling on gradient descent")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            scale_ratio = st.slider("Feature scale ratio (X₂ / X₁)", 1, 50, 20,
+                help="Large ratio = very different feature scales")
+            scaling = st.radio("Normalization method",
+                ["None", "Min-Max [0,1]", "Standardization (z-score)"])
+            lr_norm = st.select_slider("Learning rate", [0.001,0.005,0.01,0.05,0.1], value=0.01)
+            steps_norm = st.slider("GD steps", 10, 80, 40)
+
+        np.random.seed(42)
+        n_norm = 60
+        X1 = np.random.randn(n_norm)
+        X2 = np.random.randn(n_norm) * scale_ratio
+        y_norm = 2*X1 + 0.5*X2 + np.random.randn(n_norm)*0.3
+
+        if scaling == "Min-Max [0,1]":
+            X1s = (X1 - X1.min()) / (X1.max() - X1.min() + 1e-9)
+            X2s = (X2 - X2.min()) / (X2.max() - X2.min() + 1e-9)
+        elif scaling == "Standardization (z-score)":
+            X1s = (X1 - X1.mean()) / (X1.std() + 1e-9)
+            X2s = (X2 - X2.mean()) / (X2.std() + 1e-9)
+        else:
+            X1s, X2s = X1, X2
+
+        X_n = np.column_stack([X1s, X2s])
+
+        # gradient descent trajectory
+        w = np.array([0.0, 0.0])
+        traj = [w.copy()]
+        losses_n = []
+        for _ in range(steps_norm):
+            pred = X_n @ w
+            err = pred - y_norm
+            loss_n = np.mean(err**2)
+            losses_n.append(loss_n)
+            grad = 2 * X_n.T @ err / n_norm
+            w = w - lr_norm * grad
+            traj.append(w.copy())
+        traj = np.array(traj)
+
+        # loss surface
+        w1r = np.linspace(-3, 5, 60)
+        w2r = np.linspace(-3, 5, 60)
+        WW2, BB2 = np.meshgrid(w1r, w2r)
+        ZZ2 = np.array([[np.mean((X_n @ np.array([ww, bb]) - y_norm)**2)
+                         for ww in w1r] for bb in w2r])
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Contour(z=ZZ2, x=w1r, y=w2r,
+                colorscale='RdPu', opacity=0.7,
+                contours=dict(showlabels=False),
+                colorbar=dict(title='MSE', thickness=10)))
+            fig.add_trace(go.Scatter(x=traj[:,0], y=traj[:,1],
+                mode='lines+markers', name='GD path',
+                line=dict(color='#EF9F27', width=2),
+                marker=dict(size=5, color='#EF9F27')))
+            fig.add_trace(go.Scatter(x=[traj[0,0]], y=[traj[0,1]],
+                mode='markers', marker=dict(color='#E24B4A', size=12, symbol='circle'),
+                name='Start'))
+            fig.add_trace(go.Scatter(x=[traj[-1,0]], y=[traj[-1,1]],
+                mode='markers', marker=dict(color='#1D9E75', size=12, symbol='star'),
+                name='End'))
+            fig.update_layout(xaxis_title='w₁', yaxis_title='w₂',
+                height=380, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("**Without normalization:** elongated elliptical contours → slow, zigzagging descent.  \n"
+                    "**With normalization:** rounder contours → faster, straighter path to minimum.")
+
+    with tab2:
+        st.markdown("### Batch Norm vs Layer Norm — where they normalise")
+        st.markdown("""
+        | | Batch Norm | Layer Norm |
+        |---|---|---|
+        | Normalises over | the **batch** dimension | the **feature** dimension |
+        | Typical use | CNNs, MLPs | Transformers, RNNs |
+        | Problem with small batches | Yes — statistics are noisy | No |
+        | Works at inference without batch | Needs running stats | Yes |
+        """)
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            batch_size = st.slider("Batch size", 2, 32, 8)
+            n_features = st.slider("Number of features", 2, 16, 6)
+            inp_mean = st.slider("Input mean", -3.0, 3.0, 1.5, step=0.5)
+            inp_std = st.slider("Input std", 0.1, 5.0, 2.0, step=0.1)
+
+        np.random.seed(42)
+        X_bn = np.random.randn(batch_size, n_features) * inp_std + inp_mean
+
+        bn_out = (X_bn - X_bn.mean(axis=0, keepdims=True)) / (X_bn.std(axis=0, keepdims=True) + 1e-5)
+        ln_out = (X_bn - X_bn.mean(axis=1, keepdims=True)) / (X_bn.std(axis=1, keepdims=True) + 1e-5)
+
+        with col2:
+            import pandas as pd
+            fig_bn = make_subplots(rows=1, cols=3,
+                subplot_titles=["Raw input", "After Batch Norm", "After Layer Norm"])
+            for r, (data, label) in enumerate([(X_bn, "Raw"), (bn_out, "BatchNorm"), (ln_out, "LayerNorm")]):
+                for f in range(min(n_features, 8)):
+                    fig_bn.add_trace(go.Box(y=data[:,f], name=f"F{f+1}",
+                        showlegend=False, marker_color='#534AB7',
+                        opacity=0.7), row=1, col=r+1)
+            fig_bn.update_layout(height=340)
+            st.plotly_chart(fig_bn, use_container_width=True)
+            st.caption("Each box = one feature column. Batch Norm centres each feature; Layer Norm centres each sample.")
