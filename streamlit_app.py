@@ -79,7 +79,7 @@ with st.sidebar:
 
     st.markdown("**A–Z Index**")
     for key, name, icon, _ in ALPHA:
-        if st.button(f"{icon} {name}", key=f"sb_{key}", use_container_width=True):
+        if st.button(name, key=f"sb_{key}", use_container_width=True):
             go_to(key)
 
     st.divider()
