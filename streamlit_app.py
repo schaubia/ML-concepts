@@ -64,6 +64,12 @@ CATALOGUE = [
     ("normalization", "Normalization",                   "📐", "Batch norm, layer norm and feature scaling"),
     ("optimizers",    "Optimizers",                     "🚀", "SGD, Momentum, RMSProp and Adam compared"),
     ("vanishing_grad","Vanishing & Exploding Gradients","⚡", "Signal death in deep networks and fixes"),
+    # ── Agentic AI ──
+    ("agent_memory", "Agent Memory Types",        "🧠", "In-context, external (RAG) and parametric memory"),
+    ("multi_agent",  "Multi-Agent Systems",        "🤝", "Orchestrators, workers and message passing"),
+    ("planning",     "Planning & Task Decomposition","🗺️","Breaking goals into subtasks and dependency graphs"),
+    ("react_loop",   "ReAct Loop",                 "🔄", "Reason → Act → Observe cycle for tool-using agents"),
+    ("tool_use",     "Tool Use",                   "🔧", "How agents call functions and parse results"),
     # ── Math Foundations ──
     ("chain_rule",    "Chain Rule",                     "🔗", "Derivative of composite functions — the engine of backprop"),
     ("derivative",    "Derivative",                     "📐", "Instantaneous rate of change and the tangent line"),
@@ -77,16 +83,18 @@ CATALOGUE = [
     ("vectors",       "Vectors",                        "➡️", "Direction and magnitude — the language of ML data"),
 ]
 
-ML_KEYS   = {"bias_var","confusion","decision_tree","gradient","knn","linear_reg","logistic_reg",
-             "loss","naive_bayes","overfit","pca","regularization"}
-DL_KEYS   = {"activation","attention","backprop","batch_size","cnn","dropout","lr_schedule",
-             "neural_net","neuron","normalization","optimizers","vanishing_grad"}
-MATH_KEYS = {"chain_rule","derivative","dot_product","eigenvalues","integral","matrix_ops",
-             "partial_deriv","probability","svd","vectors"}
+ML_KEYS     = {"bias_var","confusion","decision_tree","gradient","knn","linear_reg","logistic_reg",
+               "loss","naive_bayes","overfit","pca","regularization"}
+DL_KEYS     = {"activation","attention","backprop","batch_size","cnn","dropout","lr_schedule",
+               "neural_net","neuron","normalization","optimizers","vanishing_grad"}
+MATH_KEYS   = {"chain_rule","derivative","dot_product","eigenvalues","integral","matrix_ops",
+               "partial_deriv","probability","svd","vectors"}
+AGENT_KEYS  = {"react_loop","tool_use","planning","agent_memory","multi_agent"}
 # alphabetical within each group
 ALPHA_ML   = sorted([c for c in CATALOGUE if c[0] in ML_KEYS],   key=lambda x: x[1].lower())
 ALPHA_DL   = sorted([c for c in CATALOGUE if c[0] in DL_KEYS],   key=lambda x: x[1].lower())
 ALPHA_MATH = sorted([c for c in CATALOGUE if c[0] in MATH_KEYS], key=lambda x: x[1].lower())
+ALPHA_AGENT = sorted([c for c in CATALOGUE if c[0] in AGENT_KEYS], key=lambda x: x[1].lower())
 
 # ── State ────────────────────────────────────────────────────────────────────
 if "section" not in st.session_state:
@@ -110,6 +118,10 @@ with st.sidebar:
             go_to(key)
     st.markdown("**Deep Learning**")
     for key, name, icon, _ in ALPHA_DL:
+        if st.button(name, key=f"sb_{key}", use_container_width=True):
+            go_to(key)
+    st.markdown("**Agentic AI**")
+    for key, name, icon, _ in ALPHA_AGENT:
         if st.button(name, key=f"sb_{key}", use_container_width=True):
             go_to(key)
     st.markdown("**Math Foundations**")
@@ -150,6 +162,8 @@ if section == "home":
     render_cards(ALPHA_ML)
     st.markdown("### 🧠 Deep Learning")
     render_cards(ALPHA_DL)
+    st.markdown("### 🤝 Agentic AI")
+    render_cards(ALPHA_AGENT)
     st.markdown("### 📐 Math Foundations")
     render_cards(ALPHA_MATH)
 
@@ -4095,3 +4109,763 @@ elif section == "svd":
             "Variance share": [f"{S_s[i]**2/(S_s**2).sum():.1%}" for i in range(len(S_s))],
             "Cumulative": [f"{(S_s[:i+1]**2).sum()/(S_s**2).sum():.1%}" for i in range(len(S_s))],
         }), use_container_width=True, hide_index=True)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# REACT LOOP
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "react_loop":
+    st.title("🔄 ReAct Loop")
+    st.markdown("""
+    <div class="concept-card">
+    <b>ReAct</b> (Reason + Act) is the core loop of a tool-using agent.
+    At each step the model: <b>Reasons</b> about what to do next,
+    <b>Acts</b> by calling a tool, then <b>Observes</b> the result —
+    repeating until the task is complete.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Step-by-step simulation", "Loop anatomy"])
+
+    with tab1:
+        st.markdown("### Simulate an agent solving a task")
+
+        SCENARIOS = {
+            "Find the weather and plan an outfit": [
+                ("Thought", "I need to check the current weather to recommend an outfit.",
+                 "🧠", "#534AB7"),
+                ("Action",  'get_weather(location="Sofia, Bulgaria")',
+                 "🔧", "#EF9F27"),
+                ("Observation", '{"temp": 12, "condition": "rainy", "wind_mph": 15}',
+                 "👁️", "#1D9E75"),
+                ("Thought", "It is cold and rainy. I should recommend a waterproof jacket and layers.",
+                 "🧠", "#534AB7"),
+                ("Action",  'search_web(query="best rainy day outfits 12 degrees")',
+                 "🔧", "#EF9F27"),
+                ("Observation", "Results: waterproof jacket, warm underlayer, waterproof shoes recommended.",
+                 "👁️", "#1D9E75"),
+                ("Thought", "I have enough information to give a complete recommendation.",
+                 "🧠", "#534AB7"),
+                ("Final Answer", "Wear a waterproof jacket over a warm underlayer, waterproof shoes. Bring an umbrella.",
+                 "✅", "#E24B4A"),
+            ],
+            "Calculate compound interest and summarise": [
+                ("Thought", "I need to calculate compound interest. I should use the calculator tool.",
+                 "🧠", "#534AB7"),
+                ("Action",  'calculator(expression="1000 * (1 + 0.05/12) ** (12*3)")',
+                 "🔧", "#EF9F27"),
+                ("Observation", '{"result": 1161.62}',
+                 "👁️", "#1D9E75"),
+                ("Thought", "The result is $1161.62. Now I should look up the current savings rate to compare.",
+                 "🧠", "#534AB7"),
+                ("Action",  'search_web(query="average savings account interest rate 2025")',
+                 "🔧", "#EF9F27"),
+                ("Observation", "Average savings rate is around 4.5% APY as of 2025.",
+                 "👁️", "#1D9E75"),
+                ("Thought", "I can now provide a complete answer comparing both options.",
+                 "🧠", "#534AB7"),
+                ("Final Answer", "$1000 grows to $1161.62 at 5% over 3 years. This beats the average 4.5% APY savings rate.",
+                 "✅", "#E24B4A"),
+            ],
+            "Research and write a short report": [
+                ("Thought", "I need to gather information before writing. Let me search for recent data.",
+                 "🧠", "#534AB7"),
+                ("Action",  'search_web(query="transformer architecture key innovations 2024")',
+                 "🔧", "#EF9F27"),
+                ("Observation", "Results: mixture-of-experts, flash attention, grouped query attention, long context.",
+                 "👁️", "#1D9E75"),
+                ("Thought", "Good, I have key points. Let me also check the latest model benchmarks.",
+                 "🧠", "#534AB7"),
+                ("Action",  'search_web(query="LLM benchmark results 2024 MMLU HumanEval")',
+                 "🔧", "#EF9F27"),
+                ("Observation", "GPT-4o: MMLU 88.7%, Claude 3.5: MMLU 88.3%, Gemini Ultra: 90.0%",
+                 "👁️", "#1D9E75"),
+                ("Thought", "I now have enough to write a concise, factual summary report.",
+                 "🧠", "#534AB7"),
+                ("Final Answer", "Report written: 2024 saw MoE scaling, long-context models, and top MMLU scores reaching 90%.",
+                 "✅", "#E24B4A"),
+            ],
+        }
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            scenario = st.selectbox("Task scenario", list(SCENARIOS.keys()))
+            steps = SCENARIOS[scenario]
+            n_steps = len(steps)
+            step_idx = st.slider("Show up to step", 1, n_steps, 1,
+                help="Drag to reveal each step of the agent loop")
+            st.markdown("---")
+            st.markdown("**Step types:**")
+            for label, col_s in [("🧠 Thought","#534AB7"),("🔧 Action","#EF9F27"),
+                                   ("👁️ Observation","#1D9E75"),("✅ Final Answer","#E24B4A")]:
+                st.markdown(f'<span style="color:{col_s}">●</span> {label}', unsafe_allow_html=True)
+
+        with col2:
+            for i, (stype, content_s, icon, color) in enumerate(steps[:step_idx]):
+                border = "3px solid" if stype == "Final Answer" else "2px solid"
+                bg = "#fef9e7" if stype == "Thought" else \
+                     "#fff8f0" if stype == "Action" else \
+                     "#f0faf5" if stype == "Observation" else "#fdecea"
+                st.markdown(f"""
+                <div style="border-left:{border} {color};background:{bg};
+                            padding:0.7rem 1rem;border-radius:0 8px 8px 0;
+                            margin-bottom:8px">
+                    <div style="font-size:0.75rem;font-weight:600;color:{color};
+                                text-transform:uppercase;letter-spacing:0.05em">
+                        {icon} {stype} — step {i+1}</div>
+                    <div style="font-family:monospace;font-size:0.9rem;margin-top:4px">
+                        {content_s}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            if step_idx < n_steps:
+                remaining = n_steps - step_idx
+                st.caption(f"▶ {remaining} more step{'s' if remaining>1 else ''} to go — drag the slider")
+            else:
+                st.success("✅ Agent completed the task!")
+
+        # metrics
+        steps_shown = steps[:step_idx]
+        thoughts = sum(1 for s in steps_shown if s[0]=="Thought")
+        actions  = sum(1 for s in steps_shown if s[0]=="Action")
+        obs      = sum(1 for s in steps_shown if s[0]=="Observation")
+        c1,c2,c3 = st.columns(3)
+        c1.metric("🧠 Thoughts", thoughts)
+        c2.metric("🔧 Tool calls", actions)
+        c3.metric("👁️ Observations", obs)
+
+    with tab2:
+        st.markdown("### The ReAct loop — anatomy")
+        # draw the loop as a flow diagram using plotly
+        fig = go.Figure()
+        fig.update_layout(xaxis=dict(visible=False, range=[0,10]),
+            yaxis=dict(visible=False, range=[0,10]),
+            height=420, plot_bgcolor="white",
+            margin=dict(l=20,r=20,t=20,b=20))
+
+        nodes = [
+            (5, 8.5, "TASK / GOAL", "#E8E6FF", "#534AB7", 14),
+            (2, 6,   "🧠 REASON\n(Thought)", "#FFF8E1", "#B8860B", 12),
+            (8, 6,   "🔧 ACT\n(Tool call)", "#FFF3E0", "#E65100", 12),
+            (5, 3.5, "👁️ OBSERVE\n(Result)", "#E8F5E9", "#1B5E20", 12),
+            (5, 1,   "✅ FINAL\nANSWER", "#FFEBEE", "#B71C1C", 12),
+        ]
+        for x, y, label, fill, border, fsize in nodes:
+            w, h = 1.5, 0.8
+            fig.add_shape(type="rect", x0=x-w, y0=y-h, x1=x+w, y1=y+h,
+                fillcolor=fill, line=dict(color=border, width=2.5), layer="below")
+            for di, line in enumerate(label.split("\n")):
+                fig.add_annotation(x=x, y=y + 0.2 - di*0.45, text=line,
+                    showarrow=False, font=dict(size=fsize, color=border))
+
+        arrows = [
+            (5, 7.7, 5, 6.8, "Start"),
+            (3.5, 6, 6.5, 6, "decide action"),
+            (8, 5.2, 6.5, 4.3, "tool result"),
+            (3.5, 4.3, 2, 5.2, "re-reason"),
+            (5, 2.7, 5, 1.8, "done?"),
+            (3.4, 3.5, 1.5, 3.5, ""),
+            (1.5, 3.5, 1.5, 6, ""),
+            (1.5, 6, 0.5, 6, "loop back"),
+        ]
+        for x0,y0,x1,y1,lbl in arrows:
+            fig.add_shape(type="line", x0=x0,y0=y0,x1=x1,y1=y1,
+                line=dict(color="#888", width=1.5))
+            if lbl:
+                mx,my = (x0+x1)/2,(y0+y1)/2
+                fig.add_annotation(x=mx,y=my,text=lbl,showarrow=False,
+                    font=dict(size=9,color="#555"),
+                    bgcolor="rgba(255,255,255,0.7)",borderpad=1)
+
+        st.plotly_chart(fig, use_container_width=True)
+        st.markdown("""
+        The agent loops through **Reason → Act → Observe** until it decides it has enough
+        information to produce a final answer. Each iteration gives it new grounding from
+        the real world via tools.
+        """)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TOOL USE
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "tool_use":
+    st.title("🔧 Tool Use")
+    st.markdown("""
+    <div class="concept-card">
+    Tool use lets an LLM extend beyond its training data by calling <b>external functions</b> —
+    web search, calculators, databases, APIs, code interpreters. The model outputs a structured
+    <b>tool call</b>, the result is injected back as an observation, and the model continues.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Tool call anatomy", "Tool selection & routing"])
+
+    with tab1:
+        st.markdown("### How a tool call works end to end")
+
+        TOOLS_DEMO = {
+            "get_weather": {
+                "description": "Get current weather for a location",
+                "parameters": {"location": "string — city name or coordinates",
+                               "units": "string — 'celsius' or 'fahrenheit'"},
+                "example_call": '{"location": "Sofia, Bulgaria", "units": "celsius"}',
+                "example_result": '{"temp": 12, "condition": "partly cloudy", "humidity": 65, "wind_kph": 20}',
+            },
+            "web_search": {
+                "description": "Search the web and return top results",
+                "parameters": {"query": "string — search query",
+                               "max_results": "integer — number of results (1-10)"},
+                "example_call": '{"query": "latest transformer architecture research", "max_results": 3}',
+                "example_result": '["FlashAttention-3 reduces memory...", "Mamba SSMs challenge...", "Mixture-of-experts scaling..."]',
+            },
+            "code_interpreter": {
+                "description": "Execute Python code and return output",
+                "parameters": {"code": "string — valid Python code to execute"},
+                "example_call": '{"code": "import numpy as np\\nprint(np.linalg.norm([3, 4]))"}',
+                "example_result": '{"stdout": "5.0\\n", "stderr": "", "exit_code": 0}',
+            },
+            "database_query": {
+                "description": "Run a SQL query on the company database",
+                "parameters": {"sql": "string — SQL SELECT statement",
+                               "database": "string — database name"},
+                "example_call": '{"sql": "SELECT AVG(score) FROM users WHERE active=1", "database": "prod"}',
+                "example_result": '{"rows": [{"AVG(score)": 87.3}], "row_count": 1, "elapsed_ms": 42}',
+            },
+        }
+
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            chosen_tool = st.selectbox("Select a tool", list(TOOLS_DEMO.keys()))
+            tool_info = TOOLS_DEMO[chosen_tool]
+            st.markdown(f"**Description:** {tool_info['description']}")
+            st.markdown("**Parameters:**")
+            for pname, pdesc in tool_info['parameters'].items():
+                st.markdown(f"- `{pname}`: {pdesc}")
+
+        with col2:
+            st.markdown("**Example tool call (JSON):**")
+            st.code(tool_info['example_call'], language="json")
+            st.markdown("**Tool result returned to agent:**")
+            st.code(tool_info['example_result'], language="json")
+
+        st.markdown("### Full message flow")
+        flow_steps = [
+            ("User message", "What's the weather in Sofia today?", "#f0f0f0", "#333"),
+            ("LLM generates tool call", f'<tool_call>\n{{"name": "{chosen_tool}",\n "args": {tool_info["example_call"]}}}\n</tool_call>', "#fff8e1", "#b8860b"),
+            ("Tool executes & returns", tool_info["example_result"], "#e8f5e9", "#1b5e20"),
+            ("LLM generates final response", "Based on the tool result, the agent now composes a natural language answer to the user.", "#f3f0ff", "#534AB7"),
+        ]
+        for label, content_f, bg, col_f in flow_steps:
+            st.markdown(f"""
+            <div style="background:{bg};border-radius:8px;padding:0.7rem 1rem;
+                        margin-bottom:8px;border-left:3px solid {col_f}">
+                <div style="font-size:0.75rem;font-weight:600;color:{col_f};
+                            text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">
+                    {label}</div>
+                <code style="font-size:0.85rem;color:{col_f}">{content_f}</code>
+            </div>
+            """, unsafe_allow_html=True)
+
+    with tab2:
+        st.markdown("### How the agent decides which tool to call")
+        st.markdown("""
+        Given a user message, the agent scores each available tool and picks the best fit.
+        In practice this is done by the LLM reasoning about the tool descriptions.
+        """)
+
+        user_query = st.text_input("User query", "What is the square root of 1764?")
+
+        # simple keyword scoring for demo
+        tool_scores = {}
+        q_lower = user_query.lower()
+        tool_scores["get_weather"]      = sum(w in q_lower for w in ["weather","temperature","rain","sunny","forecast","climate","cold","hot"])
+        tool_scores["web_search"]       = sum(w in q_lower for w in ["search","find","latest","news","who","what","when","where","research","recent"])
+        tool_scores["code_interpreter"] = sum(w in q_lower for w in ["calculate","compute","code","run","python","math","sqrt","sum","plot","sort","algorithm"])
+        tool_scores["database_query"]   = sum(w in q_lower for w in ["database","query","sql","table","rows","records","average","count","users","data"])
+
+        total = sum(tool_scores.values()) or 1
+        tool_probs = {k: v/total for k,v in tool_scores.items()}
+        best_tool = max(tool_scores, key=tool_scores.get)
+
+        fig = go.Figure(go.Bar(
+            x=list(tool_scores.keys()),
+            y=[tool_probs[k] for k in tool_scores],
+            marker_color=['#534AB7' if k==best_tool else '#AFA9EC' for k in tool_scores],
+            text=[f"{tool_probs[k]:.0%}" for k in tool_scores],
+            textposition='outside'))
+        fig.update_layout(yaxis_title="Relevance score", height=300, showlegend=False,
+            yaxis_range=[0, 1.2])
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown(f"**Best tool for this query:** `{best_tool}`")
+        st.caption("Real agents use the LLM itself to select tools based on natural language descriptions — "
+                   "not keyword matching. This demo uses simple keyword heuristics for illustration.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PLANNING & TASK DECOMPOSITION
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "planning":
+    st.title("🗺️ Planning & Task Decomposition")
+    st.markdown("""
+    <div class="concept-card">
+    Complex tasks must be broken into <b>subtasks</b> before an agent can act.
+    Good planning identifies <b>dependencies</b> between steps (what must happen before what),
+    enables <b>parallelism</b> where possible, and handles failures gracefully.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Task dependency graph", "Planning strategies"])
+
+    with tab1:
+        TASK_PLANS = {
+            "Write a research report": {
+                "tasks": [
+                    ("T1", "Define research question", []),
+                    ("T2", "Search for sources",       ["T1"]),
+                    ("T3", "Read & summarise source A",["T2"]),
+                    ("T4", "Read & summarise source B",["T2"]),
+                    ("T5", "Read & summarise source C",["T2"]),
+                    ("T6", "Synthesise findings",      ["T3","T4","T5"]),
+                    ("T7", "Write draft",              ["T6"]),
+                    ("T8", "Review & edit",            ["T7"]),
+                    ("T9", "Final report",             ["T8"]),
+                ],
+                "parallel": ["T3","T4","T5"],
+            },
+            "Build and deploy a feature": {
+                "tasks": [
+                    ("T1", "Write requirements", []),
+                    ("T2", "Design schema",      ["T1"]),
+                    ("T3", "Write backend code", ["T2"]),
+                    ("T4", "Write frontend code",["T2"]),
+                    ("T5", "Write tests",        ["T3","T4"]),
+                    ("T6", "Code review",        ["T5"]),
+                    ("T7", "Deploy to staging",  ["T6"]),
+                    ("T8", "QA testing",         ["T7"]),
+                    ("T9", "Deploy to prod",     ["T8"]),
+                ],
+                "parallel": ["T3","T4"],
+            },
+            "Plan a trip": {
+                "tasks": [
+                    ("T1", "Choose destination", []),
+                    ("T2", "Check visa requirements",["T1"]),
+                    ("T3", "Search flights",     ["T1"]),
+                    ("T4", "Search hotels",      ["T1"]),
+                    ("T5", "Book flights",       ["T3"]),
+                    ("T6", "Book hotel",         ["T4"]),
+                    ("T7", "Plan itinerary",     ["T5","T6"]),
+                    ("T8", "Pack & prepare",     ["T2","T7"]),
+                ],
+                "parallel": ["T2","T3","T4"],
+            },
+        }
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            plan_choice = st.selectbox("Task scenario", list(TASK_PLANS.keys()))
+            plan = TASK_PLANS[plan_choice]
+            tasks = plan["tasks"]
+            parallel = plan["parallel"]
+
+            st.markdown("**Task list:**")
+            for tid, tname, deps in tasks:
+                dep_str = f" (after {', '.join(deps)})" if deps else " (start)"
+                is_par  = "⚡ parallel" if tid in parallel else ""
+                st.markdown(f"**{tid}** {tname}{dep_str} {is_par}")
+
+        with col2:
+            # layout tasks in levels (topological sort approximation)
+            def compute_levels(tasks):
+                levels = {}
+                task_dict = {t[0]: t[2] for t in tasks}
+                def level(tid):
+                    if tid not in levels:
+                        deps = task_dict[tid]
+                        levels[tid] = (max(level(d) for d in deps) + 1) if deps else 0
+                    return levels[tid]
+                for t in tasks: level(t[0])
+                return levels
+
+            lvls = compute_levels(tasks)
+            max_lvl = max(lvls.values())
+
+            # group by level
+            from collections import defaultdict
+            by_level = defaultdict(list)
+            for tid, tname, _ in tasks:
+                by_level[lvls[tid]].append((tid, tname))
+
+            fig = go.Figure()
+            fig.update_layout(xaxis=dict(visible=False, range=[-0.5, max_lvl+0.5]),
+                yaxis=dict(visible=False),
+                height=420, plot_bgcolor="white",
+                margin=dict(l=10,r=10,t=10,b=10))
+
+            pos = {}
+            for lvl in range(max_lvl+1):
+                nodes_at = by_level[lvl]
+                n = len(nodes_at)
+                for i, (tid, tname) in enumerate(nodes_at):
+                    y = (i - (n-1)/2) * 1.5
+                    pos[tid] = (lvl, y)
+                    is_par = tid in parallel
+                    fill = "#fff3cd" if is_par else "#eeedfe"
+                    border = "#EF9F27" if is_par else "#534AB7"
+                    fig.add_shape(type="rect",
+                        x0=lvl-0.38, y0=y-0.45, x1=lvl+0.38, y1=y+0.45,
+                        fillcolor=fill, line=dict(color=border, width=2))
+                    label = tname if len(tname)<=18 else tname[:16]+"…"
+                    fig.add_annotation(x=lvl, y=y+0.12, text=f"<b>{tid}</b>",
+                        showarrow=False, font=dict(size=10, color=border))
+                    fig.add_annotation(x=lvl, y=y-0.18, text=label,
+                        showarrow=False, font=dict(size=8, color="#444"))
+
+            # draw dependency arrows
+            for tid, tname, deps in tasks:
+                x1, y1 = pos[tid]
+                for dep in deps:
+                    x0, y0 = pos[dep]
+                    fig.add_shape(type="line", x0=x0+0.38, y0=y0, x1=x1-0.38, y1=y1,
+                        line=dict(color="#aaa", width=1.2))
+
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption("🟡 Yellow = can run in parallel. Purple = sequential dependency.")
+
+        # stats
+        n_parallel = len(parallel)
+        n_seq = len(tasks) - n_parallel
+        critical = max_lvl + 1
+        c1,c2,c3 = st.columns(3)
+        c1.metric("Total subtasks", len(tasks))
+        c2.metric("Parallelisable", n_parallel)
+        c3.metric("Critical path length", critical)
+
+    with tab2:
+        st.markdown("### Planning strategies compared")
+        import pandas as pd
+        strategies = [
+            ("Sequential",       "Execute subtasks one by one in order",
+             "Simple, predictable", "Slow — no parallelism", "Simple linear tasks"),
+            ("Hierarchical",     "Break goal → sub-goals → actions recursively",
+             "Handles complexity", "Risk of over-planning", "Multi-step research, coding"),
+            ("ReAct (reactive)", "Plan one step at a time based on observations",
+             "Adapts to surprises", "May take more steps", "Web browsing, tool use"),
+            ("Tree of Thought",  "Explore multiple reasoning branches, prune bad ones",
+             "Better on hard problems", "High token cost", "Maths, strategy, puzzles"),
+            ("Multi-agent",      "Assign subtasks to specialised sub-agents in parallel",
+             "Fast, parallel", "Complex coordination", "Large pipelines, code generation"),
+        ]
+        st.dataframe(pd.DataFrame(strategies,
+            columns=["Strategy","How it works","Advantage","Disadvantage","Best for"]),
+            use_container_width=True, hide_index=True)
+
+        st.markdown("### When does planning fail?")
+        failure_modes = {
+            "Incorrect decomposition": 0.30,
+            "Missing dependencies": 0.20,
+            "Tool call errors": 0.25,
+            "Context window overflow": 0.15,
+            "Infinite loops": 0.10,
+        }
+        fig2 = go.Figure(go.Bar(
+            x=list(failure_modes.values()), y=list(failure_modes.keys()),
+            orientation='h',
+            marker_color=['#E24B4A','#EF9F27','#534AB7','#1D9E75','#D4537E'],
+            text=[f"{v:.0%}" for v in failure_modes.values()],
+            textposition='outside'))
+        fig2.update_layout(xaxis_title="Relative frequency", height=280,
+            xaxis_range=[0, 0.45], showlegend=False)
+        st.plotly_chart(fig2, use_container_width=True)
+        st.caption("Illustrative distribution — real failure rates depend heavily on model capability and task complexity.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# AGENT MEMORY TYPES
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "agent_memory":
+    st.title("🧠 Agent Memory Types")
+    st.markdown("""
+    <div class="concept-card">
+    Agents need different kinds of memory to operate effectively.
+    No single memory type covers all needs — real systems combine several.
+    The right mix depends on the task horizon, latency requirements and cost.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Memory taxonomy", "RAG retrieval visualised"])
+
+    with tab1:
+        import pandas as pd
+        memory_types = [
+            ("In-context (working)", "Text in the current prompt window",
+             "Instant, no setup", "Limited by context length, lost after session",
+             "Current conversation, recent tool results", "🟢 Fast"),
+            ("External / Vector store", "Embeddings in a vector DB (RAG)",
+             "Scales to millions of docs, persistent",
+             "Retrieval latency, embedding cost, may miss context",
+             "Company knowledge bases, long-term user history", "🟡 Medium"),
+            ("Parametric (weights)", "Knowledge baked into model weights during training",
+             "Zero latency, always available",
+             "Cannot be updated without retraining, may hallucinate",
+             "World knowledge, language, reasoning", "🟢 Fast"),
+            ("Episodic / Log store", "Structured record of past agent runs",
+             "Full history, inspectable",
+             "Grows indefinitely, needs summarisation",
+             "Multi-session continuity, debugging", "🟡 Medium"),
+            ("Cache (KV cache)", "Saved key-value pairs from previous forward passes",
+             "Reduces repeated computation cost",
+             "Memory-intensive, invalidated on change",
+             "Long stable system prompts, repeated prefixes", "🟢 Fast"),
+        ]
+        st.dataframe(pd.DataFrame(memory_types,
+            columns=["Type","What it is","Advantage","Limitation","Used for","Speed"]),
+            use_container_width=True, hide_index=True)
+
+        st.markdown("### Memory access pattern during a single agent turn")
+        fig = go.Figure()
+        fig.update_layout(xaxis=dict(visible=False, range=[0,10]),
+            yaxis=dict(visible=False, range=[0,10]),
+            height=320, plot_bgcolor="white",
+            margin=dict(l=10,r=10,t=10,b=10))
+
+        items = [
+            (5, 9, "User Query", "#f3f0ff", "#534AB7"),
+            (5, 7.2, "In-context window\n(system prompt + history)", "#e8f4ff", "#1565C0"),
+            (2, 5, "Vector DB\n(RAG retrieval)", "#fff8e1", "#B8860B"),
+            (8, 5, "Parametric\n(model weights)", "#e8f5e9", "#1B5E20"),
+            (5, 3, "Agent reasoning\n& response", "#fdecea", "#B71C1C"),
+        ]
+        for x,y,label,fill,border in items:
+            fig.add_shape(type="rect", x0=x-1.5, y0=y-0.7, x1=x+1.5, y1=y+0.7,
+                fillcolor=fill, line=dict(color=border, width=2))
+            for di,line in enumerate(label.split("\n")):
+                fig.add_annotation(x=x, y=y+0.15-di*0.38, text=line,
+                    showarrow=False, font=dict(size=10, color=border))
+
+        for x0,y0,x1,y1 in [(5,8.3,5,7.9),(3.5,7.2,2,5.7),(6.5,7.2,8,5.7),
+                              (2,4.3,4,3.7),(8,4.3,6,3.7),(5,2.3,5,1.5)]:
+            fig.add_shape(type="line",x0=x0,y0=y0,x1=x1,y1=y1,
+                line=dict(color="#aaa",width=1.5))
+        st.plotly_chart(fig, use_container_width=True)
+
+    with tab2:
+        st.markdown("### RAG — Retrieval Augmented Generation")
+        st.markdown("""
+        RAG retrieves relevant documents from an external store at query time,
+        injects them into the context, and lets the LLM answer with up-to-date grounded information.
+        """)
+
+        DOCS = [
+            "Transformers use self-attention to model relationships between all tokens simultaneously.",
+            "Gradient descent minimises the loss by moving parameters in the direction of steepest descent.",
+            "Convolutional neural networks use sliding kernels to detect local patterns in images.",
+            "RLHF aligns language models with human preferences using reward models and PPO.",
+            "Vector databases store embeddings and support fast approximate nearest-neighbour search.",
+            "LoRA fine-tunes large models efficiently by adding low-rank adapter matrices.",
+            "The attention mechanism computes query-key dot products scaled by sqrt(d_k).",
+            "Dropout randomly zeros activations during training to reduce overfitting.",
+            "PCA projects data onto the directions of maximum variance using eigenvectors.",
+            "The chain rule allows backpropagation to compute gradients through many layers.",
+        ]
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            query_rag = st.text_input("Query", "How does attention work?")
+            top_k = st.slider("Retrieve top-k docs", 1, 5, 3)
+            st.markdown("**Document store (10 docs):**")
+            for i, doc in enumerate(DOCS):
+                st.markdown(f"<small>Doc {i+1}: {doc[:55]}…</small>", unsafe_allow_html=True)
+
+        # simple TF-IDF-like scoring
+        query_words = set(query_rag.lower().split())
+        scores = []
+        for doc in DOCS:
+            doc_words = set(doc.lower().split())
+            overlap = len(query_words & doc_words)
+            # bonus for key phrase matches
+            bonus = sum(2 for w in query_words if any(w in dw for dw in doc_words))
+            scores.append(overlap + bonus * 0.3)
+
+        scores_arr = np.array(scores, dtype=float)
+        scores_norm = scores_arr / (scores_arr.max() + 1e-9)
+        top_idx = np.argsort(scores_arr)[::-1]
+
+        with col2:
+            fig = go.Figure(go.Bar(
+                x=[f"Doc {i+1}" for i in range(len(DOCS))],
+                y=scores_norm,
+                marker_color=['#534AB7' if i in top_idx[:top_k] else '#AFA9EC'
+                              for i in range(len(DOCS))],
+                text=[f"{s:.2f}" for s in scores_norm],
+                textposition='outside'))
+            fig.update_layout(yaxis_title="Similarity score", height=300,
+                yaxis_range=[0,1.3], showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+
+            st.markdown(f"**Top {top_k} retrieved documents:**")
+            for rank, idx in enumerate(top_idx[:top_k]):
+                st.markdown(f"""
+                <div style="background:#eeedfe;border-left:3px solid #534AB7;
+                            padding:0.5rem 0.8rem;border-radius:0 6px 6px 0;margin-bottom:6px">
+                    <b>#{rank+1} Doc {idx+1}</b> (score={scores_norm[idx]:.2f})<br>
+                    <small>{DOCS[idx]}</small>
+                </div>
+                """, unsafe_allow_html=True)
+        st.caption("Real RAG uses dense vector embeddings (cosine similarity). "
+                   "This demo uses simple keyword overlap for illustration.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MULTI-AGENT SYSTEMS
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "multi_agent":
+    st.title("🤝 Multi-Agent Systems")
+    st.markdown("""
+    <div class="concept-card">
+    A <b>multi-agent system</b> uses several specialised AI agents working together.
+    An <b>orchestrator</b> agent breaks down the task and routes subtasks to
+    <b>worker agents</b>, each optimised for a specific capability.
+    Results are aggregated and returned to the user.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Orchestrator pattern", "Agent communication"])
+
+    with tab1:
+        PIPELINES = {
+            "Content creation pipeline": {
+                "orchestrator": "Content Orchestrator",
+                "workers": [
+                    ("Research Agent",  "🔍", "Searches web, gathers facts and sources",           "#534AB7"),
+                    ("Writer Agent",    "✍️", "Drafts content from research findings",             "#1D9E75"),
+                    ("Editor Agent",    "📝", "Reviews, corrects grammar and improves clarity",    "#EF9F27"),
+                    ("SEO Agent",       "📈", "Optimises keywords, meta tags, structure",          "#E24B4A"),
+                    ("Publisher Agent", "🚀", "Formats and publishes to CMS",                     "#D4537E"),
+                ],
+                "flow": ["Research Agent","Writer Agent","Editor Agent","SEO Agent","Publisher Agent"],
+                "parallel": ["Research Agent"],
+            },
+            "Software engineering pipeline": {
+                "orchestrator": "Engineering Orchestrator",
+                "workers": [
+                    ("Planner Agent",   "🗺️", "Breaks feature into tasks and acceptance criteria", "#534AB7"),
+                    ("Coder Agent",     "💻", "Writes implementation code",                       "#1D9E75"),
+                    ("Test Agent",      "🧪", "Writes and runs unit/integration tests",            "#EF9F27"),
+                    ("Review Agent",    "🔍", "Performs code review and security checks",         "#E24B4A"),
+                    ("Deploy Agent",    "🚀", "Runs CI/CD pipeline and deploys to staging",       "#D4537E"),
+                ],
+                "flow": ["Planner Agent","Coder Agent","Test Agent","Review Agent","Deploy Agent"],
+                "parallel": ["Coder Agent","Test Agent"],
+            },
+            "Data analysis pipeline": {
+                "orchestrator": "Analysis Orchestrator",
+                "workers": [
+                    ("Ingestion Agent", "📥", "Fetches data from APIs and databases",             "#534AB7"),
+                    ("Cleaning Agent",  "🧹", "Handles missing values, outliers, formatting",    "#1D9E75"),
+                    ("Stats Agent",     "📊", "Computes descriptive statistics and correlations", "#EF9F27"),
+                    ("ML Agent",        "🤖", "Trains and evaluates predictive models",           "#E24B4A"),
+                    ("Report Agent",    "📄", "Generates charts, tables and narrative report",   "#D4537E"),
+                ],
+                "flow": ["Ingestion Agent","Cleaning Agent","Stats Agent","ML Agent","Report Agent"],
+                "parallel": ["Stats Agent","ML Agent"],
+            },
+        }
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            pipeline_choice = st.selectbox("Pipeline", list(PIPELINES.keys()))
+            pipeline = PIPELINES[pipeline_choice]
+            active_step = st.slider("Simulate execution step",
+                0, len(pipeline["workers"]), 2)
+            st.markdown(f"**Orchestrator:** {pipeline['orchestrator']}")
+            st.markdown("**Worker agents:**")
+            for i, (name, icon, desc, col_w) in enumerate(pipeline["workers"]):
+                status = "✅ done" if i < active_step else "⏳ waiting" if i == active_step else "⬜ queued"
+                par = " ⚡parallel" if name in pipeline["parallel"] else ""
+                st.markdown(f'<span style="color:{col_w}">●</span> **{icon} {name}** {status}{par}<br>'
+                            f'<small style="color:#666">{desc}</small>', unsafe_allow_html=True)
+
+        with col2:
+            fig = go.Figure()
+            fig.update_layout(xaxis=dict(visible=False, range=[-0.5, len(pipeline["workers"])+0.5]),
+                yaxis=dict(visible=False, range=[-1, 4]),
+                height=400, plot_bgcolor="white",
+                margin=dict(l=10,r=10,t=10,b=10))
+
+            # orchestrator at top
+            fig.add_shape(type="rect", x0=len(pipeline["workers"])/2-1.2, y0=3.0,
+                x1=len(pipeline["workers"])/2+1.2, y1=3.8,
+                fillcolor="#f3f0ff", line=dict(color="#534AB7", width=2.5))
+            fig.add_annotation(x=len(pipeline["workers"])/2, y=3.4,
+                text=f"<b>🎯 {pipeline['orchestrator']}</b>",
+                showarrow=False, font=dict(size=11, color="#534AB7"))
+
+            workers = pipeline["workers"]
+            xs = np.linspace(0.5, len(workers)-0.5, len(workers))
+            for i, (name, icon, desc, col_w) in enumerate(workers):
+                x = xs[i]
+                is_done = i < active_step
+                is_active = i == active_step
+                fill = "#d4edda" if is_done else "#fff3cd" if is_active else "#f8f9fa"
+                border = col_w
+                lw = 3 if is_active else 2
+                fig.add_shape(type="rect", x0=x-0.45, y0=0.8, x1=x+0.45, y1=2.2,
+                    fillcolor=fill, line=dict(color=border, width=lw))
+                fig.add_annotation(x=x, y=1.7, text=f"{icon}",
+                    showarrow=False, font=dict(size=16))
+                short_name = name.replace(" Agent","")
+                fig.add_annotation(x=x, y=1.2, text=f"<b>{short_name}</b>",
+                    showarrow=False, font=dict(size=9, color=col_w))
+                status_icon = "✅" if is_done else "⚡" if is_active else "⬜"
+                fig.add_annotation(x=x, y=0.95, text=status_icon,
+                    showarrow=False, font=dict(size=10))
+
+                # line from orchestrator to worker
+                fig.add_shape(type="line", x0=len(workers)/2, y0=3.0,
+                    x1=x, y1=2.2, line=dict(color="#aaa", width=1, dash="dot"))
+
+                # arrows between sequential workers
+                if i < len(workers)-1 and workers[i][0] not in pipeline["parallel"]:
+                    fig.add_shape(type="line", x0=x+0.45, y0=1.5,
+                        x1=xs[i+1]-0.45, y1=1.5,
+                        line=dict(color=col_w, width=1.5))
+
+            # result arrow back up
+            fig.add_shape(type="line",
+                x0=xs[-1], y0=2.2, x1=len(workers)/2, y1=3.0,
+                line=dict(color="#1D9E75", width=2, dash="dash"))
+            fig.add_annotation(x=len(workers)/2+0.8, y=2.6, text="result",
+                showarrow=False, font=dict(size=9, color="#1D9E75"))
+
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption("⚡ = parallel workers. Drag the slider to watch the pipeline execute.")
+
+    with tab2:
+        st.markdown("### How agents communicate")
+        import pandas as pd
+        comm_patterns = [
+            ("Message passing", "Agents send structured messages (JSON/text) via a shared bus or queue",
+             "Decoupled, async-friendly", "Needs schema design"),
+            ("Shared memory / blackboard", "All agents read/write to a common state store",
+             "Simple, visible to all", "Concurrency conflicts"),
+            ("Function calls", "Orchestrator calls sub-agents as if they were tools",
+             "Clean, hierarchical", "Sequential by default"),
+            ("Streaming", "Agents pipe output tokens directly to the next agent",
+             "Low latency", "Complex error handling"),
+        ]
+        st.dataframe(pd.DataFrame(comm_patterns,
+            columns=["Pattern","Description","Pro","Con"]),
+            use_container_width=True, hide_index=True)
+
+        st.markdown("### Key design decisions")
+        decisions = {
+            "How many agents?": "Start with one. Add agents only when a clear specialisation boundary exists.",
+            "Synchronous or async?": "Sync is simpler to debug. Async is needed for parallelism and long-running tasks.",
+            "How to handle failure?": "Each agent should return success/error. Orchestrator retries or falls back.",
+            "How to share context?": "Pass minimal context in each message. Use IDs to reference large objects in shared stores.",
+            "How to avoid loops?": "Set a max iteration count. Track visited states. Use a supervisor agent.",
+        }
+        for q, a in decisions.items():
+            with st.expander(q):
+                st.markdown(a)
