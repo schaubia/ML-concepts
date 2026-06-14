@@ -38,28 +38,45 @@ st.markdown("""
 # ── Catalogue ────────────────────────────────────────────────────────────────
 # (key, name, icon, short description)
 CATALOGUE = [
-    ("activation",    "Activation Functions",          "🎯", "ReLU, Sigmoid, Tanh and their properties"),
-    ("backprop",      "Backpropagation",                "🔄", "How the error propagates backwards"),
-    ("batch_size",    "Batch Size & Gradient Noise",   "🎲", "How batch size affects gradient quality"),
+    # ── Machine Learning ──
     ("bias_var",      "Bias-Variance Tradeoff",         "↔️", "Decomposing prediction error into bias and variance"),
     ("confusion",     "Confusion Matrix & Metrics",     "🔢", "Precision, recall, F1 and the threshold effect"),
-    ("dropout",       "Dropout",                        "💧", "Randomly zeroing neurons to prevent overfitting"),
     ("gradient",      "Gradient & Descent",             "🏔️", "Direction and step size of learning"),
     ("knn",           "K-Nearest Neighbors",            "🔵", "Classify by majority vote of closest points"),
     ("linear_reg",    "Linear Regression",              "📊", "Finding the best-fit line through data"),
     ("logistic_reg",  "Logistic Regression",            "🔀", "Binary classification with sigmoid output"),
     ("loss",          "Loss Function",                  "📉", "How we measure model error"),
+    ("overfit",       "Overfitting / Underfitting",     "⚖️", "Too much or too little training"),
+    ("regularization","Regularization",                 "🔒", "L1 and L2 penalty to prevent overfitting"),
+    # ── Deep Learning ──
+    ("activation",    "Activation Functions",           "🎯", "ReLU, Sigmoid, Tanh and their properties"),
+    ("backprop",      "Backpropagation",                "🔄", "How the error propagates backwards"),
+    ("batch_size",    "Batch Size & Gradient Noise",    "🎲", "How batch size affects gradient quality"),
+    ("dropout",       "Dropout",                        "💧", "Randomly zeroing neurons to prevent overfitting"),
     ("lr_schedule",   "Learning Rate Schedulers",       "📅", "Step decay, cosine annealing and warmup"),
     ("neural_net",    "Neural Network Architecture",    "🧬", "Layers, parameters and forward pass"),
     ("neuron",        "Neuron (Perceptron)",             "🔬", "The single computational unit at the core of every network"),
     ("normalization", "Normalization",                   "📐", "Batch norm, layer norm and feature scaling"),
     ("optimizers",    "Optimizers",                     "🚀", "SGD, Momentum, RMSProp and Adam compared"),
-    ("overfit",       "Overfitting / Underfitting",     "⚖️", "Too much or too little training"),
-    ("regularization","Regularization",                 "🔒", "L1 and L2 penalty to prevent overfitting"),
     ("vanishing_grad","Vanishing & Exploding Gradients","⚡", "Signal death in deep networks and fixes"),
+    # ── Math Foundations ──
+    ("chain_rule",    "Chain Rule",                     "🔗", "Derivative of composite functions — the engine of backprop"),
+    ("derivative",    "Derivative",                     "📐", "Instantaneous rate of change and the tangent line"),
+    ("dot_product",   "Dot Product",                    "·",  "Multiply two vectors into a scalar — similarity and projection"),
+    ("eigenvalues",   "Eigenvalues & Eigenvectors",     "λ",  "Directions a matrix stretches without rotating"),
+    ("integral",      "Integral",                       "∫",  "Area under a curve and accumulation"),
+    ("matrix_ops",    "Matrix Operations",              "🔲", "Multiplication, transpose and linear transformations"),
+    ("partial_deriv", "Partial Derivatives",            "∂",  "Rate of change along one dimension of a multivariable function"),
+    ("vectors",       "Vectors",                        "➡️", "Direction and magnitude — the language of ML data"),
 ]
-# alphabetical order for the sidebar index
-ALPHA = sorted(CATALOGUE, key=lambda x: x[1].lower())
+
+ML_KEYS   = {"bias_var","confusion","gradient","knn","linear_reg","logistic_reg","loss","overfit","regularization"}
+DL_KEYS   = {"activation","backprop","batch_size","dropout","lr_schedule","neural_net","neuron","normalization","optimizers","vanishing_grad"}
+MATH_KEYS = {"chain_rule","derivative","dot_product","eigenvalues","integral","matrix_ops","partial_deriv","vectors"}
+# alphabetical within each group
+ALPHA_ML   = sorted([c for c in CATALOGUE if c[0] in ML_KEYS],   key=lambda x: x[1].lower())
+ALPHA_DL   = sorted([c for c in CATALOGUE if c[0] in DL_KEYS],   key=lambda x: x[1].lower())
+ALPHA_MATH = sorted([c for c in CATALOGUE if c[0] in MATH_KEYS], key=lambda x: x[1].lower())
 
 # ── State ────────────────────────────────────────────────────────────────────
 if "section" not in st.session_state:
@@ -77,9 +94,17 @@ with st.sidebar:
     if st.button("🏠  Home", use_container_width=True):
         go_to("home")
 
-    st.markdown("**A–Z Index**")
-    for key, name, icon, _ in ALPHA:
-        if st.button(f"{icon} {name}", key=f"sb_{key}", use_container_width=True):
+    st.markdown("**Machine Learning**")
+    for key, name, icon, _ in ALPHA_ML:
+        if st.button(name, key=f"sb_{key}", use_container_width=True):
+            go_to(key)
+    st.markdown("**Deep Learning**")
+    for key, name, icon, _ in ALPHA_DL:
+        if st.button(name, key=f"sb_{key}", use_container_width=True):
+            go_to(key)
+    st.markdown("**Math Foundations**")
+    for key, name, icon, _ in ALPHA_MATH:
+        if st.button(name, key=f"sb_{key}", use_container_width=True):
             go_to(key)
 
     st.divider()
@@ -95,20 +120,28 @@ if section == "home":
     st.markdown("Pick a concept from the cards below or from the A–Z index on the left.")
     st.divider()
 
-    cols = st.columns(3)
-    for i, (key, name, icon, desc) in enumerate(CATALOGUE):
-        with cols[i % 3]:
-            st.markdown(f"""
-            <div style="border:0.5px solid #d3d1c7;border-radius:12px;
-                        padding:1.2rem;margin-bottom:0.4rem;min-height:100px">
-                <div style="font-size:2rem">{icon}</div>
-                <div style="font-weight:500;margin:6px 0 4px">{name}</div>
-                <div style="font-size:0.85rem;color:#5F5E5A">{desc}</div>
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button("Open →", key=f"card_{key}", use_container_width=True):
-                go_to(key)
-                st.rerun()
+    def render_cards(items):
+        cols = st.columns(3)
+        for i, (key, name, icon, desc) in enumerate(items):
+            with cols[i % 3]:
+                st.markdown(f"""
+                <div style="border:0.5px solid #d3d1c7;border-radius:12px;
+                            padding:1.2rem;margin-bottom:0.4rem;min-height:100px">
+                    <div style="font-size:2rem">{icon}</div>
+                    <div style="font-weight:500;margin:6px 0 4px">{name}</div>
+                    <div style="font-size:0.85rem;color:#5F5E5A">{desc}</div>
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button("Open →", key=f"card_{key}", use_container_width=True):
+                    go_to(key)
+                    st.rerun()
+
+    st.markdown("### 🤖 Machine Learning")
+    render_cards(ALPHA_ML)
+    st.markdown("### 🧠 Deep Learning")
+    render_cards(ALPHA_DL)
+    st.markdown("### 📐 Math Foundations")
+    render_cards(ALPHA_MATH)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # LOSS FUNCTION
@@ -2241,3 +2274,934 @@ Loss after:  {loss_new:.4f}   {'✅ improved' if loss_new < loss_learn else '⚠
         > the update nudges every weight in the direction that reduces loss.
         > Repeat this millions of times across many neurons — that's training a neural network.
         """)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# VECTORS
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "vectors":
+    st.title("➡️ Vectors")
+    st.markdown("""
+    <div class="concept-card">
+    A <b>vector</b> is an ordered list of numbers representing a point or direction in space.
+    In ML every data sample, every weight layer output, and every gradient is a vector.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["2D visualisation", "Dot product & similarity", "Vector operations"])
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            ax = st.slider("a — x", -4.0, 4.0,  2.0, step=0.1, key="v_ax")
+            ay = st.slider("a — y", -4.0, 4.0,  1.0, step=0.1, key="v_ay")
+            bx = st.slider("b — x", -4.0, 4.0, -1.0, step=0.1, key="v_bx")
+            by = st.slider("b — y", -4.0, 4.0,  3.0, step=0.1, key="v_by")
+            show_sum = st.checkbox("Show a + b", value=True)
+            show_diff= st.checkbox("Show a − b", value=False)
+
+        mag_a = np.sqrt(ax**2 + ay**2)
+        mag_b = np.sqrt(bx**2 + by**2)
+        dot   = ax*bx + ay*by
+        cos_t = dot / (mag_a * mag_b + 1e-9)
+        angle = np.degrees(np.arccos(np.clip(cos_t, -1, 1)))
+
+        with col2:
+            fig = go.Figure()
+            fig.add_shape(type="line", x0=0, y0=0, x1=ax, y1=ay,
+                line=dict(color="#534AB7", width=3))
+            fig.add_annotation(x=ax, y=ay, text=f"<b>a</b> [{ax:.1f}, {ay:.1f}]",
+                showarrow=True, arrowhead=2, arrowcolor="#534AB7",
+                font=dict(color="#534AB7", size=12), ax=15, ay=-15)
+
+            fig.add_shape(type="line", x0=0, y0=0, x1=bx, y1=by,
+                line=dict(color="#E24B4A", width=3))
+            fig.add_annotation(x=bx, y=by, text=f"<b>b</b> [{bx:.1f}, {by:.1f}]",
+                showarrow=True, arrowhead=2, arrowcolor="#E24B4A",
+                font=dict(color="#E24B4A", size=12), ax=-15, ay=-15)
+
+            if show_sum:
+                sx, sy = ax+bx, ay+by
+                fig.add_shape(type="line", x0=0, y0=0, x1=sx, y1=sy,
+                    line=dict(color="#1D9E75", width=2.5, dash="dash"))
+                fig.add_annotation(x=sx, y=sy, text=f"<b>a+b</b> [{sx:.1f},{sy:.1f}]",
+                    showarrow=True, arrowhead=2, arrowcolor="#1D9E75",
+                    font=dict(color="#1D9E75", size=11), ax=20, ay=10)
+                fig.add_shape(type="line", x0=ax, y0=ay, x1=sx, y1=sy,
+                    line=dict(color="#E24B4A", width=1, dash="dot"))
+                fig.add_shape(type="line", x0=bx, y0=by, x1=sx, y1=sy,
+                    line=dict(color="#534AB7", width=1, dash="dot"))
+
+            if show_diff:
+                dx2, dy2 = ax-bx, ay-by
+                fig.add_shape(type="line", x0=0, y0=0, x1=dx2, y1=dy2,
+                    line=dict(color="#EF9F27", width=2.5, dash="dash"))
+                fig.add_annotation(x=dx2, y=dy2, text=f"<b>a−b</b>",
+                    showarrow=True, arrowhead=2, arrowcolor="#EF9F27",
+                    font=dict(color="#EF9F27", size=11), ax=20, ay=10)
+
+            # angle arc
+            theta_a = np.arctan2(ay, ax)
+            theta_b = np.arctan2(by, bx)
+            arc_r = 0.6
+            thetas = np.linspace(min(theta_a, theta_b), max(theta_a, theta_b), 40)
+            fig.add_trace(go.Scatter(x=arc_r*np.cos(thetas), y=arc_r*np.sin(thetas),
+                mode='lines', line=dict(color='gray', width=1, dash='dot'),
+                showlegend=False))
+            mid_t = (theta_a + theta_b)/2
+            fig.add_annotation(x=arc_r*1.4*np.cos(mid_t), y=arc_r*1.4*np.sin(mid_t),
+                text=f"{angle:.1f}°", showarrow=False, font=dict(size=11, color='gray'))
+
+            lim = max(abs(ax),abs(ay),abs(bx),abs(by),abs(ax+bx),abs(ay+by)) + 1
+            fig.update_layout(xaxis=dict(range=[-lim,lim], zeroline=True, zerolinecolor='#ccc'),
+                yaxis=dict(range=[-lim,lim], zeroline=True, zerolinecolor='#ccc',
+                    scaleanchor='x', scaleratio=1),
+                height=420, plot_bgcolor='white',
+                showlegend=False, margin=dict(l=10,r=10,t=10,b=10))
+            st.plotly_chart(fig, use_container_width=True)
+
+        c1,c2,c3,c4 = st.columns(4)
+        c1.metric("|a|  magnitude", f"{mag_a:.3f}")
+        c2.metric("|b|  magnitude", f"{mag_b:.3f}")
+        c3.metric("a·b  dot product", f"{dot:.3f}")
+        c4.metric("Angle between", f"{angle:.1f}°")
+
+    with tab2:
+        st.markdown('<div class="formula-box">a · b = Σ aᵢbᵢ = |a||b|cos θ</div>', unsafe_allow_html=True)
+        st.markdown("The dot product measures **how aligned** two vectors are.")
+        col1, col2 = st.columns([1,2])
+        with col1:
+            angle_deg = st.slider("Angle between vectors (degrees)", 0, 180, 45)
+            mag_demo  = st.slider("Magnitude of both vectors", 0.5, 3.0, 1.5, step=0.1)
+        angle_rad = np.radians(angle_deg)
+        dp = mag_demo**2 * np.cos(angle_rad)
+        with col2:
+            fig = go.Figure()
+            fig.add_shape(type="line", x0=0,y0=0, x1=mag_demo,y1=0,
+                line=dict(color="#534AB7",width=3))
+            fig.add_annotation(x=mag_demo,y=0.15, text="a", font=dict(color="#534AB7",size=14), showarrow=False)
+            fig.add_shape(type="line", x0=0,y0=0,
+                x1=mag_demo*np.cos(angle_rad), y1=mag_demo*np.sin(angle_rad),
+                line=dict(color="#E24B4A",width=3))
+            fig.add_annotation(x=mag_demo*np.cos(angle_rad),
+                y=mag_demo*np.sin(angle_rad)+0.15,
+                text="b", font=dict(color="#E24B4A",size=14), showarrow=False)
+            # projection of b onto a
+            proj = mag_demo*np.cos(angle_rad)
+            fig.add_shape(type="line", x0=proj,y0=0,
+                x1=mag_demo*np.cos(angle_rad), y1=mag_demo*np.sin(angle_rad),
+                line=dict(color="#EF9F27",width=1.5,dash="dot"))
+            fig.add_annotation(x=proj/2, y=-0.2, text=f"projection = {proj:.2f}",
+                showarrow=False, font=dict(color="#EF9F27",size=11))
+            fig.update_layout(xaxis=dict(range=[-0.5,mag_demo+0.5],zeroline=True),
+                yaxis=dict(range=[-0.5,mag_demo+0.5],scaleanchor='x',scaleratio=1,zeroline=True),
+                height=320, plot_bgcolor='white', showlegend=False,
+                margin=dict(l=10,r=10,t=10,b=10))
+            st.plotly_chart(fig, use_container_width=True)
+        st.metric("Dot product a·b", f"{dp:.3f}")
+        if angle_deg < 90:   st.success(f"Angle < 90° → positive dot product → vectors point in similar direction")
+        elif angle_deg == 90: st.info("Angle = 90° → dot product = 0 → vectors are orthogonal (perpendicular)")
+        else:                 st.warning(f"Angle > 90° → negative dot product → vectors point in opposite directions")
+        st.markdown("> **In ML:** cosine similarity between two embedding vectors uses exactly this — dot product divided by magnitudes.")
+
+    with tab3:
+        st.markdown("### Common vector operations")
+        col1, col2 = st.columns(2)
+        v = np.array([ax, ay])
+        u = np.array([bx, by])
+        with col1:
+            st.markdown("**Scalar multiplication**")
+            scalar = st.slider("scalar s", -3.0, 3.0, 2.0, step=0.1)
+            sv = scalar * v
+            st.markdown(f'<div class="formula-box">s·a = {scalar}·[{ax},{ay}] = [{sv[0]:.2f},{sv[1]:.2f}]</div>', unsafe_allow_html=True)
+            st.markdown("**Unit vector (normalise)**")
+            unit = v / (np.linalg.norm(v) + 1e-9)
+            st.markdown(f'<div class="formula-box">â = a/|a| = [{unit[0]:.3f},{unit[1]:.3f}]  |â|={np.linalg.norm(unit):.3f}</div>', unsafe_allow_html=True)
+        with col2:
+            st.markdown("**L1 and L2 norms**")
+            l1 = np.sum(np.abs(v)); l2 = np.linalg.norm(v)
+            st.markdown(f'<div class="formula-box">‖a‖₁ = |{ax}|+|{ay}| = {l1:.3f}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="formula-box">‖a‖₂ = √({ax}²+{ay}²) = {l2:.3f}</div>', unsafe_allow_html=True)
+            st.markdown("**Cross product magnitude (2D)**")
+            cross = abs(ax*by - ay*bx)
+            st.markdown(f'<div class="formula-box">|a×b| = |{ax}·{by} − {ay}·{bx}| = {cross:.3f}</div>', unsafe_allow_html=True)
+            st.caption("= area of parallelogram formed by a and b")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MATRIX OPERATIONS
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "matrix_ops":
+    st.title("🔲 Matrix Operations")
+    st.markdown("""
+    <div class="concept-card">
+    A <b>matrix</b> is a 2D array of numbers. Every layer in a neural network applies a
+    matrix multiplication. Understanding what matrices <em>do geometrically</em> builds
+    strong intuition for weights, transformations and embeddings.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["Multiplication", "Geometric transformation", "Transpose & properties"])
+
+    with tab1:
+        st.markdown("### Matrix × Matrix and Matrix × Vector")
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            st.markdown("**Matrix A (2×3)**")
+            A = np.array([[st.number_input(f"A[{i+1},{j+1}]", value=float([[1,2,0],[0,1,3]][i][j]),
+                step=0.5, key=f"A{i}{j}") for j in range(3)] for i in range(2)])
+            st.markdown("**Matrix B (3×2)**")
+            B = np.array([[st.number_input(f"B[{i+1},{j+1}]", value=float([[1,0],[2,1],[0,3]][i][j]),
+                step=0.5, key=f"B{i}{j}") for j in range(2)] for i in range(3)])
+
+        with col2:
+            C = A @ B
+            st.markdown("**Result C = A × B  (2×2)**")
+            st.markdown(f'<div class="formula-box">'
+                f'[ {C[0,0]:.1f} , {C[0,1]:.1f} ]<br>'
+                f'[ {C[1,0]:.1f} , {C[1,1]:.1f} ]'
+                f'</div>', unsafe_allow_html=True)
+            st.markdown("**How C[i,j] is computed — dot product of row i of A with column j of B:**")
+            for i in range(2):
+                for j in range(2):
+                    terms = " + ".join([f"{A[i,k]:.1f}·{B[k,j]:.1f}" for k in range(3)])
+                    st.markdown(f"C[{i+1},{j+1}] = {terms} = **{C[i,j]:.2f}**")
+
+            st.markdown("**Matrix × vector** (A applied to a 3D input):")
+            vx = st.number_input("v₁", value=1.0, step=0.5, key="mv1")
+            vy = st.number_input("v₂", value=0.0, step=0.5, key="mv2")
+            vz = st.number_input("v₃", value=2.0, step=0.5, key="mv3")
+            v_in = np.array([vx, vy, vz])
+            v_out = A @ v_in
+            st.markdown(f'<div class="formula-box">A · v = [{v_out[0]:.2f}, {v_out[1]:.2f}]</div>',
+                unsafe_allow_html=True)
+            st.caption(f"Input: 3D → Output: 2D  (A projects the vector into a lower-dimensional space)")
+
+    with tab2:
+        st.markdown("### What a 2×2 matrix does to space")
+        st.markdown("Every 2×2 matrix is a geometric transformation — rotation, scaling, shearing or reflection.")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            preset = st.selectbox("Preset transformation", [
+                "Custom", "Rotate 45°", "Scale x2", "Shear", "Reflection (y-axis)", "Stretch x, squash y"])
+            presets = {
+                "Rotate 45°":            [[np.cos(np.pi/4),-np.sin(np.pi/4)],[np.sin(np.pi/4),np.cos(np.pi/4)]],
+                "Scale x2":              [[2,0],[0,2]],
+                "Shear":                 [[1,1],[0,1]],
+                "Reflection (y-axis)":   [[-1,0],[0,1]],
+                "Stretch x, squash y":   [[2,0],[0,0.5]],
+            }
+            if preset != "Custom":
+                default = presets[preset]
+            else:
+                default = [[1,0],[0,1]]
+            m00 = st.number_input("M[1,1]", value=float(default[0][0]), step=0.1, key="m00")
+            m01 = st.number_input("M[1,2]", value=float(default[0][1]), step=0.1, key="m01")
+            m10 = st.number_input("M[2,1]", value=float(default[1][0]), step=0.1, key="m10")
+            m11 = st.number_input("M[2,2]", value=float(default[1][1]), step=0.1, key="m11")
+            M = np.array([[m00,m01],[m10,m11]])
+            det = np.linalg.det(M)
+            st.metric("Determinant", f"{det:.3f}")
+            st.caption("det=0 → matrix collapses space (not invertible). |det|>1 → expands. |det|<1 → shrinks.")
+
+        with col2:
+            # unit square and transformed square
+            square = np.array([[0,0],[1,0],[1,1],[0,1],[0,0]]).T
+            t_square = M @ square
+            # basis vectors
+            e1 = M @ np.array([1,0])
+            e2 = M @ np.array([0,1])
+
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=square[0], y=square[1], fill='toself',
+                fillcolor='rgba(83,74,183,0.15)', line=dict(color='#534AB7',width=2),
+                name='Original unit square'))
+            fig.add_trace(go.Scatter(x=t_square[0], y=t_square[1], fill='toself',
+                fillcolor='rgba(226,75,74,0.15)', line=dict(color='#E24B4A',width=2),
+                name='Transformed square'))
+            # original basis
+            for v, col, lbl in [([1,0],'#534AB7','e₁'),([0,1],'#1D9E75','e₂')]:
+                fig.add_shape(type='line',x0=0,y0=0,x1=v[0],y1=v[1],
+                    line=dict(color=col,width=2,dash='dash'))
+            # transformed basis
+            for v, col, lbl in [(e1,'#E24B4A','Me₁'),(e2,'#EF9F27','Me₂')]:
+                fig.add_shape(type='line',x0=0,y0=0,x1=v[0],y1=v[1],
+                    line=dict(color=col,width=2.5))
+                fig.add_annotation(x=v[0],y=v[1],text=lbl,showarrow=True,
+                    arrowhead=2,arrowcolor=col,font=dict(color=col,size=11))
+            lim = max(3, float(np.abs(t_square).max())+0.5)
+            fig.update_layout(xaxis=dict(range=[-lim,lim],zeroline=True),
+                yaxis=dict(range=[-lim,lim],zeroline=True,scaleanchor='x',scaleratio=1),
+                height=420, plot_bgcolor='white',
+                legend=dict(orientation='h',y=1.1),
+                margin=dict(l=10,r=10,t=10,b=10))
+            st.plotly_chart(fig, use_container_width=True)
+
+    with tab3:
+        st.markdown("### Transpose and key properties")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**Transpose:** flip rows and columns")
+            Tm = np.array([[1,2,3],[4,5,6]])
+            st.markdown(f'<div class="formula-box">'
+                f'A = [[1,2,3],[4,5,6]]<br>Aᵀ = [[1,4],[2,5],[3,6]]</div>',
+                unsafe_allow_html=True)
+            st.markdown("**Shape rule for multiplication:**")
+            st.markdown(f'<div class="formula-box">(m×n) · (n×p) → (m×p)</div>', unsafe_allow_html=True)
+            st.caption("The inner dimensions must match. This is why layer shapes in neural networks must align.")
+        with col2:
+            st.markdown("**Identity matrix:** A·I = A")
+            st.markdown(f'<div class="formula-box">I = [[1,0],[0,1]]</div>', unsafe_allow_html=True)
+            st.markdown("**Inverse:** A·A⁻¹ = I  (only if det ≠ 0)")
+            M2 = np.array([[m00,m01],[m10,m11]])
+            if abs(np.linalg.det(M2)) > 1e-6:
+                inv = np.linalg.inv(M2)
+                st.markdown(f'<div class="formula-box">M⁻¹ = [[{inv[0,0]:.2f},{inv[0,1]:.2f}],<br>[{inv[1,0]:.2f},{inv[1,1]:.2f}]]</div>',
+                    unsafe_allow_html=True)
+            else:
+                st.error("This matrix is singular (det=0) — no inverse exists.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DERIVATIVE
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "derivative":
+    st.title("📐 Derivative")
+    st.markdown("""
+    <div class="concept-card">
+    The <b>derivative</b> f'(x) is the instantaneous rate of change of f at x —
+    the slope of the tangent line at that point. It answers: <em>"if x increases by a tiny
+    amount, how much does f change?"</em>. This is the engine behind every gradient update in ML.
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('<div class="formula-box">f\'(x) = lim<sub>h→0</sub> [f(x+h) − f(x)] / h</div>',
+        unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["Tangent line explorer", "Numerical vs analytical", "Common rules"])
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            fn_choice = st.selectbox("Function", ["x²", "x³", "sin(x)", "cos(x)", "eˣ", "ln(x)", "x² + 2x − 3"])
+            x0 = st.slider("Point x₀", -3.0, 3.0, 1.0, step=0.05)
+            show_limit = st.checkbox("Show secant → tangent (h shrinks)", value=False)
+            h_val = st.select_slider("h (secant step)", [2.0,1.0,0.5,0.2,0.1,0.01], value=0.5) if show_limit else 0.01
+
+        fn_map = {
+            "x²":        (lambda x: x**2,          lambda x: 2*x,           "2x"),
+            "x³":        (lambda x: x**3,          lambda x: 3*x**2,        "3x²"),
+            "sin(x)":    (lambda x: np.sin(x),     lambda x: np.cos(x),     "cos(x)"),
+            "cos(x)":    (lambda x: np.cos(x),     lambda x: -np.sin(x),    "−sin(x)"),
+            "eˣ":        (lambda x: np.exp(np.clip(x,-10,5)), lambda x: np.exp(np.clip(x,-10,5)), "eˣ"),
+            "ln(x)":     (lambda x: np.log(np.abs(x)+1e-9), lambda x: 1/(x+1e-9), "1/x"),
+            "x² + 2x − 3": (lambda x: x**2+2*x-3, lambda x: 2*x+2,         "2x + 2"),
+        }
+        f, df, df_str = fn_map[fn_choice]
+
+        x_range = np.linspace(-3.5, 3.5, 400)
+        y_range = np.array([f(xi) for xi in x_range])
+        slope = df(x0)
+        y0_val = f(x0)
+        tangent_y = slope*(x_range - x0) + y0_val
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=x_range, y=np.clip(y_range,-8,8), name=fn_choice,
+                line=dict(color='#534AB7', width=2.5)))
+            fig.add_trace(go.Scatter(x=x_range, y=np.clip(tangent_y,-8,8),
+                name=f"Tangent at x={x0:.2f}", line=dict(color='#E24B4A', width=2, dash='dash')))
+            fig.add_scatter(x=[x0], y=[y0_val], mode='markers',
+                marker=dict(color='#E24B4A', size=12), name='Point', showlegend=False)
+            if show_limit:
+                x1_s = x0 + h_val
+                y1_s = f(x1_s)
+                sec_slope = (y1_s - y0_val) / (h_val + 1e-12)
+                sec_y = sec_slope*(x_range - x0) + y0_val
+                fig.add_trace(go.Scatter(x=x_range, y=np.clip(sec_y,-8,8),
+                    name=f"Secant (h={h_val})", line=dict(color='#EF9F27', width=2)))
+                fig.add_scatter(x=[x1_s], y=[y1_s], mode='markers',
+                    marker=dict(color='#EF9F27', size=10), showlegend=False)
+            fig.update_layout(xaxis_title="x", yaxis_title="y",
+                yaxis_range=[-8, 8], height=400, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown(f'<div class="formula-box">f(x) = {fn_choice} &nbsp;→&nbsp; f\'(x) = {df_str} &nbsp;→&nbsp; f\'({x0:.2f}) = {slope:.4f}</div>',
+            unsafe_allow_html=True)
+        st.caption("The tangent slope equals the derivative. As h→0, the orange secant converges to the red tangent.")
+
+    with tab2:
+        st.markdown("### Numerical approximation vs analytical formula")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            fn2 = st.selectbox("Function", ["x²", "sin(x)", "eˣ"], key="d_fn2")
+            x_num = st.slider("x", -3.0, 3.0, 1.5, step=0.1, key="d_xnum")
+            h_num = st.select_slider("h (step size)", [1.0,0.5,0.1,0.01,0.001,0.0001], value=0.1)
+        f2, df2, df2_str = fn_map[fn2]
+        analytical = df2(x_num)
+        forward  = (f2(x_num+h_num) - f2(x_num)) / h_num
+        central  = (f2(x_num+h_num) - f2(x_num-h_num)) / (2*h_num)
+        with col2:
+            st.markdown(f'<div class="formula-box">Analytical f\'(x) = {df2_str} = {analytical:.6f}</div>',
+                unsafe_allow_html=True)
+            import pandas as pd
+            df_num = pd.DataFrame({
+                "Method": ["Forward difference", "Central difference", "Analytical"],
+                "Formula": [f"[f(x+h)−f(x)]/h", f"[f(x+h)−f(x−h)]/2h", f"{df2_str}"],
+                "Value": [f"{forward:.6f}", f"{central:.6f}", f"{analytical:.6f}"],
+                "Error": [f"{abs(forward-analytical):.2e}", f"{abs(central-analytical):.2e}", "0"],
+            })
+            st.dataframe(df_num, use_container_width=True, hide_index=True)
+        st.caption("Central difference is more accurate for the same h — error is O(h²) vs O(h) for forward.")
+
+    with tab3:
+        st.markdown("### Key differentiation rules")
+        rules = [
+            ("Power rule",     "f(x) = xⁿ",       "f'(x) = n·xⁿ⁻¹",              "x³ → 3x²"),
+            ("Sum rule",       "f+g",               "(f+g)' = f'+g'",               "x²+sin(x) → 2x+cos(x)"),
+            ("Product rule",   "f·g",               "(fg)' = f'g + fg'",            "x·sin(x) → sin(x)+x·cos(x)"),
+            ("Chain rule",     "f(g(x))",           "f'(g(x))·g'(x)",               "sin(x²) → cos(x²)·2x"),
+            ("Exponential",    "eˣ",                "eˣ",                           "e³ˣ → 3e³ˣ"),
+            ("Logarithm",      "ln(x)",             "1/x",                          "ln(2x) → 1/x"),
+        ]
+        import pandas as pd
+        st.dataframe(pd.DataFrame(rules, columns=["Rule","f(x)","f'(x)","Example"]),
+            use_container_width=True, hide_index=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PARTIAL DERIVATIVES
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "partial_deriv":
+    st.title("∂ Partial Derivatives")
+    st.markdown("""
+    <div class="concept-card">
+    A <b>partial derivative</b> ∂f/∂x measures how f changes when only one variable moves,
+    holding all others fixed. The vector of all partial derivatives is the <b>gradient</b> ∇f —
+    the direction of steepest ascent used in every ML optimiser.
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('<div class="formula-box">∇f(x,y) = [∂f/∂x , ∂f/∂y]</div>', unsafe_allow_html=True)
+
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        fn_p = st.selectbox("Function f(x,y)", [
+            "x² + y²", "sin(x)·cos(y)", "x²·y + y³", "eˣ⁺ʸ", "x² − y²"])
+        x_p = st.slider("x₀", -2.0, 2.0, 1.0, step=0.1, key="pd_x")
+        y_p = st.slider("y₀", -2.0, 2.0, 0.5, step=0.1, key="pd_y")
+        show_grad_arrows = st.checkbox("Show gradient arrows on surface", value=True)
+
+    fn_p_map = {
+        "x² + y²":      (lambda x,y: x**2+y**2,     lambda x,y: 2*x,             lambda x,y: 2*y,           "2x","2y"),
+        "sin(x)·cos(y)":(lambda x,y: np.sin(x)*np.cos(y), lambda x,y: np.cos(x)*np.cos(y), lambda x,y: -np.sin(x)*np.sin(y), "cos(x)cos(y)","-sin(x)sin(y)"),
+        "x²·y + y³":    (lambda x,y: x**2*y+y**3,   lambda x,y: 2*x*y,          lambda x,y: x**2+3*y**2,   "2xy","x²+3y²"),
+        "eˣ⁺ʸ":         (lambda x,y: np.exp(np.clip(x+y,-10,5)), lambda x,y: np.exp(np.clip(x+y,-10,5)), lambda x,y: np.exp(np.clip(x+y,-10,5)), "eˣ⁺ʸ","eˣ⁺ʸ"),
+        "x² − y²":      (lambda x,y: x**2-y**2,     lambda x,y: 2*x,             lambda x,y: -2*y,          "2x","-2y"),
+    }
+    f_p, dfdx_fn, dfdy_fn, dfdx_str, dfdy_str = fn_p_map[fn_p]
+    dfdx_val = dfdx_fn(x_p, y_p)
+    dfdy_val = dfdy_fn(x_p, y_p)
+    f_val = f_p(x_p, y_p)
+
+    with col2:
+        xs = np.linspace(-2.5, 2.5, 60)
+        ys = np.linspace(-2.5, 2.5, 60)
+        X, Y = np.meshgrid(xs, ys)
+        Z = np.clip(f_p(X, Y), -10, 10)
+        fig = go.Figure(data=[go.Surface(x=X, y=Y, z=Z, colorscale='RdPu',
+            opacity=0.85, showscale=False)])
+        # mark the point
+        fig.add_trace(go.Scatter3d(x=[x_p], y=[y_p], z=[f_val], mode='markers',
+            marker=dict(color='#E24B4A', size=6), name='(x₀,y₀)'))
+        # gradient arrow in xy-plane (projected)
+        grad_len = 0.5
+        fig.add_trace(go.Scatter3d(
+            x=[x_p, x_p + grad_len*dfdx_val/(np.sqrt(dfdx_val**2+dfdy_val**2)+1e-9)],
+            y=[y_p, y_p + grad_len*dfdy_val/(np.sqrt(dfdx_val**2+dfdy_val**2)+1e-9)],
+            z=[f_val, f_val], mode='lines',
+            line=dict(color='#EF9F27', width=6), name='Gradient direction'))
+        fig.update_layout(scene=dict(xaxis_title='x', yaxis_title='y', zaxis_title='f(x,y)',
+            camera=dict(eye=dict(x=1.5, y=1.5, z=1.2))),
+            height=430, margin=dict(l=0,r=0,b=0,t=0))
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown(f'<div class="formula-box">'
+        f'∂f/∂x = {dfdx_str} = {dfdx_val:.4f} &nbsp;&nbsp; ∂f/∂y = {dfdy_str} = {dfdy_val:.4f}'
+        f'</div>', unsafe_allow_html=True)
+    c1,c2,c3 = st.columns(3)
+    c1.metric("f(x₀,y₀)", f"{f_val:.4f}")
+    c2.metric("∂f/∂x at point", f"{dfdx_val:.4f}")
+    c3.metric("∂f/∂y at point", f"{dfdy_val:.4f}")
+    st.markdown(f"**Gradient vector:** ∇f = [{dfdx_val:.4f}, {dfdy_val:.4f}] — points in direction of steepest ascent. "
+        f"Gradient descent moves in the **opposite** direction: −∇f.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# INTEGRAL
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "integral":
+    st.title("∫ Integral")
+    st.markdown("""
+    <div class="concept-card">
+    The <b>integral</b> accumulates the total area between a function and the x-axis.
+    In ML it appears in probability (area under a PDF = 1), expected values,
+    and understanding continuous loss landscapes.
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('<div class="formula-box">∫ₐᵇ f(x) dx = lim<sub>n→∞</sub> Σ f(xᵢ)·Δx</div>',
+        unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Riemann sum visualisation", "Common integrals"])
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            fn_i = st.selectbox("Function", ["x²", "sin(x)", "eˣ", "x³−2x", "cos(x)"])
+            a_i = st.slider("Lower limit a", -3.0, 2.9, 0.0, step=0.1)
+            b_i = st.slider("Upper limit b", a_i+0.1, 3.0, 2.0, step=0.1)
+            n_rect = st.slider("Number of rectangles n", 2, 100, 10)
+            method = st.radio("Method", ["Left", "Right", "Midpoint"], horizontal=True)
+
+        fn_i_map = {
+            "x²":      (lambda x: x**2,            "x³/3"),
+            "sin(x)":  (lambda x: np.sin(x),       "−cos(x)"),
+            "eˣ":      (lambda x: np.exp(np.clip(x,-10,4)), "eˣ"),
+            "x³−2x":   (lambda x: x**3 - 2*x,      "x⁴/4 − x²"),
+            "cos(x)":  (lambda x: np.cos(x),       "sin(x)"),
+        }
+        f_i, antideriv_str = fn_i_map[fn_i]
+
+        x_plot = np.linspace(a_i-0.3, b_i+0.3, 400)
+        y_plot = np.array([f_i(xi) for xi in x_plot])
+
+        dx = (b_i - a_i) / n_rect
+        if method == "Left":     xs_rect = np.linspace(a_i, b_i-dx, n_rect)
+        elif method == "Right":  xs_rect = np.linspace(a_i+dx, b_i, n_rect)
+        else:                    xs_rect = np.linspace(a_i+dx/2, b_i-dx/2, n_rect)
+        heights = np.array([f_i(xi) for xi in xs_rect])
+        riemann_sum = float(np.sum(heights) * dx)
+
+        # numerical true integral
+        x_fine = np.linspace(a_i, b_i, 2000)
+        true_integral = float(np.trapz([f_i(xi) for xi in x_fine], x_fine))
+
+        with col2:
+            fig = go.Figure()
+            for xi, hi in zip(xs_rect, heights):
+                fig.add_shape(type='rect',
+                    x0=xi-dx/2 if method=="Midpoint" else (xi if method=="Left" else xi-dx),
+                    y0=0, x1=xi+dx/2 if method=="Midpoint" else (xi+dx if method=="Left" else xi),
+                    y1=hi,
+                    fillcolor='rgba(83,74,183,0.35)', line=dict(color='#534AB7', width=0.5))
+            fig.add_trace(go.Scatter(x=x_plot, y=y_plot, name=fn_i,
+                line=dict(color='#E24B4A', width=2.5)))
+            fig.add_vline(x=a_i, line_dash='dot', line_color='gray')
+            fig.add_vline(x=b_i, line_dash='dot', line_color='gray')
+            fig.update_layout(xaxis_title="x", yaxis_title="f(x)",
+                height=400, showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+
+        c1,c2,c3 = st.columns(3)
+        c1.metric("Riemann sum", f"{riemann_sum:.5f}")
+        c2.metric("True integral", f"{true_integral:.5f}")
+        c3.metric("Error", f"{abs(riemann_sum-true_integral):.2e}")
+        st.caption(f"Antiderivative: F(x) = {antideriv_str}  →  F({b_i:.1f}) − F({a_i:.1f}) = {true_integral:.5f}")
+
+    with tab2:
+        import pandas as pd
+        integrals = [
+            ("xⁿ  (n≠−1)",   "xⁿ⁺¹/(n+1) + C",  "Power rule — every polynomial term"),
+            ("1/x",           "ln|x| + C",         "Appears in log-loss, entropy"),
+            ("eˣ",            "eˣ + C",            "Its own antiderivative — unique property"),
+            ("sin(x)",        "−cos(x) + C",       "Oscillating functions, Fourier"),
+            ("cos(x)",        "sin(x) + C",        "Oscillating functions"),
+            ("1/(1+x²)",      "arctan(x) + C",     "Probability distributions"),
+        ]
+        st.dataframe(pd.DataFrame(integrals, columns=["f(x)","∫f(x)dx","Where it appears"]),
+            use_container_width=True, hide_index=True)
+        st.markdown("**Fundamental Theorem of Calculus** connects derivatives and integrals:")
+        st.markdown('<div class="formula-box">d/dx ∫ₐˣ f(t)dt = f(x)</div>', unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CHAIN RULE
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "chain_rule":
+    st.title("🔗 Chain Rule")
+    st.markdown("""
+    <div class="concept-card">
+    The <b>chain rule</b> tells us how to differentiate a <em>composition</em> of functions:
+    if y = f(g(x)), then dy/dx = f'(g(x)) · g'(x). This is the mathematical heart of
+    backpropagation — every gradient in a neural network is computed via repeated chain rule.
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('<div class="formula-box">dy/dx = (dy/du) · (du/dx)&nbsp;&nbsp; where u = g(x)</div>',
+        unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Step-by-step decomposition", "Chain rule in a neural network"])
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            outer = st.selectbox("Outer function f(u)", ["u²", "sin(u)", "eᵘ", "ln(u)", "√u"])
+            inner = st.selectbox("Inner function g(x)", ["2x+1", "x²", "cos(x)", "x³−x"])
+            x_cr  = st.slider("x₀", -2.0, 2.0, 1.0, step=0.1, key="cr_x")
+
+        outer_map = {
+            "u²":   (lambda u: u**2,                          lambda u: 2*u,                    "2u"),
+            "sin(u)":(lambda u: np.sin(u),                    lambda u: np.cos(u),              "cos(u)"),
+            "eᵘ":   (lambda u: np.exp(np.clip(u,-10,5)),     lambda u: np.exp(np.clip(u,-10,5)),"eᵘ"),
+            "ln(u)":(lambda u: np.log(np.abs(u)+1e-9),       lambda u: 1/(u+1e-9),             "1/u"),
+            "√u":   (lambda u: np.sqrt(np.abs(u)),           lambda u: 0.5/np.sqrt(np.abs(u)+1e-9),"1/(2√u)"),
+        }
+        inner_map = {
+            "2x+1":   (lambda x: 2*x+1,   lambda x: np.full_like(np.array([x],dtype=float),2.0)[0],  "2"),
+            "x²":     (lambda x: x**2,    lambda x: 2*x,           "2x"),
+            "cos(x)": (lambda x: np.cos(x), lambda x: -np.sin(x), "−sin(x)"),
+            "x³−x":   (lambda x: x**3-x,  lambda x: 3*x**2-1,     "3x²−1"),
+        }
+        f_out, df_out, df_out_str = outer_map[outer]
+        g_in,  dg_in,  dg_in_str  = inner_map[inner]
+
+        u_val   = g_in(x_cr)
+        y_val   = f_out(u_val)
+        du_dx   = dg_in(x_cr)
+        dy_du   = df_out(u_val)
+        dy_dx   = dy_du * du_dx
+
+        with col2:
+            st.markdown("**Decomposition at x₀ = {:.2f}**".format(x_cr))
+            st.code(f"""
+Step 1 — Evaluate inner function g(x):
+   u = g({x_cr:.2f}) = {inner} = {u_val:.4f}
+
+Step 2 — Evaluate outer function f(u):
+   y = f(u) = f({u_val:.4f}) = {outer} = {y_val:.4f}
+
+Step 3 — Derivative of inner:
+   du/dx = g'(x) = {dg_in_str} = {du_dx:.4f}
+
+Step 4 — Derivative of outer (at u):
+   dy/du = f'(u) = {df_out_str} = {dy_du:.4f}
+
+Step 5 — Chain rule:
+   dy/dx = (dy/du)·(du/dx)
+         = {dy_du:.4f} × {du_dx:.4f}
+         = {dy_dx:.4f}
+""", language="text")
+
+        # plot f(g(x)) and its derivative
+        x_range_cr = np.linspace(-2.5, 2.5, 300)
+        y_comp = np.array([f_out(g_in(xi)) for xi in x_range_cr])
+        dy_comp = np.array([df_out(g_in(xi))*dg_in(xi) for xi in x_range_cr])
+        tangent_cr = dy_dx*(x_range_cr - x_cr) + y_val
+
+        fig = make_subplots(rows=1, cols=2,
+            subplot_titles=[f"f(g(x)) = {outer}({inner})", "Derivative via chain rule"])
+        fig.add_trace(go.Scatter(x=x_range_cr, y=np.clip(y_comp,-8,8), name='f(g(x))',
+            line=dict(color='#534AB7',width=2.5)), row=1, col=1)
+        fig.add_trace(go.Scatter(x=x_range_cr, y=np.clip(tangent_cr,-8,8),
+            name='Tangent', line=dict(color='#E24B4A',width=1.5,dash='dash')), row=1, col=1)
+        fig.add_scatter(x=[x_cr], y=[y_val], mode='markers',
+            marker=dict(color='#E24B4A',size=10), showlegend=False, row=1, col=1)
+        fig.add_trace(go.Scatter(x=x_range_cr, y=np.clip(dy_comp,-8,8), name="d/dx f(g(x))",
+            line=dict(color='#1D9E75',width=2.5)), row=1, col=2)
+        fig.add_scatter(x=[x_cr], y=[dy_dx], mode='markers',
+            marker=dict(color='#1D9E75',size=10), showlegend=False, row=1, col=2)
+        fig.update_xaxes(title_text="x"); fig.update_yaxes(title_text="y")
+        fig.update_layout(height=360, legend=dict(orientation='h',y=1.12))
+        st.plotly_chart(fig, use_container_width=True)
+
+    with tab2:
+        st.markdown("### Why the chain rule *is* backpropagation")
+        st.markdown("""
+        Consider a 3-layer network: input x → layer 1 → layer 2 → loss L.
+
+        To update w₁ we need dL/dw₁. We never have a direct formula, but the chain rule gives:
+        """)
+        st.markdown('<div class="formula-box">dL/dw₁ = (dL/da₂)·(da₂/da₁)·(da₁/dw₁)</div>',
+            unsafe_allow_html=True)
+        st.markdown("""
+        Each term is easy to compute locally at each layer.
+        Backpropagation is just the chain rule applied efficiently from output → input,
+        reusing intermediate values so nothing is computed twice.
+        """)
+
+        # simulate a tiny network chain rule numerically
+        st.markdown("**Numerical demonstration — 3-layer chain:**")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            x_nn = st.slider("Input x", -2.0, 2.0, 1.0, step=0.1, key="cr_nn_x")
+            w1_c = st.slider("Weight w₁", -2.0, 2.0, 0.5, step=0.1, key="cr_w1")
+            w2_c = st.slider("Weight w₂", -2.0, 2.0, 1.5, step=0.1, key="cr_w2")
+            w3_c = st.slider("Weight w₃", -2.0, 2.0,-0.8, step=0.1, key="cr_w3")
+            y_tgt= st.slider("Target y",  -2.0, 2.0, 1.0, step=0.1, key="cr_y")
+
+        z1 = w1_c * x_nn;         a1 = np.tanh(z1)
+        z2 = w2_c * a1;           a2 = np.tanh(z2)
+        z3 = w3_c * a2;           y_hat_c = z3
+        L  = 0.5*(y_hat_c - y_tgt)**2
+        dL_dyhat = y_hat_c - y_tgt
+        dyhat_dw3 = a2
+        da2_dz2 = 1 - np.tanh(z2)**2
+        dz2_dw2 = a1
+        da1_dz1 = 1 - np.tanh(z1)**2
+        dz1_dw1 = x_nn
+        grad_w3 = dL_dyhat * dyhat_dw3
+        grad_w2 = dL_dyhat * w3_c * da2_dz2 * dz2_dw2
+        grad_w1 = dL_dyhat * w3_c * da2_dz2 * w2_c * da1_dz1 * dz1_dw1
+
+        with col2:
+            st.code(f"""
+Forward:  x={x_nn} → z1={z1:.3f} → a1=tanh={a1:.3f}
+          → z2={z2:.3f} → a2=tanh={a2:.3f}
+          → z3=ŷ={y_hat_c:.3f}   Loss={L:.4f}
+
+Backward (chain rule):
+  dL/dw3 = {grad_w3:.4f}
+  dL/dw2 = {grad_w2:.4f}
+  dL/dw1 = {grad_w1:.4f}   ← gradient flows back through 3 layers
+""", language="text")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DOT PRODUCT
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "dot_product":
+    st.title("· Dot Product")
+    st.markdown("""
+    <div class="concept-card">
+    The <b>dot product</b> multiplies corresponding elements of two vectors and sums them.
+    It is the single most repeated operation in ML: every neuron computes a dot product,
+    every attention score is a dot product, every cosine similarity is a normalised dot product.
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('<div class="formula-box">a · b = Σ aᵢbᵢ = |a||b|cos θ</div>', unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Interactive calculator", "Applications in ML"])
+
+    with tab1:
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            dim = st.slider("Vector dimension", 2, 6, 3)
+            st.markdown("**Vector a**")
+            a_dp = np.array([st.slider(f"a[{i+1}]", -3.0, 3.0,
+                [1.0,2.0,-1.0,0.5,1.5,-0.5][i], step=0.1, key=f"dp_a{i}") for i in range(dim)])
+            st.markdown("**Vector b**")
+            b_dp = np.array([st.slider(f"b[{i+1}]", -3.0, 3.0,
+                [2.0,-1.0,1.0,1.5,-0.5,0.5][i], step=0.1, key=f"dp_b{i}") for i in range(dim)])
+
+        dp_val   = float(np.dot(a_dp, b_dp))
+        mag_a_dp = float(np.linalg.norm(a_dp))
+        mag_b_dp = float(np.linalg.norm(b_dp))
+        cos_sim  = dp_val / (mag_a_dp * mag_b_dp + 1e-9)
+        angle_dp = float(np.degrees(np.arccos(np.clip(cos_sim, -1, 1))))
+
+        with col2:
+            st.markdown("**Element-wise multiplication:**")
+            terms = [f"({a_dp[i]:.1f})×({b_dp[i]:.1f}) = {a_dp[i]*b_dp[i]:.2f}" for i in range(dim)]
+            for t in terms:
+                st.markdown(f"&nbsp;&nbsp;&nbsp;{t}")
+            st.markdown(f"**Sum = {dp_val:.4f}**")
+            st.divider()
+            c1,c2,c3,c4 = st.columns(2), st.columns(2)
+            st.metric("|a|", f"{mag_a_dp:.3f}")
+            st.metric("|b|", f"{mag_b_dp:.3f}")
+            st.metric("a·b", f"{dp_val:.4f}")
+            st.metric("cos θ", f"{cos_sim:.4f}")
+            st.metric("Angle θ", f"{angle_dp:.1f}°")
+
+            if cos_sim > 0.9:   st.success("Vectors are nearly identical in direction")
+            elif cos_sim > 0.0: st.info("Vectors point in a similar direction")
+            elif cos_sim == 0:  st.warning("Vectors are orthogonal (perpendicular)")
+            else:               st.error("Vectors point in opposite directions")
+
+        # bar chart of contributions
+        fig = go.Figure()
+        contribs = a_dp * b_dp
+        colors_dp = ['#1D9E75' if c >= 0 else '#E24B4A' for c in contribs]
+        fig.add_trace(go.Bar(x=[f"a[{i+1}]·b[{i+1}]" for i in range(dim)],
+            y=contribs, marker_color=colors_dp, name='Element contribution'))
+        fig.add_hline(y=0, line_color='gray', line_width=0.5)
+        fig.update_layout(xaxis_title="Component", yaxis_title="aᵢ·bᵢ",
+            title=f"Element contributions to dot product (sum = {dp_val:.3f})",
+            height=280, showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
+
+    with tab2:
+        st.markdown("""
+        ### Where the dot product appears in ML
+
+        **1. Single neuron output:**
+        """)
+        st.markdown('<div class="formula-box">z = w · x + b = Σ wᵢxᵢ + b</div>', unsafe_allow_html=True)
+        st.markdown("""
+        **2. Cosine similarity** (used in embeddings, NLP, recommendation):
+        """)
+        st.markdown('<div class="formula-box">cos_sim(a,b) = a·b / (|a|·|b|)</div>', unsafe_allow_html=True)
+        st.markdown("""
+        **3. Attention score** (transformers):
+        """)
+        st.markdown('<div class="formula-box">score(Q,K) = Q·Kᵀ / √dₖ</div>', unsafe_allow_html=True)
+        st.markdown("""
+        **4. Projection** — how much of b lies along a:
+        """)
+        st.markdown('<div class="formula-box">proj_a(b) = (a·b / |a|²) · a</div>', unsafe_allow_html=True)
+
+        st.markdown("### Interactive cosine similarity between two word embeddings (simulated)")
+        col1, col2 = st.columns(2)
+        with col1:
+            np.random.seed(42)
+            words = ["king","queen","man","woman","cat","dog","Paris","France"]
+            w1_sel = st.selectbox("Word 1", words, index=0)
+            w2_sel = st.selectbox("Word 2", words, index=1)
+            # simple fake embeddings
+            embeddings = {w: np.random.randn(8) for w in words}
+            embeddings["queen"] = embeddings["king"] + np.array([0.1,-0.2,0.8,0.1,-0.1,0.2,-0.1,0.1])
+            embeddings["woman"] = embeddings["man"]  + np.array([0.1,-0.2,0.8,0.1,-0.1,0.2,-0.1,0.1])
+            embeddings["dog"]   = embeddings["cat"]  + np.random.randn(8)*0.3
+            embeddings["France"]= embeddings["Paris"]+ np.random.randn(8)*0.3
+            e1, e2 = embeddings[w1_sel], embeddings[w2_sel]
+            cs = float(np.dot(e1,e2)/(np.linalg.norm(e1)*np.linalg.norm(e2)+1e-9))
+        with col2:
+            st.metric(f"cos_sim({w1_sel}, {w2_sel})", f"{cs:.4f}")
+            st.progress(float((cs+1)/2))
+            st.caption("Simulated 8-dim embeddings. Related words cluster together.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# EIGENVALUES & EIGENVECTORS
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "eigenvalues":
+    st.title("λ Eigenvalues & Eigenvectors")
+    st.markdown("""
+    <div class="concept-card">
+    An <b>eigenvector</b> of a matrix A is a special direction that doesn't rotate under A —
+    it only stretches or shrinks. The <b>eigenvalue</b> λ tells you by how much.
+    They appear in PCA (dimensionality reduction), understanding covariance, and stability analysis.
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('<div class="formula-box">A · v = λ · v</div>', unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Visual explorer", "PCA connection"])
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            preset_e = st.selectbox("Matrix preset", [
+                "Custom", "Scaling", "Rotation 30°", "Shear", "Symmetric"])
+            presets_e = {
+                "Scaling":      [[3,0],[0,1.5]],
+                "Rotation 30°": [[np.cos(np.pi/6),-np.sin(np.pi/6)],[np.sin(np.pi/6),np.cos(np.pi/6)]],
+                "Shear":        [[1,2],[0,1]],
+                "Symmetric":    [[3,1],[1,2]],
+            }
+            def_e = presets_e.get(preset_e, [[2,1],[1,2]])
+            e00 = st.number_input("A[1,1]", value=float(def_e[0][0]), step=0.5, key="e00")
+            e01 = st.number_input("A[1,2]", value=float(def_e[0][1]), step=0.5, key="e01")
+            e10 = st.number_input("A[2,1]", value=float(def_e[1][0]), step=0.5, key="e10")
+            e11 = st.number_input("A[2,2]", value=float(def_e[1][1]), step=0.5, key="e11")
+            A_e = np.array([[e00,e01],[e10,e11]])
+
+        try:
+            eigenvalues, eigenvectors = np.linalg.eig(A_e)
+            real_eigs = np.isreal(eigenvalues).all()
+        except Exception:
+            real_eigs = False
+
+        with col2:
+            fig = go.Figure()
+            # show many vectors before/after transformation
+            angles = np.linspace(0, 2*np.pi, 24, endpoint=False)
+            for ang in angles:
+                v_orig = np.array([np.cos(ang), np.sin(ang)])
+                v_trans = A_e @ v_orig
+                fig.add_shape(type='line', x0=0,y0=0, x1=v_orig[0],y1=v_orig[1],
+                    line=dict(color='rgba(83,74,183,0.3)',width=1))
+                fig.add_shape(type='line', x0=0,y0=0, x1=v_trans[0],y1=v_trans[1],
+                    line=dict(color='rgba(226,75,74,0.25)',width=1))
+
+            # highlight eigenvectors
+            if real_eigs:
+                ev_colors = ['#EF9F27','#1D9E75']
+                for i, (lam, ev, col_ev) in enumerate(zip(eigenvalues, eigenvectors.T, ev_colors)):
+                    if np.isreal(lam):
+                        ev_r = ev.real / (np.linalg.norm(ev.real)+1e-9)
+                        fig.add_shape(type='line', x0=0,y0=0,
+                            x1=ev_r[0], y1=ev_r[1],
+                            line=dict(color=col_ev, width=3))
+                        transformed = (A_e @ ev_r)
+                        fig.add_shape(type='line', x0=0,y0=0,
+                            x1=transformed[0], y1=transformed[1],
+                            line=dict(color=col_ev, width=3, dash='dash'))
+                        fig.add_annotation(x=ev_r[0]*1.2, y=ev_r[1]*1.2,
+                            text=f"v{i+1} (λ={lam.real:.2f})",
+                            font=dict(color=col_ev, size=12), showarrow=False)
+
+            lim_e = max(3.0, float(np.abs(A_e).max())*1.5)
+            fig.update_layout(
+                xaxis=dict(range=[-lim_e,lim_e], zeroline=True, zerolinecolor='#ccc'),
+                yaxis=dict(range=[-lim_e,lim_e], zeroline=True, zerolinecolor='#ccc',
+                    scaleanchor='x', scaleratio=1),
+                height=420, plot_bgcolor='white', showlegend=False,
+                margin=dict(l=10,r=10,t=30,b=10),
+                title="Blue=original vectors, Red=transformed. Gold/Green=eigenvectors (solid→dashed after A)")
+            st.plotly_chart(fig, use_container_width=True)
+
+        if real_eigs:
+            c1,c2 = st.columns(2)
+            for i, (lam, ev) in enumerate(zip(eigenvalues, eigenvectors.T)):
+                col_c = [c1,c2][i]
+                col_c.metric(f"λ{i+1}", f"{lam.real:.4f}")
+                col_c.markdown(f"v{i+1} = [{ev[0].real:.3f}, {ev[1].real:.3f}]")
+            st.markdown(f"**Trace** (sum of eigenvalues) = {np.trace(A_e):.3f} &nbsp;|&nbsp; "
+                f"**Determinant** (product of eigenvalues) = {np.linalg.det(A_e):.3f}")
+        else:
+            st.warning("This matrix has complex eigenvalues (rotation without real eigenvectors).")
+
+    with tab2:
+        st.markdown("""
+        ### PCA — Principal Component Analysis
+
+        PCA finds the directions of maximum variance in data.
+        These directions are exactly the **eigenvectors of the covariance matrix**,
+        and the eigenvalues tell you how much variance each direction captures.
+        """)
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            n_pca = st.slider("Number of data points", 20, 200, 80)
+            corr  = st.slider("Feature correlation", -0.95, 0.95, 0.8, step=0.05)
+            seed_pca = st.slider("Seed", 0, 10, 1, key="pca_seed")
+
+        np.random.seed(seed_pca)
+        cov_mat = np.array([[1.0, corr],[corr, 1.0]])
+        X_pca = np.random.multivariate_normal([0,0], cov_mat, n_pca)
+        cov_emp = np.cov(X_pca.T)
+        evals, evecs = np.linalg.eigh(cov_emp)
+        # sort descending
+        idx = np.argsort(evals)[::-1]
+        evals, evecs = evals[idx], evecs[:,idx]
+        var_explained = evals / evals.sum()
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=X_pca[:,0], y=X_pca[:,1], mode='markers',
+                marker=dict(color='#534AB7', size=5, opacity=0.6), name='Data'))
+            scale = 2.0
+            for i, (val, vec, col_p) in enumerate(zip(evals, evecs.T, ['#E24B4A','#1D9E75'])):
+                fig.add_shape(type='line',
+                    x0=-vec[0]*np.sqrt(val)*scale, y0=-vec[1]*np.sqrt(val)*scale,
+                    x1=vec[0]*np.sqrt(val)*scale,  y1=vec[1]*np.sqrt(val)*scale,
+                    line=dict(color=col_p, width=3))
+                fig.add_annotation(x=vec[0]*np.sqrt(val)*scale*1.1,
+                    y=vec[1]*np.sqrt(val)*scale*1.1,
+                    text=f"PC{i+1} ({var_explained[i]:.1%})",
+                    font=dict(color=col_p, size=12), showarrow=False)
+            fig.update_layout(xaxis_title="Feature 1", yaxis_title="Feature 2",
+                xaxis=dict(range=[-4,4]), yaxis=dict(range=[-4,4],scaleanchor='x',scaleratio=1),
+                height=400, plot_bgcolor='white',
+                margin=dict(l=10,r=10,t=10,b=10), showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+
+        c1,c2 = st.columns(2)
+        c1.metric("PC1 explains", f"{var_explained[0]:.1%} of variance")
+        c2.metric("PC2 explains", f"{var_explained[1]:.1%} of variance")
+        st.caption("The principal components (eigenvectors) are the natural axes of the data cloud.")

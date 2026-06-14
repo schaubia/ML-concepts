@@ -41,17 +41,22 @@ CATALOGUE = [
     # ── Machine Learning ──
     ("bias_var",      "Bias-Variance Tradeoff",         "↔️", "Decomposing prediction error into bias and variance"),
     ("confusion",     "Confusion Matrix & Metrics",     "🔢", "Precision, recall, F1 and the threshold effect"),
+    ("decision_tree", "Decision Tree",                  "🌳", "Recursive feature splits that form a tree of rules"),
     ("gradient",      "Gradient & Descent",             "🏔️", "Direction and step size of learning"),
     ("knn",           "K-Nearest Neighbors",            "🔵", "Classify by majority vote of closest points"),
     ("linear_reg",    "Linear Regression",              "📊", "Finding the best-fit line through data"),
     ("logistic_reg",  "Logistic Regression",            "🔀", "Binary classification with sigmoid output"),
     ("loss",          "Loss Function",                  "📉", "How we measure model error"),
+    ("naive_bayes",   "Naive Bayes",                    "📊", "Probabilistic classifier using Bayes theorem"),
     ("overfit",       "Overfitting / Underfitting",     "⚖️", "Too much or too little training"),
+    ("pca",           "PCA",                            "🔍", "Dimensionality reduction via principal components"),
     ("regularization","Regularization",                 "🔒", "L1 and L2 penalty to prevent overfitting"),
     # ── Deep Learning ──
     ("activation",    "Activation Functions",           "🎯", "ReLU, Sigmoid, Tanh and their properties"),
+    ("attention",     "Attention Mechanism",            "👁️", "How transformers focus on relevant input tokens"),
     ("backprop",      "Backpropagation",                "🔄", "How the error propagates backwards"),
     ("batch_size",    "Batch Size & Gradient Noise",    "🎲", "How batch size affects gradient quality"),
+    ("cnn",           "Convolutional Layer (CNN)",      "🖼️", "Kernel sliding over input to detect local patterns"),
     ("dropout",       "Dropout",                        "💧", "Randomly zeroing neurons to prevent overfitting"),
     ("lr_schedule",   "Learning Rate Schedulers",       "📅", "Step decay, cosine annealing and warmup"),
     ("neural_net",    "Neural Network Architecture",    "🧬", "Layers, parameters and forward pass"),
@@ -67,12 +72,17 @@ CATALOGUE = [
     ("integral",      "Integral",                       "∫",  "Area under a curve and accumulation"),
     ("matrix_ops",    "Matrix Operations",              "🔲", "Multiplication, transpose and linear transformations"),
     ("partial_deriv", "Partial Derivatives",            "∂",  "Rate of change along one dimension of a multivariable function"),
+    ("probability",   "Probability Distributions",      "🎲", "Normal, Binomial, Poisson and their shapes"),
+    ("svd",           "SVD — Matrix Decomposition",     "✂️", "Singular values, low-rank approximation and compression"),
     ("vectors",       "Vectors",                        "➡️", "Direction and magnitude — the language of ML data"),
 ]
 
-ML_KEYS   = {"bias_var","confusion","gradient","knn","linear_reg","logistic_reg","loss","overfit","regularization"}
-DL_KEYS   = {"activation","backprop","batch_size","dropout","lr_schedule","neural_net","neuron","normalization","optimizers","vanishing_grad"}
-MATH_KEYS = {"chain_rule","derivative","dot_product","eigenvalues","integral","matrix_ops","partial_deriv","vectors"}
+ML_KEYS   = {"bias_var","confusion","decision_tree","gradient","knn","linear_reg","logistic_reg",
+             "loss","naive_bayes","overfit","pca","regularization"}
+DL_KEYS   = {"activation","attention","backprop","batch_size","cnn","dropout","lr_schedule",
+             "neural_net","neuron","normalization","optimizers","vanishing_grad"}
+MATH_KEYS = {"chain_rule","derivative","dot_product","eigenvalues","integral","matrix_ops",
+             "partial_deriv","probability","svd","vectors"}
 # alphabetical within each group
 ALPHA_ML   = sorted([c for c in CATALOGUE if c[0] in ML_KEYS],   key=lambda x: x[1].lower())
 ALPHA_DL   = sorted([c for c in CATALOGUE if c[0] in DL_KEYS],   key=lambda x: x[1].lower())
@@ -3205,3 +3215,883 @@ elif section == "eigenvalues":
         c1.metric("PC1 explains", f"{var_explained[0]:.1%} of variance")
         c2.metric("PC2 explains", f"{var_explained[1]:.1%} of variance")
         st.caption("The principal components (eigenvectors) are the natural axes of the data cloud.")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PCA
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "pca":
+    st.title("🔍 PCA — Principal Component Analysis")
+    st.markdown("""
+    <div class="concept-card">
+    PCA finds the directions of <b>maximum variance</b> in high-dimensional data and projects
+    the data onto a lower-dimensional space, losing as little information as possible.
+    It is one of the most widely used dimensionality reduction techniques in ML.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["2D → 1D intuition", "Multi-dimensional PCA", "Scree plot & variance"])
+
+    with tab1:
+        st.markdown("The first principal component is the direction that captures the most variance.")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            n_pca2 = st.slider("Points", 30, 200, 80, key="pca2_n")
+            corr2  = st.slider("Feature correlation", -0.95, 0.95, 0.75, step=0.05, key="pca2_c")
+            noise2 = st.slider("Noise", 0.05, 0.8, 0.2, step=0.05, key="pca2_ns")
+            seed2  = st.slider("Seed", 0, 20, 3, key="pca2_s")
+            show_proj = st.checkbox("Show projections onto PC1", value=True)
+
+        np.random.seed(seed2)
+        cov2 = np.array([[1.0, corr2],[corr2, 1.0]])
+        X2 = np.random.multivariate_normal([0,0], cov2, n_pca2)
+        X2 += np.random.randn(*X2.shape) * noise2
+
+        # manual PCA
+        X2c = X2 - X2.mean(axis=0)
+        cov_e = np.cov(X2c.T)
+        evals2, evecs2 = np.linalg.eigh(cov_e)
+        idx2 = np.argsort(evals2)[::-1]
+        evals2, evecs2 = evals2[idx2], evecs2[:, idx2]
+        pc1 = evecs2[:, 0]
+        var_exp = evals2 / evals2.sum()
+
+        # projections onto PC1
+        projections = X2c @ pc1
+        X_proj = np.outer(projections, pc1)
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=X2[:,0], y=X2[:,1], mode='markers',
+                marker=dict(color='#534AB7', size=6, opacity=0.6), name='Data points'))
+
+            if show_proj:
+                for i in range(len(X2c)):
+                    orig = X2c[i] + X2.mean(axis=0)
+                    proj = X_proj[i] + X2.mean(axis=0)
+                    fig.add_shape(type='line', x0=orig[0], y0=orig[1],
+                        x1=proj[0], y1=proj[1],
+                        line=dict(color='rgba(239,159,39,0.3)', width=1))
+                fig.add_trace(go.Scatter(
+                    x=(X_proj + X2.mean(axis=0))[:,0],
+                    y=(X_proj + X2.mean(axis=0))[:,1],
+                    mode='markers', marker=dict(color='#EF9F27', size=5, opacity=0.8),
+                    name='Projected onto PC1'))
+
+            # draw PC arrows
+            scale = np.sqrt(evals2) * 1.5
+            for i, (ev, sc, col_p, lbl) in enumerate(zip(
+                    evecs2.T, scale, ['#E24B4A','#1D9E75'], ['PC1','PC2'])):
+                fig.add_shape(type='line',
+                    x0=X2.mean(0)[0]-ev[0]*sc, y0=X2.mean(0)[1]-ev[1]*sc,
+                    x1=X2.mean(0)[0]+ev[0]*sc, y1=X2.mean(0)[1]+ev[1]*sc,
+                    line=dict(color=col_p, width=3))
+                fig.add_annotation(
+                    x=X2.mean(0)[0]+ev[0]*sc*1.15,
+                    y=X2.mean(0)[1]+ev[1]*sc*1.15,
+                    text=f"<b>{lbl}</b> ({var_exp[i]:.1%})",
+                    font=dict(color=col_p, size=12), showarrow=False)
+
+            lim = max(abs(X2).max(), abs(X_proj + X2.mean(0)).max()) + 0.5
+            fig.update_layout(xaxis=dict(range=[-lim,lim], zeroline=True),
+                yaxis=dict(range=[-lim,lim], zeroline=True, scaleanchor='x', scaleratio=1),
+                height=430, plot_bgcolor='white',
+                legend=dict(orientation='h', y=1.1),
+                margin=dict(l=10,r=10,t=10,b=10))
+            st.plotly_chart(fig, use_container_width=True)
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("PC1 variance explained", f"{var_exp[0]:.1%}")
+        c2.metric("PC2 variance explained", f"{var_exp[1]:.1%}")
+        c3.metric("PC1 direction", f"[{pc1[0]:.3f}, {pc1[1]:.3f}]")
+        st.info("Orange lines show the reconstruction error — information lost by projecting onto PC1 only.")
+
+    with tab2:
+        st.markdown("PCA on a higher-dimensional dataset, projected to 2D for visualisation.")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            n_classes = st.slider("Classes", 2, 4, 3, key="pca_cls")
+            n_feats   = st.slider("Original features (dimensions)", 3, 10, 5, key="pca_f")
+            n_samp    = st.slider("Samples per class", 20, 80, 40, key="pca_s")
+            seed_hd   = st.slider("Seed", 0, 10, 1, key="pca_seed2")
+
+        np.random.seed(seed_hd)
+        centers = np.random.randn(n_classes, n_feats) * 2
+        X_hd = np.vstack([np.random.randn(n_samp, n_feats) + centers[c]
+                          for c in range(n_classes)])
+        y_hd = np.repeat(np.arange(n_classes), n_samp)
+
+        # PCA via SVD
+        X_hdc = X_hd - X_hd.mean(axis=0)
+        U, S, Vt = np.linalg.svd(X_hdc, full_matrices=False)
+        var_ratio = S**2 / (S**2).sum()
+        X_2d = X_hdc @ Vt[:2].T
+
+        with col2:
+            cls_colors = ['#534AB7','#E24B4A','#1D9E75','#EF9F27']
+            fig = go.Figure()
+            for c in range(n_classes):
+                mask = y_hd == c
+                fig.add_trace(go.Scatter(x=X_2d[mask,0], y=X_2d[mask,1],
+                    mode='markers', name=f'Class {c+1}',
+                    marker=dict(color=cls_colors[c], size=7, opacity=0.75)))
+            fig.update_layout(xaxis_title=f"PC1 ({var_ratio[0]:.1%})",
+                yaxis_title=f"PC2 ({var_ratio[1]:.1%})",
+                height=390, legend=dict(orientation='h', y=1.1))
+            st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown(f"Original: **{n_feats}D** → PCA projection: **2D** "
+                    f"(retaining {var_ratio[0]+var_ratio[1]:.1%} of variance)")
+
+    with tab3:
+        st.markdown("### Scree plot — how many components to keep?")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            n_feat_s = st.slider("Number of features", 3, 15, 8, key="pca_sc_f")
+            n_samp_s = st.slider("Samples", 50, 300, 120, key="pca_sc_s")
+            seed_sc  = st.slider("Seed", 0, 10, 0, key="pca_sc_seed")
+            threshold = st.slider("Variance threshold", 0.7, 0.99, 0.90, step=0.01)
+
+        np.random.seed(seed_sc)
+        # make data with varying signal strength across dims
+        true_dims = max(2, n_feat_s // 2)
+        W = np.random.randn(n_feat_s, true_dims)
+        Z = np.random.randn(n_samp_s, true_dims)
+        X_sc = Z @ W.T + np.random.randn(n_samp_s, n_feat_s) * 0.5
+        X_sc -= X_sc.mean(0)
+        _, S_sc, _ = np.linalg.svd(X_sc, full_matrices=False)
+        var_sc = S_sc**2 / (S_sc**2).sum()
+        cumvar = np.cumsum(var_sc)
+        n_keep = int(np.searchsorted(cumvar, threshold)) + 1
+
+        with col2:
+            fig = make_subplots(rows=1, cols=2,
+                subplot_titles=["Variance per component (scree)", "Cumulative variance"])
+            fig.add_trace(go.Bar(x=list(range(1, n_feat_s+1)), y=var_sc,
+                marker_color=['#E24B4A' if i < n_keep else '#AFA9EC'
+                              for i in range(n_feat_s)], name='Individual'),
+                row=1, col=1)
+            fig.add_trace(go.Scatter(x=list(range(1, n_feat_s+1)), y=cumvar,
+                mode='lines+markers', line=dict(color='#534AB7', width=2.5),
+                name='Cumulative'), row=1, col=2)
+            fig.add_hline(y=threshold, line_dash='dash', line_color='#EF9F27',
+                annotation_text=f"{threshold:.0%}", row=1, col=2)
+            fig.add_vline(x=n_keep, line_dash='dot', line_color='#E24B4A',
+                annotation_text=f"keep {n_keep}", row=1, col=1)
+            fig.update_xaxes(title_text="Component")
+            fig.update_yaxes(title_text="Variance explained")
+            fig.update_layout(height=350, showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+
+        st.metric(f"Components needed for {threshold:.0%} variance",
+                  f"{n_keep} out of {n_feat_s}",
+                  f"{n_feat_s - n_keep} dimensions removed")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DECISION TREE
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "decision_tree":
+    st.title("🌳 Decision Tree")
+    st.markdown("""
+    <div class="concept-card">
+    A decision tree repeatedly <b>splits the data</b> on the feature and threshold that best
+    separates the classes. Each split is chosen to maximise <b>information gain</b>
+    (or minimise Gini impurity). The result is a set of human-readable if/else rules.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Decision boundary", "Gini impurity & splits"])
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            max_depth = st.slider("Max tree depth", 1, 6, 3)
+            n_dt = st.slider("Samples per class", 30, 100, 50, key="dt_n")
+            sep_dt = st.slider("Class separation", 0.5, 3.0, 1.5, step=0.1, key="dt_sep")
+            seed_dt = st.slider("Seed", 0, 20, 5, key="dt_seed")
+            n_classes_dt = st.radio("Classes", [2, 3], horizontal=True)
+
+        from sklearn.tree import DecisionTreeClassifier
+        np.random.seed(seed_dt)
+        if n_classes_dt == 2:
+            X_dt = np.vstack([np.random.randn(n_dt,2)+[-sep_dt/2,0],
+                              np.random.randn(n_dt,2)+[sep_dt/2,0]])
+            y_dt = np.array([0]*n_dt+[1]*n_dt)
+        else:
+            X_dt = np.vstack([np.random.randn(n_dt,2)+[-sep_dt,0],
+                              np.random.randn(n_dt,2)+[sep_dt,0],
+                              np.random.randn(n_dt,2)+[0,sep_dt]])
+            y_dt = np.array([0]*n_dt+[1]*n_dt+[2]*n_dt)
+
+        clf_dt = DecisionTreeClassifier(max_depth=max_depth, random_state=42)
+        clf_dt.fit(X_dt, y_dt)
+        train_acc = clf_dt.score(X_dt, y_dt)
+
+        xx_dt, yy_dt = np.meshgrid(np.linspace(-5,5,150), np.linspace(-5,5,150))
+        Z_dt = clf_dt.predict(np.c_[xx_dt.ravel(), yy_dt.ravel()]).reshape(xx_dt.shape)
+
+        dt_colors = ['#534AB7','#E24B4A','#1D9E75']
+        bg_colors  = ['rgba(83,74,183,0.12)','rgba(226,75,74,0.12)','rgba(29,158,117,0.12)']
+
+        with col2:
+            fig = go.Figure()
+            for cls in range(n_classes_dt):
+                mask_bg = Z_dt == cls
+                fig.add_trace(go.Scatter(
+                    x=xx_dt.ravel()[mask_bg.ravel()],
+                    y=yy_dt.ravel()[mask_bg.ravel()],
+                    mode='markers', marker=dict(color=dt_colors[cls], size=3, opacity=0.12),
+                    showlegend=False))
+            for cls in range(n_classes_dt):
+                mask = y_dt == cls
+                fig.add_trace(go.Scatter(x=X_dt[mask,0], y=X_dt[mask,1],
+                    mode='markers', name=f'Class {cls}',
+                    marker=dict(color=dt_colors[cls], size=7, opacity=0.85,
+                        line=dict(color='white', width=0.5))))
+            fig.update_layout(xaxis=dict(range=[-5,5]), yaxis=dict(range=[-5,5]),
+                height=420, legend=dict(orientation='h', y=1.1))
+            st.plotly_chart(fig, use_container_width=True)
+
+        c1,c2,c3 = st.columns(3)
+        c1.metric("Max depth", max_depth)
+        c2.metric("Train accuracy", f"{train_acc:.1%}")
+        c3.metric("Leaf nodes", clf_dt.get_n_leaves())
+
+        if max_depth >= 5:
+            st.warning("Deep tree — likely overfitting. The jagged boundaries memorise training noise.")
+        elif max_depth <= 2:
+            st.info("Shallow tree — may underfit complex patterns, but generalises well.")
+        else:
+            st.success("Moderate depth — good balance of expressiveness and generalisability.")
+
+    with tab2:
+        st.markdown("### Gini impurity — the split criterion")
+        st.markdown('<div class="formula-box">Gini = 1 − Σ pᵢ²</div>', unsafe_allow_html=True)
+        st.markdown("Gini = 0 means a pure node (all one class). Gini = 0.5 means perfectly mixed (2 classes).")
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            p_cls1 = st.slider("Fraction of class A in node", 0.0, 1.0, 0.5, step=0.01)
+            p_cls2 = 1.0 - p_cls1
+            gini = 1 - (p_cls1**2 + p_cls2**2)
+            entropy = -(p_cls1*np.log2(p_cls1+1e-9) + p_cls2*np.log2(p_cls2+1e-9))
+            st.metric("Gini impurity", f"{gini:.4f}")
+            st.metric("Entropy", f"{entropy:.4f}")
+            if gini < 0.1:   st.success("Very pure node — good split!")
+            elif gini < 0.3: st.info("Moderately pure")
+            else:             st.warning("Impure node — tree will try to split further")
+
+        with col2:
+            p_range = np.linspace(0.001, 0.999, 300)
+            gini_curve    = 1 - (p_range**2 + (1-p_range)**2)
+            entropy_curve = -(p_range*np.log2(p_range) + (1-p_range)*np.log2(1-p_range))
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=p_range, y=gini_curve, name='Gini',
+                line=dict(color='#534AB7', width=2.5)))
+            fig.add_trace(go.Scatter(x=p_range, y=entropy_curve/2, name='Entropy/2',
+                line=dict(color='#E24B4A', width=2.5)))
+            fig.add_vline(x=p_cls1, line_dash='dash', line_color='#EF9F27',
+                annotation_text=f"p={p_cls1:.2f}")
+            fig.update_layout(xaxis_title="Fraction of class A",
+                yaxis_title="Impurity", height=320,
+                legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("### Information gain — how a split is chosen")
+        st.markdown("""
+        At each node the tree tries every feature and every threshold.
+        It picks the one that maximises:
+        """)
+        st.markdown('<div class="formula-box">IG = Gini(parent) − [n_L/n · Gini(left) + n_R/n · Gini(right)]</div>',
+            unsafe_allow_html=True)
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            n_left  = st.slider("Left child samples", 5, 50, 20)
+            p_left  = st.slider("Fraction class A — left",  0.0, 1.0, 0.9, step=0.01)
+            n_right = st.slider("Right child samples", 5, 50, 30)
+            p_right = st.slider("Fraction class A — right", 0.0, 1.0, 0.1, step=0.01)
+        n_total = n_left + n_right
+        p_parent = (n_left*p_left + n_right*p_right) / n_total
+        gini_parent = 1-(p_parent**2+(1-p_parent)**2)
+        gini_left   = 1-(p_left**2+(1-p_left)**2)
+        gini_right  = 1-(p_right**2+(1-p_right)**2)
+        ig = gini_parent - (n_left/n_total*gini_left + n_right/n_total*gini_right)
+        with col2:
+            st.code(f"""
+Parent gini  = {gini_parent:.4f}  (p_A = {p_parent:.2f})
+Left gini    = {gini_left:.4f}   (p_A = {p_left:.2f}, n={n_left})
+Right gini   = {gini_right:.4f}  (p_A = {p_right:.2f}, n={n_right})
+
+Information gain = {gini_parent:.4f} − ({n_left}/{n_total}·{gini_left:.4f} + {n_right}/{n_total}·{gini_right:.4f})
+                 = {ig:.4f}
+""", language="text")
+            if ig > 0.15: st.success("Excellent split — large reduction in impurity")
+            elif ig > 0.05: st.info("Decent split")
+            else: st.warning("Poor split — little gain")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# NAIVE BAYES
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "naive_bayes":
+    st.title("📊 Naive Bayes")
+    st.markdown("""
+    <div class="concept-card">
+    Naive Bayes applies <b>Bayes' theorem</b> with the "naive" assumption that features are
+    independent given the class. Despite its simplicity it works surprisingly well for
+    text classification, spam filtering and medical diagnosis.
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('<div class="formula-box">P(class | features) ∝ P(class) · Π P(featureᵢ | class)</div>',
+        unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Bayes theorem live", "Gaussian Naive Bayes classifier"])
+
+    with tab1:
+        st.markdown("### Update your belief with evidence")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            prior = st.slider("Prior P(disease)", 0.001, 0.5, 0.01, step=0.001,
+                format="%.3f", help="How common is the disease in the population?")
+            sensitivity = st.slider("Sensitivity P(+|disease)", 0.5, 1.0, 0.95, step=0.01,
+                help="True positive rate of the test")
+            specificity = st.slider("Specificity P(−|healthy)", 0.5, 1.0, 0.90, step=0.01,
+                help="True negative rate of the test")
+            test_result = st.radio("Test result", ["Positive ✅", "Negative ❌"])
+
+        fp_rate = 1 - specificity
+        p_pos   = prior*sensitivity + (1-prior)*fp_rate
+        p_neg   = prior*(1-sensitivity) + (1-prior)*specificity
+
+        if test_result == "Positive ✅":
+            posterior = prior * sensitivity / (p_pos + 1e-12)
+            evidence_str = "positive"
+        else:
+            posterior = prior * (1-sensitivity) / (p_neg + 1e-12)
+            evidence_str = "negative"
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Bar(x=['Prior P(disease)', f'Posterior P(disease|test {evidence_str})'],
+                y=[prior, posterior],
+                marker_color=['#AFA9EC','#534AB7' if posterior > prior else '#E24B4A'],
+                text=[f"{prior:.4f}", f"{posterior:.4f}"],
+                textposition='outside'))
+            fig.update_layout(yaxis=dict(range=[0, min(1, max(posterior, prior)*1.5)]),
+                height=320, showlegend=False, yaxis_title="Probability")
+            st.plotly_chart(fig, use_container_width=True)
+
+        c1,c2,c3 = st.columns(3)
+        c1.metric("Prior", f"{prior:.4f}")
+        c2.metric("Posterior", f"{posterior:.4f}")
+        change = (posterior - prior) / (prior + 1e-12)
+        c3.metric("Belief change", f"{change:+.1f}×")
+        st.markdown(f"""
+        **Bayes formula applied:**
+        - P(disease | positive) = P(+|disease)·P(disease) / P(+) = {sensitivity:.2f}·{prior:.3f} / {p_pos:.4f} = **{posterior:.4f}**
+        """)
+        if prior < 0.01 and posterior < 0.3:
+            st.info("Even with a positive test, the posterior is low because the disease is rare — this is the **base rate fallacy**.")
+
+    with tab2:
+        st.markdown("### Gaussian Naive Bayes — 2D feature classifier")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            n_nb = st.slider("Samples per class", 20, 80, 40, key="nb_n")
+            sep_nb = st.slider("Class separation", 0.5, 3.0, 1.5, step=0.1, key="nb_sep")
+            seed_nb = st.slider("Seed", 0, 10, 1, key="nb_seed")
+            test_x1 = st.slider("Test point — feature 1", -4.0, 4.0, 0.5, step=0.1)
+            test_x2 = st.slider("Test point — feature 2", -4.0, 4.0, 0.5, step=0.1)
+
+        np.random.seed(seed_nb)
+        X_nb0 = np.random.randn(n_nb, 2) + np.array([-sep_nb/2, 0])
+        X_nb1 = np.random.randn(n_nb, 2) + np.array([sep_nb/2,  0])
+        X_nb  = np.vstack([X_nb0, X_nb1])
+        y_nb  = np.array([0]*n_nb + [1]*n_nb)
+
+        # fit Gaussian NB manually
+        means = np.array([X_nb[y_nb==c].mean(0) for c in [0,1]])
+        stds  = np.array([X_nb[y_nb==c].std(0)  for c in [0,1]])
+        priors_nb = np.array([0.5, 0.5])
+
+        def gauss_pdf(x, mu, sigma):
+            return np.exp(-0.5*((x-mu)/sigma)**2) / (sigma*np.sqrt(2*np.pi) + 1e-9)
+
+        def nb_predict_proba(x):
+            log_probs = []
+            for c in [0,1]:
+                lp = np.log(priors_nb[c])
+                lp += np.sum(np.log(gauss_pdf(x, means[c], stds[c]) + 1e-12))
+                log_probs.append(lp)
+            log_probs = np.array(log_probs)
+            log_probs -= log_probs.max()
+            probs = np.exp(log_probs)
+            return probs / probs.sum()
+
+        # decision boundary grid
+        xx_nb, yy_nb = np.meshgrid(np.linspace(-5,5,120), np.linspace(-5,5,120))
+        grid_nb = np.c_[xx_nb.ravel(), yy_nb.ravel()]
+        Z_nb = np.array([nb_predict_proba(pt)[1] for pt in grid_nb]).reshape(xx_nb.shape)
+
+        test_proba = nb_predict_proba(np.array([test_x1, test_x2]))
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Contour(x=np.linspace(-5,5,120), y=np.linspace(-5,5,120),
+                z=Z_nb, colorscale=[[0,'rgba(83,74,183,0.2)'],[0.5,'white'],[1,'rgba(226,75,74,0.2)']],
+                showscale=False, contours=dict(showlabels=False)))
+            fig.add_trace(go.Scatter(x=X_nb0[:,0], y=X_nb0[:,1], mode='markers',
+                name='Class 0', marker=dict(color='#534AB7', size=7, opacity=0.75)))
+            fig.add_trace(go.Scatter(x=X_nb1[:,0], y=X_nb1[:,1], mode='markers',
+                name='Class 1', marker=dict(color='#E24B4A', size=7, opacity=0.75)))
+            pred_cls = int(test_proba[1] >= 0.5)
+            fig.add_trace(go.Scatter(x=[test_x1], y=[test_x2], mode='markers',
+                name=f'Test → Class {pred_cls}',
+                marker=dict(color=['#534AB7','#E24B4A'][pred_cls], size=14,
+                    symbol='star', line=dict(color='black',width=1.5))))
+            fig.update_layout(xaxis=dict(range=[-5,5]), yaxis=dict(range=[-5,5]),
+                height=400, legend=dict(orientation='h', y=1.1))
+            st.plotly_chart(fig, use_container_width=True)
+
+        c1, c2 = st.columns(2)
+        c1.metric("P(Class 0 | x)", f"{test_proba[0]:.4f}")
+        c2.metric("P(Class 1 | x)", f"{test_proba[1]:.4f}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CNN — CONVOLUTIONAL LAYER
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "cnn":
+    st.title("🖼️ Convolutional Layer (CNN)")
+    st.markdown("""
+    <div class="concept-card">
+    A convolutional layer slides a small <b>kernel</b> (filter) across an input,
+    computing a dot product at every position. This detects local patterns —
+    edges, textures, shapes — regardless of where they appear in the image.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Kernel convolution visualised", "Common kernels & effects"])
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            grid_size = st.slider("Input size (N×N)", 6, 12, 8)
+            input_type = st.selectbox("Input pattern",
+                ["Random", "Vertical edge", "Horizontal edge", "Diagonal", "Checkerboard"])
+            kernel_preset = st.selectbox("Kernel (3×3)",
+                ["Edge detect (vertical)", "Edge detect (horizontal)",
+                 "Sharpen", "Blur (average)", "Custom"])
+            stride = st.radio("Stride", [1, 2], horizontal=True)
+            padding = st.checkbox("Zero padding (same size output)", value=False)
+
+        np.random.seed(42)
+        G = grid_size
+        if input_type == "Random":
+            inp = np.random.rand(G, G)
+        elif input_type == "Vertical edge":
+            inp = np.zeros((G,G)); inp[:, G//2:] = 1.0
+        elif input_type == "Horizontal edge":
+            inp = np.zeros((G,G)); inp[G//2:, :] = 1.0
+        elif input_type == "Diagonal":
+            inp = np.array([[1.0 if abs(i-j)<2 else 0.0 for j in range(G)] for i in range(G)])
+        else:
+            inp = np.array([[(i+j)%2*1.0 for j in range(G)] for i in range(G)])
+
+        kernels = {
+            "Edge detect (vertical)":   np.array([[-1,0,1],[-2,0,2],[-1,0,1]]),
+            "Edge detect (horizontal)": np.array([[-1,-2,-1],[0,0,0],[1,2,1]]),
+            "Sharpen":                  np.array([[0,-1,0],[-1,5,-1],[0,-1,0]]),
+            "Blur (average)":           np.ones((3,3))/9,
+            "Custom":                   np.array([[1,0,-1],[1,0,-1],[1,0,-1]]),
+        }
+        K = kernels[kernel_preset]
+
+        # convolution
+        pad = 1 if padding else 0
+        inp_padded = np.pad(inp, pad) if padding else inp
+        out_size = (inp_padded.shape[0]-3)//stride+1
+        feature_map = np.zeros((out_size, out_size))
+        for i in range(out_size):
+            for j in range(out_size):
+                patch = inp_padded[i*stride:i*stride+3, j*stride:j*stride+3]
+                feature_map[i,j] = np.sum(patch * K)
+
+        with col2:
+            fig = make_subplots(rows=1, cols=3,
+                subplot_titles=["Input", "Kernel (3×3)", "Feature map (output)"],
+                column_widths=[0.45, 0.15, 0.4])
+            fig.add_trace(go.Heatmap(z=inp, colorscale='Greys', showscale=False,
+                xgap=1, ygap=1), row=1, col=1)
+            fig.add_trace(go.Heatmap(z=K, colorscale='RdBu', showscale=False,
+                xgap=2, ygap=2,
+                text=[[f"{K[i,j]:.1f}" for j in range(3)] for i in range(3)],
+                texttemplate="%{text}", textfont=dict(size=11)), row=1, col=2)
+            fig.add_trace(go.Heatmap(z=feature_map, colorscale='RdBu',
+                showscale=False, xgap=1, ygap=1), row=1, col=3)
+            fig.update_yaxes(autorange='reversed')
+            fig.update_layout(height=380)
+            st.plotly_chart(fig, use_container_width=True)
+
+        c1,c2,c3 = st.columns(3)
+        c1.metric("Input size", f"{G}×{G}")
+        c2.metric("Output size", f"{out_size}×{out_size}")
+        c3.metric("Parameters in kernel", "9 weights + 1 bias")
+        st.markdown(f"**Key insight:** the same 9 weights are reused at every position — "
+                    f"this *weight sharing* gives CNNs translation invariance and makes them vastly more "
+                    f"efficient than a fully-connected layer ({G*G*out_size*out_size:,} weights vs 9).")
+
+    with tab2:
+        st.markdown("### How different kernels highlight different features")
+        np.random.seed(7)
+        # make a structured test image
+        test_img = np.zeros((16,16))
+        test_img[3:13, 3:13] = 0.5
+        test_img[5:11, 5:11] = 1.0
+        test_img[2, :] = 0.8; test_img[:, 2] = 0.8
+
+        kernel_gallery = {
+            "Original":               np.array([[0,0,0],[0,1,0],[0,0,0]]),
+            "Vertical edges":         np.array([[-1,0,1],[-2,0,2],[-1,0,1]]),
+            "Horizontal edges":       np.array([[-1,-2,-1],[0,0,0],[1,2,1]]),
+            "Blur":                   np.ones((3,3))/9,
+            "Sharpen":                np.array([[0,-1,0],[-1,5,-1],[0,-1,0]]),
+        }
+
+        results = {}
+        for name, k in kernel_gallery.items():
+            fm = np.zeros((14,14))
+            for i in range(14):
+                for j in range(14):
+                    fm[i,j] = np.sum(test_img[i:i+3,j:j+3]*k)
+            results[name] = fm
+
+        fig = make_subplots(rows=1, cols=5,
+            subplot_titles=list(kernel_gallery.keys()))
+        for idx, (name, fm) in enumerate(results.items()):
+            fig.add_trace(go.Heatmap(z=fm, colorscale='RdBu' if idx>0 else 'Greys',
+                showscale=False, xgap=1, ygap=1), row=1, col=idx+1)
+        fig.update_yaxes(autorange='reversed')
+        fig.update_layout(height=200)
+        st.plotly_chart(fig, use_container_width=True)
+        st.caption("Same input image, 5 different 3×3 kernels. CNNs learn these kernels automatically from data.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ATTENTION MECHANISM
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "attention":
+    st.title("👁️ Attention Mechanism")
+    st.markdown("""
+    <div class="concept-card">
+    Attention allows a model to <b>selectively focus</b> on different parts of the input
+    when producing each output. In transformers, every token computes a <b>Query</b>,
+    receives <b>Keys</b> from all tokens, and uses the dot product similarity to decide
+    how much to <b>attend</b> to each position.
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('<div class="formula-box">Attention(Q,K,V) = softmax(Q·Kᵀ / √dₖ) · V</div>',
+        unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Attention weights visualised", "Softmax & temperature"])
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            sentence = st.text_input("Input sentence (space-separated tokens)",
+                "the cat sat on the mat")
+            tokens = sentence.strip().split()
+            n_tok = len(tokens)
+            query_idx = st.slider("Query token (which word is 'looking')",
+                0, max(n_tok-1, 0), min(2, n_tok-1))
+            d_k = st.select_slider("Key dimension dₖ", [4, 8, 16, 32], value=8)
+            seed_att = st.slider("Seed (random QK weights)", 0, 20, 5, key="att_seed")
+            temperature = st.slider("Temperature (1/√dₖ scaling)", 0.1, 2.0, 1.0, step=0.1)
+
+        np.random.seed(seed_att)
+        # random embeddings for demo
+        embeddings = np.random.randn(n_tok, d_k)
+        W_Q = np.random.randn(d_k, d_k) * 0.5
+        W_K = np.random.randn(d_k, d_k) * 0.5
+        W_V = np.random.randn(d_k, d_k) * 0.5
+
+        Q = embeddings @ W_Q
+        K = embeddings @ W_K
+        V = embeddings @ W_V
+
+        # raw scores for the query token
+        scores = Q[query_idx] @ K.T / (np.sqrt(d_k) * temperature)
+        attn_weights = np.exp(scores - scores.max())
+        attn_weights /= attn_weights.sum()
+
+        # full attention matrix
+        all_scores = Q @ K.T / (np.sqrt(d_k) * temperature)
+        all_weights = np.exp(all_scores - all_scores.max(axis=1, keepdims=True))
+        all_weights /= all_weights.sum(axis=1, keepdims=True)
+
+        with col2:
+            fig = make_subplots(rows=1, cols=2,
+                subplot_titles=[f'Attention from "{tokens[query_idx]}"',
+                                "Full attention matrix"])
+            fig.add_trace(go.Bar(x=tokens, y=attn_weights,
+                marker_color=['#E24B4A' if i==query_idx else '#534AB7' for i in range(n_tok)],
+                text=[f"{w:.3f}" for w in attn_weights], textposition='outside',
+                showlegend=False), row=1, col=1)
+            fig.add_trace(go.Heatmap(z=all_weights, x=tokens, y=tokens,
+                colorscale='Blues', showscale=False,
+                text=[[f"{all_weights[i,j]:.2f}" for j in range(n_tok)] for i in range(n_tok)],
+                texttemplate="%{text}", textfont=dict(size=10)), row=1, col=2)
+            fig.update_yaxes(autorange='reversed', row=1, col=2)
+            fig.update_xaxes(title_text="Key token", row=1, col=1)
+            fig.update_yaxes(title_text="Attention weight", row=1, col=1)
+            fig.update_layout(height=380)
+            st.plotly_chart(fig, use_container_width=True)
+
+        top_token = tokens[np.argmax(attn_weights)]
+        st.markdown(f'**"{tokens[query_idx]}"** attends most strongly to **"{top_token}"** '
+                    f'(weight = {attn_weights.max():.3f})')
+
+    with tab2:
+        st.markdown("### Softmax converts raw scores into attention weights")
+        st.markdown('<div class="formula-box">softmax(zᵢ) = exp(zᵢ) / Σ exp(zⱼ)</div>',
+            unsafe_allow_html=True)
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            n_scores = st.slider("Number of keys", 3, 8, 5)
+            raw_scores = [st.slider(f"Score z{i+1}", -3.0, 3.0,
+                [1.5, -0.5, 2.0, 0.3, -1.0, 0.8, -0.2, 1.1][i], step=0.1, key=f"sm_{i}")
+                for i in range(n_scores)]
+            temp_sm = st.slider("Temperature τ", 0.1, 3.0, 1.0, step=0.1,
+                help="Low T → sharp (winner-take-all). High T → uniform.")
+
+        scores_arr = np.array(raw_scores) / temp_sm
+        sm = np.exp(scores_arr - scores_arr.max())
+        sm /= sm.sum()
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Bar(x=[f"k{i+1}" for i in range(n_scores)],
+                y=raw_scores, name='Raw scores', marker_color='#AFA9EC', opacity=0.7))
+            fig.add_trace(go.Bar(x=[f"k{i+1}" for i in range(n_scores)],
+                y=sm, name='After softmax', marker_color='#534AB7'))
+            fig.update_layout(barmode='group', height=320,
+                legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, use_container_width=True)
+        st.markdown(f"**Temperature τ={temp_sm}:** {'sharp focus on top key' if temp_sm < 0.5 else 'uniform attention across all keys' if temp_sm > 2 else 'balanced attention'}")
+        st.caption("In transformers τ = 1/√dₖ. Low temperature → the model is more decisive; high → more exploratory.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PROBABILITY DISTRIBUTIONS
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "probability":
+    st.title("🎲 Probability Distributions")
+    st.markdown("""
+    <div class="concept-card">
+    A probability distribution describes how likely each value of a random variable is.
+    Distributions are everywhere in ML: loss functions assume distributions over errors,
+    variational autoencoders sample from Gaussians, and Bayesian methods put distributions
+    over parameters.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["Normal (Gaussian)", "Binomial & Poisson", "Comparing distributions"])
+
+    with tab1:
+        st.markdown('<div class="formula-box">f(x) = (1/σ√2π) · exp(−(x−μ)²/2σ²)</div>',
+            unsafe_allow_html=True)
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            mu    = st.slider("Mean μ", -4.0, 4.0, 0.0, step=0.1, key="nd_mu")
+            sigma = st.slider("Std dev σ", 0.1, 3.0, 1.0, step=0.1, key="nd_sigma")
+            show_68 = st.checkbox("Show 68–95–99.7 rule", value=True)
+            x_query = st.slider("Query point x", -6.0, 6.0, 1.0, step=0.1)
+
+        x_nd = np.linspace(mu-5*sigma, mu+5*sigma, 400)
+        y_nd = np.exp(-0.5*((x_nd-mu)/sigma)**2) / (sigma*np.sqrt(2*np.pi))
+        pdf_at_x = np.exp(-0.5*((x_query-mu)/sigma)**2) / (sigma*np.sqrt(2*np.pi))
+        cdf_at_x = float(0.5*(1+np.sign(x_query-mu)*
+                    (1-np.exp(-0.7071*(abs(x_query-mu)/sigma)**1.6)))) # approx
+
+        with col2:
+            fig = go.Figure()
+            if show_68:
+                for k, alpha, label in [(1,0.20,'68%'),(2,0.12,'95%'),(3,0.07,'99.7%')]:
+                    fig.add_trace(go.Scatter(
+                        x=np.concatenate([x_nd[(x_nd>=mu-k*sigma)&(x_nd<=mu+k*sigma)],
+                                          x_nd[(x_nd>=mu-k*sigma)&(x_nd<=mu+k*sigma)][::-1]]),
+                        y=np.concatenate([y_nd[(x_nd>=mu-k*sigma)&(x_nd<=mu+k*sigma)],
+                                          np.zeros(((x_nd>=mu-k*sigma)&(x_nd<=mu+k*sigma)).sum())]),
+                        fill='toself', fillcolor=f'rgba(83,74,183,{alpha})',
+                        line=dict(color='rgba(0,0,0,0)'), name=f'±{k}σ ({label})'))
+            fig.add_trace(go.Scatter(x=x_nd, y=y_nd, name='PDF',
+                line=dict(color='#534AB7', width=2.5)))
+            fig.add_vline(x=mu, line_dash='dot', line_color='#EF9F27',
+                annotation_text=f"μ={mu}")
+            fig.add_vline(x=x_query, line_dash='dash', line_color='#E24B4A',
+                annotation_text=f"x={x_query:.1f}")
+            fig.update_layout(xaxis_title="x", yaxis_title="Probability density",
+                height=380, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, use_container_width=True)
+
+        c1,c2,c3 = st.columns(3)
+        c1.metric("PDF f(x)", f"{pdf_at_x:.4f}")
+        c2.metric("Mean μ", mu)
+        c3.metric("Variance σ²", f"{sigma**2:.2f}")
+
+    with tab2:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            dist_type = st.radio("Distribution", ["Binomial", "Poisson"])
+            if dist_type == "Binomial":
+                n_bin = st.slider("n (trials)", 1, 50, 20)
+                p_bin = st.slider("p (success prob)", 0.01, 0.99, 0.3, step=0.01)
+                k_vals = np.arange(0, n_bin+1)
+                from math import comb
+                pmf = np.array([comb(n_bin,k)*(p_bin**k)*((1-p_bin)**(n_bin-k)) for k in k_vals])
+                mean_d, var_d = n_bin*p_bin, n_bin*p_bin*(1-p_bin)
+                title = f"Binomial(n={n_bin}, p={p_bin})"
+            else:
+                lam = st.slider("λ (rate)", 0.5, 15.0, 4.0, step=0.5)
+                k_vals = np.arange(0, int(lam*3)+1)
+                pmf = np.exp(-lam) * lam**k_vals / np.array([np.math.factorial(k) for k in k_vals])
+                mean_d, var_d = lam, lam
+                title = f"Poisson(λ={lam})"
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Bar(x=k_vals, y=pmf, name='PMF',
+                marker_color='#534AB7', opacity=0.8))
+            fig.add_vline(x=mean_d, line_dash='dash', line_color='#E24B4A',
+                annotation_text=f"mean={mean_d:.2f}")
+            fig.update_layout(xaxis_title="k", yaxis_title="P(X=k)",
+                title=title, height=350, showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+        c1,c2 = st.columns(2)
+        c1.metric("Mean", f"{mean_d:.3f}")
+        c2.metric("Variance", f"{var_d:.3f}")
+
+    with tab3:
+        st.markdown("### Shape comparison — same mean, different distributions")
+        mean_cmp = st.slider("Shared mean", -2.0, 2.0, 0.0, step=0.2)
+        x_cmp = np.linspace(-6, 8, 400)
+        fig = go.Figure()
+        for sigma_cmp, col_c, lbl in [(0.5,'#E24B4A','σ=0.5 (narrow)'),(1.0,'#534AB7','σ=1.0'),(2.0,'#1D9E75','σ=2.0 (wide)')]:
+            y_cmp = np.exp(-0.5*((x_cmp-mean_cmp)/sigma_cmp)**2)/(sigma_cmp*np.sqrt(2*np.pi))
+            fig.add_trace(go.Scatter(x=x_cmp, y=y_cmp, name=lbl, line=dict(color=col_c, width=2.5)))
+        fig.update_layout(xaxis_title="x", yaxis_title="PDF", height=320,
+            legend=dict(orientation='h', y=1.12))
+        st.plotly_chart(fig, use_container_width=True)
+        st.markdown("""
+        - **Narrow (low σ)** — model is very certain, low entropy
+        - **Wide (high σ)** — high uncertainty, high entropy
+        - In VAEs and Bayesian ML, learning the right σ is as important as learning the mean
+        """)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SVD — MATRIX DECOMPOSITION
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "svd":
+    st.title("✂️ SVD — Singular Value Decomposition")
+    st.markdown("""
+    <div class="concept-card">
+    SVD decomposes any matrix into three simpler matrices: <b>A = U Σ Vᵀ</b>.
+    It reveals the intrinsic structure of data. Key applications: PCA, image compression,
+    recommendation systems, and understanding what a neural network layer has learned.
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('<div class="formula-box">A = U · Σ · Vᵀ &nbsp;&nbsp;&nbsp; (m×n) = (m×m)(m×n)(n×n)</div>',
+        unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Image compression", "Low-rank approximation explorer"])
+
+    with tab1:
+        st.markdown("### SVD as lossy compression — keep only the top k singular values")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            img_type = st.selectbox("Test image", ["Gradient", "Stripes", "Checkerboard", "Random noise", "Smooth blob"])
+            k_svd = st.slider("Rank k (singular values kept)", 1, 30, 5)
+            img_size = 40
+
+        np.random.seed(0)
+        if img_type == "Gradient":
+            img = np.outer(np.linspace(0,1,img_size), np.linspace(0,1,img_size))
+        elif img_type == "Stripes":
+            img = np.tile(np.linspace(0,1,img_size), (img_size,1))
+            img[::2] = 1 - img[::2]
+        elif img_type == "Checkerboard":
+            img = np.array([[(i+j)%2 for j in range(img_size)] for i in range(img_size)], dtype=float)
+        elif img_type == "Random noise":
+            img = np.random.rand(img_size, img_size)
+        else:
+            cx, cy = img_size//2, img_size//2
+            img = np.array([[np.exp(-((i-cx)**2+(j-cy)**2)/80) for j in range(img_size)] for i in range(img_size)])
+
+        U, S, Vt = np.linalg.svd(img)
+        k_capped = min(k_svd, len(S))
+        img_approx = (U[:, :k_capped] * S[:k_capped]) @ Vt[:k_capped, :]
+        error = np.mean((img - img_approx)**2)
+        var_captured = (S[:k_capped]**2).sum() / (S**2).sum()
+        compression = k_capped*(img_size+img_size+1) / (img_size*img_size)
+
+        with col2:
+            fig = make_subplots(rows=1, cols=3,
+                subplot_titles=["Original", f"Rank-{k_capped} approx", "Singular values"])
+            fig.add_trace(go.Heatmap(z=img, colorscale='Greys', showscale=False), row=1, col=1)
+            fig.add_trace(go.Heatmap(z=img_approx, colorscale='Greys', showscale=False), row=1, col=2)
+            fig.add_trace(go.Bar(x=list(range(1,len(S)+1)), y=S,
+                marker_color=['#534AB7' if i<k_capped else '#AFA9EC' for i in range(len(S))],
+                showlegend=False), row=1, col=3)
+            fig.add_vline(x=k_capped+0.5, line_dash='dash', line_color='#E24B4A', row=1, col=3)
+            fig.update_layout(height=350)
+            st.plotly_chart(fig, use_container_width=True)
+
+        c1,c2,c3,c4 = st.columns(4)
+        c1.metric("Rank k", k_capped)
+        c2.metric("Variance captured", f"{var_captured:.1%}")
+        c3.metric("Reconstruction MSE", f"{error:.4f}")
+        c4.metric("Storage ratio", f"{compression:.2f}×", help="<1 means compressed")
+        st.caption(f"Blue bars = kept singular values. Grey = discarded. "
+                   f"Original needs {img_size}² = {img_size**2} values; "
+                   f"rank-{k_capped} needs {k_capped*(2*img_size+1)} values.")
+
+    with tab2:
+        st.markdown("### The three matrices U, Σ, Vᵀ explained")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            m_svd = st.slider("Rows m", 3, 8, 4, key="svd_m")
+            n_svd = st.slider("Cols n", 3, 8, 5, key="svd_n")
+            rank_svd = st.slider("True rank of matrix", 1, min(m_svd,n_svd), 2)
+            seed_svd = st.slider("Seed", 0, 10, 0, key="svd_seed")
+
+        np.random.seed(seed_svd)
+        # build a low-rank matrix
+        A_true = np.random.randn(m_svd, rank_svd) @ np.random.randn(rank_svd, n_svd)
+        A_noisy = A_true + np.random.randn(m_svd, n_svd) * 0.5
+        U_s, S_s, Vt_s = np.linalg.svd(A_noisy, full_matrices=False)
+
+        with col2:
+            fig = make_subplots(rows=1, cols=4,
+                subplot_titles=["A (noisy)", "U (left singular)", "Σ (diagonal)", "Vᵀ (right singular)"],
+                column_widths=[0.3, 0.25, 0.15, 0.3])
+            fig.add_trace(go.Heatmap(z=A_noisy, colorscale='RdBu', showscale=False,
+                zmid=0), row=1, col=1)
+            fig.add_trace(go.Heatmap(z=U_s, colorscale='RdBu', showscale=False,
+                zmid=0), row=1, col=2)
+            fig.add_trace(go.Heatmap(z=np.diag(S_s), colorscale='Blues',
+                showscale=False), row=1, col=3)
+            fig.add_trace(go.Heatmap(z=Vt_s, colorscale='RdBu', showscale=False,
+                zmid=0), row=1, col=4)
+            fig.update_layout(height=320)
+            st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("**U** — how original rows relate to latent dimensions  \n"
+                    "**Σ** — importance of each latent dimension (singular values)  \n"
+                    "**Vᵀ** — how original columns relate to latent dimensions")
+        import pandas as pd
+        st.dataframe(pd.DataFrame({
+            "Singular value": [f"σ{i+1} = {S_s[i]:.3f}" for i in range(len(S_s))],
+            "Variance share": [f"{S_s[i]**2/(S_s**2).sum():.1%}" for i in range(len(S_s))],
+            "Cumulative": [f"{(S_s[:i+1]**2).sum()/(S_s**2).sum():.1%}" for i in range(len(S_s))],
+        }), use_container_width=True, hide_index=True)
