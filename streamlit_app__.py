@@ -37,27 +37,27 @@ st.markdown("""
 
 # ── Catalogue ────────────────────────────────────────────────────────────────
 # (key, name, icon, short description)
+# Sections are grouped but displayed together in the A-Z index
 CATALOGUE = [
     # ── Machine Learning ──
+    ("activation",    "Activation Functions",          "🎯", "ReLU, Sigmoid, Tanh and their properties"),
+    ("backprop",      "Backpropagation",                "🔄", "How the error propagates backwards"),
+    ("batch_size",    "Batch Size & Gradient Noise",   "🎲", "How batch size affects gradient quality"),
     ("bias_var",      "Bias-Variance Tradeoff",         "↔️", "Decomposing prediction error into bias and variance"),
     ("confusion",     "Confusion Matrix & Metrics",     "🔢", "Precision, recall, F1 and the threshold effect"),
+    ("dropout",       "Dropout",                        "💧", "Randomly zeroing neurons to prevent overfitting"),
     ("gradient",      "Gradient & Descent",             "🏔️", "Direction and step size of learning"),
     ("knn",           "K-Nearest Neighbors",            "🔵", "Classify by majority vote of closest points"),
     ("linear_reg",    "Linear Regression",              "📊", "Finding the best-fit line through data"),
     ("logistic_reg",  "Logistic Regression",            "🔀", "Binary classification with sigmoid output"),
     ("loss",          "Loss Function",                  "📉", "How we measure model error"),
-    ("overfit",       "Overfitting / Underfitting",     "⚖️", "Too much or too little training"),
-    ("regularization","Regularization",                 "🔒", "L1 and L2 penalty to prevent overfitting"),
-    # ── Deep Learning ──
-    ("activation",    "Activation Functions",           "🎯", "ReLU, Sigmoid, Tanh and their properties"),
-    ("backprop",      "Backpropagation",                "🔄", "How the error propagates backwards"),
-    ("batch_size",    "Batch Size & Gradient Noise",    "🎲", "How batch size affects gradient quality"),
-    ("dropout",       "Dropout",                        "💧", "Randomly zeroing neurons to prevent overfitting"),
     ("lr_schedule",   "Learning Rate Schedulers",       "📅", "Step decay, cosine annealing and warmup"),
     ("neural_net",    "Neural Network Architecture",    "🧬", "Layers, parameters and forward pass"),
     ("neuron",        "Neuron (Perceptron)",             "🔬", "The single computational unit at the core of every network"),
     ("normalization", "Normalization",                   "📐", "Batch norm, layer norm and feature scaling"),
     ("optimizers",    "Optimizers",                     "🚀", "SGD, Momentum, RMSProp and Adam compared"),
+    ("overfit",       "Overfitting / Underfitting",     "⚖️", "Too much or too little training"),
+    ("regularization","Regularization",                 "🔒", "L1 and L2 penalty to prevent overfitting"),
     ("vanishing_grad","Vanishing & Exploding Gradients","⚡", "Signal death in deep networks and fixes"),
     # ── Math Foundations ──
     ("chain_rule",    "Chain Rule",                     "🔗", "Derivative of composite functions — the engine of backprop"),
@@ -69,13 +69,11 @@ CATALOGUE = [
     ("partial_deriv", "Partial Derivatives",            "∂",  "Rate of change along one dimension of a multivariable function"),
     ("vectors",       "Vectors",                        "➡️", "Direction and magnitude — the language of ML data"),
 ]
-
-ML_KEYS   = {"bias_var","confusion","gradient","knn","linear_reg","logistic_reg","loss","overfit","regularization"}
-DL_KEYS   = {"activation","backprop","batch_size","dropout","lr_schedule","neural_net","neuron","normalization","optimizers","vanishing_grad"}
 MATH_KEYS = {"chain_rule","derivative","dot_product","eigenvalues","integral","matrix_ops","partial_deriv","vectors"}
+ML_KEYS   = {k for k,*_ in CATALOGUE} - MATH_KEYS
+
 # alphabetical within each group
 ALPHA_ML   = sorted([c for c in CATALOGUE if c[0] in ML_KEYS],   key=lambda x: x[1].lower())
-ALPHA_DL   = sorted([c for c in CATALOGUE if c[0] in DL_KEYS],   key=lambda x: x[1].lower())
 ALPHA_MATH = sorted([c for c in CATALOGUE if c[0] in MATH_KEYS], key=lambda x: x[1].lower())
 
 # ── State ────────────────────────────────────────────────────────────────────
@@ -96,10 +94,6 @@ with st.sidebar:
 
     st.markdown("**Machine Learning**")
     for key, name, icon, _ in ALPHA_ML:
-        if st.button(name, key=f"sb_{key}", use_container_width=True):
-            go_to(key)
-    st.markdown("**Deep Learning**")
-    for key, name, icon, _ in ALPHA_DL:
         if st.button(name, key=f"sb_{key}", use_container_width=True):
             go_to(key)
     st.markdown("**Math Foundations**")
@@ -137,11 +131,9 @@ if section == "home":
                     st.rerun()
 
     st.markdown("### 🤖 Machine Learning")
-    render_cards(ALPHA_ML)
-    st.markdown("### 🧠 Deep Learning")
-    render_cards(ALPHA_DL)
+    render_cards(sorted([c for c in CATALOGUE if c[0] in ML_KEYS], key=lambda x: x[1].lower()))
     st.markdown("### 📐 Math Foundations")
-    render_cards(ALPHA_MATH)
+    render_cards(sorted([c for c in CATALOGUE if c[0] in MATH_KEYS], key=lambda x: x[1].lower()))
 
 # ═══════════════════════════════════════════════════════════════════════════
 # LOSS FUNCTION
