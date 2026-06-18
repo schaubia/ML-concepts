@@ -113,6 +113,10 @@ with st.sidebar:
     if st.button("🏠  Home", use_container_width=True):
         go_to("home")
 
+    st.markdown("**Math Foundations**")
+    for key, name, icon, _ in ALPHA_MATH:
+        if st.button(name, key=f"sb_{key}", use_container_width=True):
+            go_to(key)
     st.markdown("**Machine Learning**")
     for key, name, icon, _ in ALPHA_ML:
         if st.button(name, key=f"sb_{key}", use_container_width=True):
@@ -123,10 +127,6 @@ with st.sidebar:
             go_to(key)
     st.markdown("**Agentic AI**")
     for key, name, icon, _ in ALPHA_AGENT:
-        if st.button(name, key=f"sb_{key}", use_container_width=True):
-            go_to(key)
-    st.markdown("**Math Foundations**")
-    for key, name, icon, _ in ALPHA_MATH:
         if st.button(name, key=f"sb_{key}", use_container_width=True):
             go_to(key)
 
@@ -159,14 +159,14 @@ if section == "home":
                     go_to(key)
                     st.rerun()
 
+    st.markdown("### 📐 Math Foundations")
+    render_cards(ALPHA_MATH)
     st.markdown("### 🤖 Machine Learning")
     render_cards(ALPHA_ML)
     st.markdown("### 🧠 Deep Learning")
     render_cards(ALPHA_DL)
     st.markdown("### 🤝 Agentic AI")
     render_cards(ALPHA_AGENT)
-    st.markdown("### 📐 Math Foundations")
-    render_cards(ALPHA_MATH)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # LOSS FUNCTION
