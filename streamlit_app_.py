@@ -74,6 +74,7 @@ CATALOGUE = [
     ("chain_rule",    "Chain Rule",                     "🔗", "Derivative of composite functions — the engine of backprop"),
     ("derivative",    "Derivative",                     "📐", "Instantaneous rate of change and the tangent line"),
     ("dot_product",   "Dot Product",                    "·",  "Multiply two vectors into a scalar — similarity and projection"),
+    ("embeddings",    "Embeddings",                     "🗺️", "Word2Vec, GloVe and contextual vectors — meaning as geometry"),
     ("eigenvalues",   "Eigenvalues & Eigenvectors",     "λ",  "Directions a matrix stretches without rotating"),
     ("integral",      "Integral",                       "∫",  "Area under a curve and accumulation"),
     ("matrix_ops",    "Matrix Operations",              "🔲", "Multiplication, transpose and linear transformations"),
@@ -88,7 +89,7 @@ ML_KEYS     = {"bias_var","confusion","decision_tree","gradient","knn","linear_r
                "loss","naive_bayes","overfit","pca","regularization"}
 DL_KEYS     = {"activation","attention","backprop","batch_size","cnn","dropout","lr_schedule",
                "neural_net","neuron","normalization","optimizers","vanishing_grad"}
-MATH_KEYS   = {"chain_rule","derivative","dot_product","eigenvalues","integral","matrix_ops",
+MATH_KEYS   = {"chain_rule","derivative","dot_product","eigenvalues","embeddings","integral","matrix_ops",
                "partial_deriv","probability","svd","vectors","vector_norms"}
 AGENT_KEYS  = {"react_loop","tool_use","planning","agent_memory","multi_agent"}
 # alphabetical within each group
@@ -5133,4 +5134,339 @@ elif section == "vector_norms":
         | Optimal solution | Likely at a corner → **sparse weights** | On the curve → **small but non-zero weights** |
         | Use when | You want feature selection | You want all features to contribute a little |
         | Also called | Lasso regularization | Ridge regularization |
+        """)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# EMBEDDINGS
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "embeddings":
+    st.title("🗺️ Embeddings")
+    st.markdown("""
+    <div class="concept-card">
+    An <b>embedding</b> maps a discrete object — a word, sentence, image, user — into a
+    dense vector of real numbers so that <em>similar things end up close together</em> in
+    that space. The geometry of the space encodes meaning: direction, distance and angle
+    all carry information the model can learn from.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["Word2Vec vs GloVe", "Cosine similarity explorer", "Static vs contextual"])
+
+    # ── TAB 1: Word2Vec vs GloVe ─────────────────────────────────────────
+    with tab1:
+        st.markdown("### How are embeddings trained?")
+
+        col_a, col_b = st.columns(2)
+
+        with col_a:
+            st.markdown("#### Word2Vec  *(Google, 2013)*")
+            st.markdown("""
+            **Core idea:** train a shallow neural network to *predict* words from their neighbours.
+            The hidden-layer weights become the embedding vectors.
+
+            Two flavours:
+            - **Skip-gram** — given centre word, predict surrounding context words
+            - **CBOW** — given context words, predict the centre word
+
+            **Learning signal:** local context windows (e.g. ±2 words).
+            The model never sees global corpus statistics — only one window at a time.
+            """)
+            st.markdown('<div class="formula-box">P(context | word) ≈ softmax(E_word · E_context^T)</div>', unsafe_allow_html=True)
+
+            # Illustrate Skip-gram window
+            sentence = ["the", "cat", "sat", "on", "the", "mat"]
+            centre_idx = st.slider("Centre word (Skip-gram)", 1, 4, 2, key="w2v_centre")
+            window = 2
+
+            fig_sg = go.Figure()
+            for i, word in enumerate(sentence):
+                dist = abs(i - centre_idx)
+                if i == centre_idx:
+                    color, size, label = "#534AB7", 20, f"<b>{word}</b><br>(target)"
+                elif dist <= window:
+                    color, size, label = "#1D9E75", 14, f"{word}<br>(context)"
+                else:
+                    color, size, label = "#ccc", 10, word
+
+                fig_sg.add_trace(go.Scatter(
+                    x=[i], y=[0], mode="markers+text",
+                    marker=dict(size=size, color=color),
+                    text=[word], textposition="top center",
+                    textfont=dict(color=color, size=12),
+                    showlegend=False
+                ))
+                # window bracket lines
+                if dist == window and dist > 0:
+                    fig_sg.add_shape(type="line", x0=centre_idx, y0=-0.3, x1=i, y1=-0.3,
+                        line=dict(color="#1D9E75", width=1.5, dash="dot"))
+
+            fig_sg.update_layout(
+                height=160, plot_bgcolor="white",
+                xaxis=dict(visible=False, range=[-0.5, 5.5]),
+                yaxis=dict(visible=False, range=[-0.6, 0.6]),
+                margin=dict(l=10, r=10, t=10, b=10)
+            )
+            st.plotly_chart(fig_sg, use_container_width=True)
+            st.caption(f"Window = ±{window}. Purple = target word; green = context words used for training.")
+
+        with col_b:
+            st.markdown("#### GloVe  *(Stanford, 2014)*")
+            st.markdown("""
+            **Core idea:** factorize the *global* word co-occurrence matrix.
+            Build a table of how often every word pair (i, j) appears within a window
+            across the *entire* corpus, then find vectors whose dot product matches
+            the log of that count.
+
+            **Learning signal:** corpus-wide statistics — every sentence contributes
+            to the same table before any vectors are learned.
+            """)
+            st.markdown('<div class="formula-box">w_i · w_j + b_i + b_j ≈ log X_ij</div>', unsafe_allow_html=True)
+            st.markdown("*X_ij = co-occurrence count of words i and j*")
+
+            # Co-occurrence matrix mini-demo
+            words_demo = ["king", "queen", "man", "woman", "crown"]
+            # Plausible toy co-occurrence counts
+            co_matrix = np.array([
+                [0,  15, 20,  8, 30],
+                [15,  0,  8, 22, 28],
+                [20,  8,  0, 35,  5],
+                [ 8, 22, 35,  0,  4],
+                [30, 28,  5,  4,  0],
+            ], dtype=float)
+
+            fig_co = go.Figure(data=go.Heatmap(
+                z=co_matrix,
+                x=words_demo, y=words_demo,
+                colorscale="Blues",
+                text=co_matrix.astype(int),
+                texttemplate="%{text}",
+                showscale=False,
+            ))
+            fig_co.update_layout(
+                height=260, margin=dict(l=10, r=10, t=30, b=10),
+                title=dict(text="Toy co-occurrence matrix X_ij", font=dict(size=12)),
+            )
+            st.plotly_chart(fig_co, use_container_width=True)
+            st.caption("GloVe optimises vectors so w_i · w_j ≈ log(X_ij). High counts → similar vectors.")
+
+        st.markdown("---")
+        st.markdown("### Side-by-side comparison")
+        import pandas as pd
+        comparison = [
+            ("Learning signal",    "Local context windows",                   "Global co-occurrence matrix"),
+            ("Training objective", "Predict neighbour words (classification)", "Fit log co-occurrence counts (regression)"),
+            ("Model type",         "Shallow neural network",                  "Weighted least-squares factorization"),
+            ("Memory during train","Low — streams one window at a time",       "High — builds full N×N matrix first"),
+            ("Strengths",          "Syntactic patterns; fast to train",        "Semantic analogies; leverages full corpus"),
+            ("Weaknesses",         "Misses long-range corpus statistics",      "Memory-intensive for large vocabularies"),
+            ("Both share",         "Dense fixed-size vectors per word",        "Dense fixed-size vectors per word"),
+            ("Both share",         "Semantic arithmetic (king−man+woman≈queen)", "Semantic arithmetic (king−man+woman≈queen)"),
+            ("Both share",         "Static — one vector per word regardless of context", "Static — one vector per word regardless of context"),
+        ]
+        df_cmp = pd.DataFrame(comparison, columns=["Aspect", "Word2Vec", "GloVe"])
+        st.dataframe(df_cmp, use_container_width=True, hide_index=True)
+
+    # ── TAB 2: Cosine similarity explorer ────────────────────────────────
+    with tab2:
+        st.markdown("### Cosine similarity — meaning as angle")
+        st.markdown("""
+        The standard way to compare two embeddings is **cosine similarity** — the cosine
+        of the angle between them. It ignores magnitude (a long and a short vector pointing
+        the same way are equally similar).
+        """)
+        st.markdown('<div class="formula-box">cos(θ) = (a · b) / (‖a‖ · ‖b‖)  ∈  [−1, 1]</div>', unsafe_allow_html=True)
+
+        # Toy 2-D word embeddings (hand-crafted to illustrate clusters)
+        toy_words = {
+            "king":   np.array([ 2.1,  1.8]),
+            "queen":  np.array([ 1.9,  2.2]),
+            "man":    np.array([ 1.8, -0.3]),
+            "woman":  np.array([ 1.6,  0.2]),
+            "prince": np.array([ 2.3,  1.2]),
+            "dog":    np.array([-1.5, -1.8]),
+            "cat":    np.array([-1.8, -1.4]),
+            "puppy":  np.array([-1.3, -2.1]),
+            "run":    np.array([-0.5,  2.2]),
+            "walk":   np.array([-0.3,  1.9]),
+            "sprint": np.array([-0.7,  2.5]),
+        }
+
+        word_list = list(toy_words.keys())
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            word_a = st.selectbox("Word A", word_list, index=0)
+            word_b = st.selectbox("Word B", word_list, index=1)
+
+            va = toy_words[word_a]
+            vb = toy_words[word_b]
+            cos_sim = np.dot(va, vb) / (np.linalg.norm(va) * np.linalg.norm(vb))
+            angle   = np.degrees(np.arccos(np.clip(cos_sim, -1, 1)))
+
+            st.metric("Cosine similarity", f"{cos_sim:.3f}")
+            st.metric("Angle between vectors", f"{angle:.1f}°")
+
+            if cos_sim > 0.95:
+                st.success("Nearly identical direction — very similar meaning.")
+            elif cos_sim > 0.7:
+                st.success("High similarity — related concepts.")
+            elif cos_sim > 0.3:
+                st.info("Moderate similarity — loosely related.")
+            elif cos_sim > 0:
+                st.warning("Weak similarity — different topics.")
+            else:
+                st.error("Negative similarity — opposite directions.")
+
+            st.markdown("---")
+            st.markdown("**All similarities to Word A:**")
+            sims = {w: np.dot(va, toy_words[w]) / (np.linalg.norm(va) * np.linalg.norm(toy_words[w]))
+                    for w in word_list if w != word_a}
+            for w, s in sorted(sims.items(), key=lambda x: -x[1]):
+                bar = "█" * int((s + 1) * 10)
+                st.markdown(f"`{w:<8}` {s:+.2f}  {bar}")
+
+        with col2:
+            fig = go.Figure()
+
+            # Plot all word vectors as points
+            clusters = {
+                "royalty": ["king","queen","prince"],
+                "gender":  ["man","woman"],
+                "animals": ["dog","cat","puppy"],
+                "motion":  ["run","walk","sprint"],
+            }
+            cluster_colors = {"royalty":"#534AB7","gender":"#D4537E","animals":"#1D9E75","motion":"#EF9F27"}
+
+            for cluster, members in clusters.items():
+                xs = [toy_words[w][0] for w in members]
+                ys = [toy_words[w][1] for w in members]
+                fig.add_trace(go.Scatter(
+                    x=xs, y=ys, mode="markers+text",
+                    text=members, textposition="top center",
+                    marker=dict(size=12, color=cluster_colors[cluster]),
+                    name=cluster, textfont=dict(size=11)
+                ))
+
+            # Highlight selected pair with arrows from origin
+            for word, color, label in [(word_a, "#222", "A"), (word_b, "#E24B4A", "B")]:
+                v = toy_words[word]
+                fig.add_annotation(
+                    x=v[0], y=v[1], ax=0, ay=0,
+                    xref="x", yref="y", axref="x", ayref="y",
+                    showarrow=True,
+                    arrowhead=3, arrowwidth=2.5, arrowcolor=color,
+                    text=f"<b>{label}</b>", font=dict(color=color, size=13),
+                )
+
+            # Arc for angle
+            theta_a = np.arctan2(va[1], va[0])
+            theta_b = np.arctan2(vb[1], vb[0])
+            arc_r   = 0.5
+            arc_t   = np.linspace(min(theta_a, theta_b), max(theta_a, theta_b), 50)
+            fig.add_trace(go.Scatter(
+                x=arc_r * np.cos(arc_t),
+                y=arc_r * np.sin(arc_t),
+                mode="lines", line=dict(color="#999", width=1.5, dash="dot"),
+                showlegend=False
+            ))
+
+            fig.update_layout(
+                height=420,
+                xaxis=dict(range=[-2.8, 3.2], zeroline=True, zerolinecolor="#ddd", title="dim 1"),
+                yaxis=dict(range=[-2.8, 3.2], zeroline=True, zerolinecolor="#ddd",
+                           title="dim 2", scaleanchor="x"),
+                plot_bgcolor="white",
+                legend=dict(x=0.01, y=0.01),
+                margin=dict(l=40, r=20, t=20, b=40),
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption("Toy 2-D embeddings — clusters show semantic grouping. "
+                       "Arrows show the two selected words; the dotted arc is the angle between them.")
+
+        st.markdown("### The famous analogy: king − man + woman ≈ queen")
+        v_analogy = toy_words["king"] - toy_words["man"] + toy_words["woman"]
+        sims_analogy = {w: np.dot(v_analogy, toy_words[w]) / (np.linalg.norm(v_analogy) * np.linalg.norm(toy_words[w]))
+                        for w in word_list}
+        top3 = sorted(sims_analogy.items(), key=lambda x: -x[1])[:3]
+        st.markdown(f"In this toy space: **king − man + woman** is closest to → "
+                    f"**{top3[0][0]}** (sim={top3[0][1]:.2f}), "
+                    f"{top3[1][0]} ({top3[1][1]:.2f}), "
+                    f"{top3[2][0]} ({top3[2][1]:.2f})")
+
+    # ── TAB 3: Static vs Contextual ──────────────────────────────────────
+    with tab3:
+        st.markdown("### The fundamental limitation of Word2Vec and GloVe")
+        st.markdown("""
+        Both Word2Vec and GloVe produce **one fixed vector per word** — regardless of context.
+        The word *"bank"* gets the same vector whether you mean a river bank or a financial bank.
+        """)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("#### Static embeddings (Word2Vec / GloVe)")
+            st.markdown("""
+            - One vector per word, learned once, frozen
+            - Fast and memory-efficient at inference
+            - Cannot distinguish word sense from context
+            - Good for: bag-of-words models, similarity search, recommendation
+            """)
+            st.markdown('<div class="formula-box">embed("bank") → [0.3, −0.7, 1.2, ...]<br><small>same vector in every sentence</small></div>', unsafe_allow_html=True)
+
+        with col2:
+            st.markdown("#### Contextual embeddings (BERT, GPT, etc.)")
+            st.markdown("""
+            - A different vector per token *per context*
+            - Computed by a full transformer forward pass
+            - Captures polysemy, syntax, long-range dependencies
+            - Good for: NLU, QA, classification, generation
+            """)
+            st.markdown('<div class="formula-box">embed("bank", "river bank") → [0.1, 0.9, −0.2, ...]<br>embed("bank", "savings bank") → [0.8, −0.1, 0.5, ...]</div>', unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.markdown("### Evolution of embeddings")
+
+        timeline = [
+            ("2003", "Neural LM\n(Bengio et al.)", "First dense word vectors as by-product of language modelling", "#ccc"),
+            ("2013", "Word2Vec\n(Mikolov, Google)", "Efficient skip-gram & CBOW; popularised word embeddings", "#534AB7"),
+            ("2014", "GloVe\n(Pennington, Stanford)", "Global co-occurrence matrix factorization", "#534AB7"),
+            ("2017", "ELMo\n(Peters et al.)", "First contextual embeddings from bi-directional LSTMs", "#1D9E75"),
+            ("2018", "BERT\n(Devlin, Google)", "Transformer encoder; masked language modelling; fine-tunable", "#1D9E75"),
+            ("2019+", "Sentence-BERT,\nOpenAI Ada, etc.", "Optimised for sentence-level similarity and retrieval", "#EF9F27"),
+        ]
+
+        fig_tl = go.Figure()
+        fig_tl.update_layout(
+            height=280,
+            xaxis=dict(visible=False, range=[-0.5, len(timeline) - 0.5]),
+            yaxis=dict(visible=False, range=[-1, 3]),
+            plot_bgcolor="white",
+            margin=dict(l=10, r=10, t=20, b=10),
+        )
+
+        for i, (year, name, desc, color) in enumerate(timeline):
+            fig_tl.add_shape(type="circle",
+                x0=i-0.35, y0=0.6, x1=i+0.35, y1=1.4,
+                fillcolor=color, line=dict(color=color))
+            fig_tl.add_annotation(x=i, y=1.0, text=f"<b>{year}</b>",
+                showarrow=False, font=dict(size=10, color="white"))
+            fig_tl.add_annotation(x=i, y=0.2, text=name.replace("\n","<br>"),
+                showarrow=False, font=dict(size=9, color="#333"), align="center")
+            fig_tl.add_annotation(x=i, y=2.2, text=desc,
+                showarrow=False, font=dict(size=8, color="#555"), align="center",
+                width=130)
+            if i < len(timeline) - 1:
+                fig_tl.add_shape(type="line", x0=i+0.35, y0=1.0,
+                    x1=i+0.65, y1=1.0, line=dict(color="#aaa", width=2))
+
+        st.plotly_chart(fig_tl, use_container_width=True)
+
+        st.markdown("""
+        **When to use which:**
+        | Use case | Best choice |
+        |---|---|
+        | Large-scale similarity search / ANN index | Static (Word2Vec, GloVe, Ada) |
+        | Text classification with limited compute | Static + simple classifier |
+        | Named entity recognition, QA, NLU | Contextual (BERT family) |
+        | Sentence / document retrieval (RAG) | Sentence-BERT, Ada-002, or similar |
+        | Generation tasks | GPT-style contextual (decoder) |
         """)
