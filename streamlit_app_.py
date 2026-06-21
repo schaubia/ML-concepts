@@ -82,6 +82,7 @@ CATALOGUE = [
     ("probability",   "Probability Distributions",      "🎲", "Normal, Binomial, Poisson and their shapes"),
     ("svd",           "SVD — Matrix Decomposition",     "✂️", "Singular values, low-rank approximation and compression"),
     ("vectors",       "Vectors",                        "➡️", "Direction and magnitude — the language of ML data"),
+    ("vector_spaces",  "Vector Spaces",                  "🧭", "Basis, span, projection and orthogonality"),
     ("vector_norms",  "Vector Norms",                   "‖·‖", "L1, L2 and Lp norms — measuring size and distance"),
 ]
 
@@ -90,7 +91,7 @@ ML_KEYS     = {"bias_var","confusion","decision_tree","gradient","knn","linear_r
 DL_KEYS     = {"activation","attention","backprop","batch_size","cnn","dropout","lr_schedule",
                "neural_net","neuron","normalization","optimizers","vanishing_grad"}
 MATH_KEYS   = {"chain_rule","derivative","dot_product","eigenvalues","embeddings","integral","matrix_ops",
-               "partial_deriv","probability","svd","vectors","vector_norms"}
+               "partial_deriv","probability","svd","vectors","vector_norms","vector_spaces"}
 AGENT_KEYS  = {"react_loop","tool_use","planning","agent_memory","multi_agent"}
 # alphabetical within each group
 ALPHA_ML   = sorted([c for c in CATALOGUE if c[0] in ML_KEYS],   key=lambda x: x[1].lower())
@@ -5470,3 +5471,431 @@ elif section == "embeddings":
         | Sentence / document retrieval (RAG) | Sentence-BERT, Ada-002, or similar |
         | Generation tasks | GPT-style contextual (decoder) |
         """)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# VECTOR SPACES
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "vector_spaces":
+    st.title("🧭 Vector Spaces")
+    st.markdown("""
+    <div class="concept-card">
+    A <b>vector space</b> is the mathematical stage on which ML happens.
+    Understanding <em>basis</em>, <em>span</em>, <em>projection</em> and <em>orthogonality</em>
+    gives you the intuition behind PCA, attention heads, embeddings and least-squares — 
+    all of which are fundamentally about finding the right directions in a space.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "Unit vectors & normalisation",
+        "Basis & span",
+        "Projection",
+        "Orthogonality & orthonormality",
+    ])
+
+    # ── TAB 1: Unit vectors ───────────────────────────────────────────────
+    with tab1:
+        st.markdown("### Unit vectors — stripping away magnitude, keeping direction")
+        st.markdown("""
+        A **unit vector** has magnitude exactly 1. It encodes pure direction.
+        Normalising a vector means dividing it by its own magnitude to produce its unit vector.
+        """)
+        st.markdown('<div class="formula-box">v̂ = v / ‖v‖₂     so that  ‖v̂‖₂ = 1</div>', unsafe_allow_html=True)
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            vx = st.slider("v₁", -4.0, 4.0, 3.0, step=0.1, key="uv_x")
+            vy = st.slider("v₂", -4.0, 4.0, 2.0, step=0.1, key="uv_y")
+            mag = np.sqrt(vx**2 + vy**2)
+            ux, uy = (vx / mag, vy / mag) if mag > 1e-9 else (0.0, 0.0)
+
+            st.markdown("**Original vector v:**")
+            st.markdown(f'<div class="formula-box">[{vx:.2f}, {vy:.2f}]<br>‖v‖ = {mag:.3f}</div>', unsafe_allow_html=True)
+            st.markdown("**Unit vector v̂:**")
+            st.markdown(f'<div class="formula-box">[{ux:.3f}, {uy:.3f}]<br>‖v̂‖ = {np.sqrt(ux**2+uy**2):.3f}</div>', unsafe_allow_html=True)
+
+            st.markdown("---")
+            st.markdown("**Standard basis unit vectors:**")
+            st.markdown('<div class="formula-box">ê₁ = [1, 0]&nbsp;&nbsp;&nbsp;ê₂ = [0, 1]</div>', unsafe_allow_html=True)
+            st.caption("Every vector is a linear combination of the standard basis: v = v₁ê₁ + v₂ê₂")
+
+        with col2:
+            fig = go.Figure()
+            lim = max(abs(vx), abs(vy), 1.5) + 0.8
+
+            # Unit circle
+            theta_c = np.linspace(0, 2*np.pi, 200)
+            fig.add_trace(go.Scatter(
+                x=np.cos(theta_c), y=np.sin(theta_c),
+                mode="lines", line=dict(color="#ddd", width=1.5, dash="dot"),
+                name="Unit circle  ‖v‖=1", showlegend=True
+            ))
+
+            # Original vector
+            fig.add_annotation(x=vx, y=vy, ax=0, ay=0,
+                xref="x", yref="y", axref="x", ayref="y",
+                showarrow=True, arrowhead=3, arrowwidth=3, arrowcolor="#534AB7",
+                text=f"<b>v</b> ‖v‖={mag:.2f}", font=dict(color="#534AB7", size=12),
+                bgcolor="rgba(255,255,255,0.7)"
+            )
+
+            # Unit vector
+            fig.add_annotation(x=ux, y=uy, ax=0, ay=0,
+                xref="x", yref="y", axref="x", ayref="y",
+                showarrow=True, arrowhead=3, arrowwidth=2.5, arrowcolor="#1D9E75",
+                text=f"<b>v̂</b> ‖v̂‖=1", font=dict(color="#1D9E75", size=12),
+                bgcolor="rgba(255,255,255,0.7)"
+            )
+
+            # Standard basis
+            for ex, ey, label in [(1,0,"ê₁"),(0,1,"ê₂")]:
+                fig.add_annotation(x=ex, y=ey, ax=0, ay=0,
+                    xref="x", yref="y", axref="x", ayref="y",
+                    showarrow=True, arrowhead=2, arrowwidth=1.5, arrowcolor="#EF9F27",
+                    text=label, font=dict(color="#EF9F27", size=12),
+                )
+
+            fig.update_layout(
+                height=420,
+                xaxis=dict(range=[-lim,lim], zeroline=True, zerolinecolor="#ccc",
+                           scaleanchor="y", title="v₁"),
+                yaxis=dict(range=[-lim,lim], zeroline=True, zerolinecolor="#ccc", title="v₂"),
+                plot_bgcolor="white", legend=dict(x=0.01, y=0.99),
+                margin=dict(l=40,r=20,t=20,b=40),
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption("Purple = original vector v. Green = unit vector v̂ (always touches unit circle). Orange = standard basis vectors.")
+
+        st.markdown("""
+        **Why unit vectors matter in ML:**
+        - **Cosine similarity** compares embeddings as unit vectors — magnitude is normalised away so only direction counts
+        - **Attention** in transformers projects queries and keys, then computes dot products — the scale-dot-product
+          uses √d to keep unit-scale variance
+        - **Weight initialisation** schemes (Xavier, He) ensure weight vectors start near unit scale
+        """)
+
+    # ── TAB 2: Basis & span ───────────────────────────────────────────────
+    with tab2:
+        st.markdown("### Basis vectors and the span they define")
+        st.markdown("""
+        A **basis** is a minimal set of vectors that can reach every point in the space
+        through linear combinations. The **span** of a set of vectors is all the points
+        you can reach by scaling and adding them.
+        """)
+        st.markdown('<div class="formula-box">span{b₁, b₂} = { α·b₁ + β·b₂  |  α, β ∈ ℝ }</div>', unsafe_allow_html=True)
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.markdown("**Basis vector b₁:**")
+            b1x = st.slider("b₁ₓ", -3.0, 3.0, 1.0, step=0.1, key="bs_b1x")
+            b1y = st.slider("b₁ᵧ", -3.0, 3.0, 0.0, step=0.1, key="bs_b1y")
+            st.markdown("**Basis vector b₂:**")
+            b2x = st.slider("b₂ₓ", -3.0, 3.0, 0.0, step=0.1, key="bs_b2x")
+            b2y = st.slider("b₂ᵧ", -3.0, 3.0, 1.0, step=0.1, key="bs_b2y")
+            st.markdown("**Target vector v = α·b₁ + β·b₂:**")
+            alpha = st.slider("α (weight on b₁)", -3.0, 3.0, 1.5, step=0.1, key="bs_alpha")
+            beta  = st.slider("β (weight on b₂)", -3.0, 3.0, 1.0, step=0.1, key="bs_beta")
+
+            # Check linear independence
+            det = b1x*b2y - b1y*b2x
+            vx_t = alpha*b1x + beta*b2x
+            vy_t = alpha*b1y + beta*b2y
+
+            st.markdown(f'<div class="formula-box">v = {alpha}·b₁ + {beta}·b₂<br>= [{vx_t:.2f}, {vy_t:.2f}]</div>', unsafe_allow_html=True)
+
+            if abs(det) < 0.05:
+                st.error("⚠️ det ≈ 0 — these vectors are linearly dependent! They only span a line, not the full 2D plane.")
+            else:
+                st.success(f"✓ Linearly independent (det = {det:.2f}) — they span all of ℝ².")
+
+        with col2:
+            fig = go.Figure()
+            lim = 4.5
+
+            # Shade the span region (parallelogram grid)
+            grid_a = np.linspace(-3, 3, 10)
+            grid_b = np.linspace(-3, 3, 10)
+            for a in grid_a:
+                xs = [a*b1x + g*b2x for g in [-3,3]]
+                ys = [a*b1y + g*b2y for g in [-3,3]]
+                fig.add_trace(go.Scatter(x=xs, y=ys, mode="lines",
+                    line=dict(color="rgba(83,74,183,0.12)", width=1), showlegend=False))
+            for b in grid_b:
+                xs = [g*b1x + b*b2x for g in [-3,3]]
+                ys = [g*b1y + b*b2y for g in [-3,3]]
+                fig.add_trace(go.Scatter(x=xs, y=ys, mode="lines",
+                    line=dict(color="rgba(83,74,183,0.12)", width=1), showlegend=False))
+
+            # Basis vectors
+            for (bvx, bvy, label, color) in [(b1x,b1y,"b₁","#534AB7"),(b2x,b2y,"b₂","#E24B4A")]:
+                fig.add_annotation(x=bvx, y=bvy, ax=0, ay=0,
+                    xref="x", yref="y", axref="x", ayref="y",
+                    showarrow=True, arrowhead=3, arrowwidth=3, arrowcolor=color,
+                    text=f"<b>{label}</b>", font=dict(color=color, size=13))
+
+            # Parallelogram components
+            fig.add_trace(go.Scatter(
+                x=[0, alpha*b1x, vx_t],
+                y=[0, alpha*b1y, vy_t],
+                mode="lines", line=dict(color="#534AB7", width=1.5, dash="dot"), showlegend=False))
+            fig.add_trace(go.Scatter(
+                x=[0, beta*b2x, vx_t],
+                y=[0, beta*b2y, vy_t],
+                mode="lines", line=dict(color="#E24B4A", width=1.5, dash="dot"), showlegend=False))
+
+            # Result vector
+            fig.add_annotation(x=vx_t, y=vy_t, ax=0, ay=0,
+                xref="x", yref="y", axref="x", ayref="y",
+                showarrow=True, arrowhead=3, arrowwidth=2.5, arrowcolor="#1D9E75",
+                text=f"<b>v</b> [{vx_t:.1f},{vy_t:.1f}]", font=dict(color="#1D9E75", size=12))
+
+            fig.update_layout(
+                height=430,
+                xaxis=dict(range=[-lim,lim], zeroline=True, zerolinecolor="#ccc", scaleanchor="y", title="x"),
+                yaxis=dict(range=[-lim,lim], zeroline=True, zerolinecolor="#ccc", title="y"),
+                plot_bgcolor="white", showlegend=False,
+                margin=dict(l=40,r=20,t=20,b=40),
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption("Grid lines show the coordinate system defined by b₁ and b₂. "
+                       "The green vector v is reached by stepping α times along b₁ and β times along b₂.")
+
+        st.markdown("""
+        **In ML:**
+        - **PCA** finds a new basis aligned with the directions of maximum variance
+        - **Embeddings** live in a high-dimensional vector space — the basis is learned, not hand-crafted
+        - **Linear dependence** means redundant features — a sign of multicollinearity in regression
+        """)
+
+    # ── TAB 3: Projection ─────────────────────────────────────────────────
+    with tab3:
+        st.markdown("### Projecting one vector onto another")
+        st.markdown("""
+        The **projection** of **a** onto **b** is the shadow **a** casts along the direction of **b**.
+        It tells you: *how much of **a** lies in the direction of **b**?*
+        """)
+        st.markdown('<div class="formula-box">proj_b(a) = (a·b / ‖b‖²) · b = (a·b̂) · b̂</div>', unsafe_allow_html=True)
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            ax_p = st.slider("a₁", -4.0, 4.0,  3.0, step=0.1, key="pr_ax")
+            ay_p = st.slider("a₂", -4.0, 4.0,  2.5, step=0.1, key="pr_ay")
+            bx_p = st.slider("b₁", -4.0, 4.0,  4.0, step=0.1, key="pr_bx")
+            by_p = st.slider("b₂", -4.0, 4.0,  1.0, step=0.1, key="pr_by")
+
+            a = np.array([ax_p, ay_p])
+            b = np.array([bx_p, by_p])
+            b_norm2 = np.dot(b, b)
+
+            if b_norm2 < 1e-9:
+                st.warning("b is the zero vector — projection undefined.")
+                scalar_proj = 0.0
+                proj_vec = np.array([0.0, 0.0])
+                perp_vec = a.copy()
+            else:
+                scalar_proj = np.dot(a, b) / np.sqrt(b_norm2)
+                proj_vec = (np.dot(a, b) / b_norm2) * b
+                perp_vec = a - proj_vec
+
+            st.markdown("**Scalar projection** (signed length along b̂):")
+            st.markdown(f'<div class="formula-box">a·b̂ = {scalar_proj:.3f}</div>', unsafe_allow_html=True)
+            st.markdown("**Vector projection** (the actual shadow vector):")
+            st.markdown(f'<div class="formula-box">proj_b(a) = [{proj_vec[0]:.3f}, {proj_vec[1]:.3f}]</div>', unsafe_allow_html=True)
+            st.markdown("**Perpendicular component** a⊥:")
+            st.markdown(f'<div class="formula-box">a⊥ = [{perp_vec[0]:.3f}, {perp_vec[1]:.3f}]</div>', unsafe_allow_html=True)
+            st.caption("a = proj_b(a) + a⊥   (decomposition is always exact)")
+
+        with col2:
+            fig = go.Figure()
+            lim = max(abs(ax_p), abs(ay_p), abs(bx_p), abs(by_p)) + 1.2
+
+            # b vector (extended as reference line)
+            b_hat = b / (np.sqrt(b_norm2) + 1e-9)
+            fig.add_trace(go.Scatter(
+                x=[-lim*b_hat[0]*0.9, lim*b_hat[0]*0.9],
+                y=[-lim*b_hat[1]*0.9, lim*b_hat[1]*0.9],
+                mode="lines", line=dict(color="#E24B4A", width=1, dash="dot"),
+                showlegend=False
+            ))
+
+            # a vector
+            fig.add_annotation(x=ax_p, y=ay_p, ax=0, ay=0,
+                xref="x", yref="y", axref="x", ayref="y",
+                showarrow=True, arrowhead=3, arrowwidth=3, arrowcolor="#534AB7",
+                text="<b>a</b>", font=dict(color="#534AB7", size=14))
+
+            # b vector
+            fig.add_annotation(x=bx_p, y=by_p, ax=0, ay=0,
+                xref="x", yref="y", axref="x", ayref="y",
+                showarrow=True, arrowhead=3, arrowwidth=3, arrowcolor="#E24B4A",
+                text="<b>b</b>", font=dict(color="#E24B4A", size=14))
+
+            # projection vector
+            fig.add_annotation(x=proj_vec[0], y=proj_vec[1], ax=0, ay=0,
+                xref="x", yref="y", axref="x", ayref="y",
+                showarrow=True, arrowhead=3, arrowwidth=2.5, arrowcolor="#1D9E75",
+                text="<b>proj</b>", font=dict(color="#1D9E75", size=12))
+
+            # perpendicular drop line (from a to proj)
+            fig.add_trace(go.Scatter(
+                x=[proj_vec[0], ax_p],
+                y=[proj_vec[1], ay_p],
+                mode="lines", line=dict(color="#EF9F27", width=2, dash="dash"),
+                name="a⊥ (perpendicular)"
+            ))
+
+            # right-angle marker at proj_vec
+            if b_norm2 > 1e-9:
+                perp_dir = np.array([-b_hat[1], b_hat[0]]) * 0.25
+                corner = proj_vec + perp_dir
+                fig.add_trace(go.Scatter(
+                    x=[proj_vec[0], corner[0], corner[0]+b_hat[0]*0.25],
+                    y=[proj_vec[1], corner[1], corner[1]+b_hat[1]*0.25],
+                    mode="lines", line=dict(color="#aaa", width=1.5),
+                    showlegend=False
+                ))
+
+            fig.update_layout(
+                height=430,
+                xaxis=dict(range=[-lim,lim], zeroline=True, zerolinecolor="#ccc",
+                           scaleanchor="y", title="x"),
+                yaxis=dict(range=[-lim,lim], zeroline=True, zerolinecolor="#ccc", title="y"),
+                plot_bgcolor="white",
+                legend=dict(x=0.01, y=0.99),
+                margin=dict(l=40,r=20,t=20,b=40),
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption("Green = projection of a onto b (the shadow). "
+                       "Orange dashed = perpendicular component a⊥. Right-angle marker confirms they are perpendicular.")
+
+        st.markdown("""
+        **Why projection is everywhere in ML:**
+        | Concept | What's being projected |
+        |---|---|
+        | **PCA** | Data points projected onto principal components (eigenvectors) |
+        | **Least-squares regression** | Target y projected onto the column space of X |
+        | **Attention** | Queries projected onto key directions to get attention scores |
+        | **Cosine similarity** | Measures how much one embedding projects onto another |
+        | **Gram-Schmidt** | Builds orthogonal basis by repeatedly subtracting projections |
+        """)
+
+    # ── TAB 4: Orthogonality & orthonormality ─────────────────────────────
+    with tab4:
+        st.markdown("### Orthogonality — vectors at right angles")
+        st.markdown("""
+        Two vectors are **orthogonal** if their dot product is zero — they share no component
+        in common. A set of vectors is **orthonormal** if they are *all orthogonal to each other*
+        and *each has magnitude 1*.
+        """)
+
+        col1, col2 = st.columns([1,1])
+        with col1:
+            st.markdown('<div class="formula-box">a ⊥ b  ⟺  a · b = 0</div>', unsafe_allow_html=True)
+            st.markdown('<div class="formula-box">Orthonormal:  bᵢ · bⱼ = δᵢⱼ<br><small>(1 if i=j, 0 if i≠j)</small></div>', unsafe_allow_html=True)
+        with col2:
+            st.markdown("""
+            **Orthogonal** → dot product = 0, magnitudes can be anything
+
+            **Orthonormal** → dot product = 0 AND each vector is a unit vector
+
+            The standard basis {ê₁=[1,0], ê₂=[0,1]} is orthonormal.
+            """)
+
+        st.markdown("---")
+        st.markdown("### Interactive: build an orthogonal pair")
+        col1, col2 = st.columns([1,2])
+        with col1:
+            ox = st.slider("v₁", -3.0, 3.0, 2.0, step=0.1, key="orth_x")
+            oy = st.slider("v₂", -3.0, 3.0, 1.0, step=0.1, key="orth_y")
+
+            v1 = np.array([ox, oy])
+            # Perpendicular vector is always [-oy, ox]
+            v2 = np.array([-oy, ox])
+            v1_unit = v1 / (np.linalg.norm(v1) + 1e-9)
+            v2_unit = v2 / (np.linalg.norm(v2) + 1e-9)
+            dot_check = np.dot(v1, v2)
+
+            st.markdown("**v** (your vector):")
+            st.markdown(f'<div class="formula-box">[{ox:.2f}, {oy:.2f}]  ‖v‖={np.linalg.norm(v1):.3f}</div>', unsafe_allow_html=True)
+            st.markdown("**v⊥** (auto-computed orthogonal):")
+            st.markdown(f'<div class="formula-box">[{v2[0]:.2f}, {v2[1]:.2f}]  ‖v⊥‖={np.linalg.norm(v2):.3f}</div>', unsafe_allow_html=True)
+            st.markdown("**Dot product check:**")
+            st.markdown(f'<div class="formula-box">v · v⊥ = {dot_check:.6f} ≈ 0 ✓</div>', unsafe_allow_html=True)
+            st.markdown("**Unit vectors (orthonormal pair):**")
+            st.markdown(f'<div class="formula-box">û = [{v1_unit[0]:.3f}, {v1_unit[1]:.3f}]<br>û⊥ = [{v2_unit[0]:.3f}, {v2_unit[1]:.3f}]</div>', unsafe_allow_html=True)
+
+        with col2:
+            fig = go.Figure()
+            lim = max(abs(ox), abs(oy), 1.5) + 1.0
+
+            # Unit circle
+            theta_c = np.linspace(0, 2*np.pi, 200)
+            fig.add_trace(go.Scatter(x=np.cos(theta_c), y=np.sin(theta_c),
+                mode="lines", line=dict(color="#eee", width=1.5), showlegend=False))
+
+            # v and v⊥ (original)
+            for vec, label, color in [(v1,"v","#534AB7"),(v2,"v⊥","#E24B4A")]:
+                fig.add_annotation(x=vec[0], y=vec[1], ax=0, ay=0,
+                    xref="x", yref="y", axref="x", ayref="y",
+                    showarrow=True, arrowhead=3, arrowwidth=3, arrowcolor=color,
+                    text=f"<b>{label}</b>", font=dict(color=color, size=14))
+
+            # Unit versions
+            for vec, label, color in [(v1_unit,"û","#534AB7"),(v2_unit,"û⊥","#E24B4A")]:
+                fig.add_annotation(x=vec[0], y=vec[1], ax=0, ay=0,
+                    xref="x", yref="y", axref="x", ayref="y",
+                    showarrow=True, arrowhead=2, arrowwidth=1.5,
+                    arrowcolor=color,
+                    line=dict(dash="dot"),
+                    text=f"<b>{label}</b>", font=dict(color=color, size=11))
+
+            # right-angle marker at origin
+            scale = 0.25
+            corner = v1_unit * scale + v2_unit * scale
+            fig.add_trace(go.Scatter(
+                x=[v1_unit[0]*scale, corner[0], v2_unit[0]*scale],
+                y=[v1_unit[1]*scale, corner[1], v2_unit[1]*scale],
+                mode="lines", line=dict(color="#aaa", width=1.5), showlegend=False
+            ))
+
+            fig.update_layout(
+                height=430,
+                xaxis=dict(range=[-lim,lim], zeroline=True, zerolinecolor="#ccc",
+                           scaleanchor="y", title="x"),
+                yaxis=dict(range=[-lim,lim], zeroline=True, zerolinecolor="#ccc", title="y"),
+                plot_bgcolor="white", showlegend=False,
+                margin=dict(l=40,r=20,t=20,b=40),
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption("Solid arrows = original vectors. Dashed = unit versions (touching unit circle). "
+                       "Right-angle marker at origin confirms orthogonality.")
+
+        st.markdown("---")
+        st.markdown("### Why orthogonality is the backbone of ML")
+
+        cols = st.columns(3)
+        with cols[0]:
+            st.markdown("#### PCA")
+            st.markdown("""
+            Principal components are **orthogonal** by construction — each new axis is perpendicular
+            to all previous ones, so there is zero redundancy between components.
+            """)
+        with cols[1]:
+            st.markdown("#### Attention heads")
+            st.markdown("""
+            Multiple attention heads learn **different** subspaces. Near-orthogonal heads
+            capture different aspects of meaning — syntax in one, semantics in another.
+            """)
+        with cols[2]:
+            st.markdown("#### Weight matrices (QR)")
+            st.markdown("""
+            Orthogonal weight initialisation preserves gradient norms during backprop —
+            a key technique for training deep networks without vanishing gradients.
+            """)
+
+        st.markdown("""
+        **Gram-Schmidt process** — how to turn any set of linearly independent vectors into an orthonormal basis:
+        """)
+        st.markdown('<div class="formula-box">u₁ = v₁ / ‖v₁‖<br>u₂ = (v₂ − (v₂·u₁)u₁) / ‖…‖<br>u₃ = (v₃ − (v₃·u₁)u₁ − (v₃·u₂)u₂) / ‖…‖  …</div>', unsafe_allow_html=True)
+        st.caption("At each step: subtract the projections onto all previous basis vectors, then normalise. "
+                   "This is exactly what QR decomposition does algorithmically.")
