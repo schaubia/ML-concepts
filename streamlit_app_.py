@@ -57,6 +57,7 @@ CATALOGUE = [
     ("backprop",      "Backpropagation",                "🔄", "How the error propagates backwards"),
     ("batch_size",    "Batch Size & Gradient Noise",    "🎲", "How batch size affects gradient quality"),
     ("cnn",           "Convolutional Layer (CNN)",      "🖼️", "Kernel sliding over input to detect local patterns"),
+    ("rnn",           "Recurrent Networks",             "🔁", "RNNs, LSTMs and GRUs — memory across time"),
     ("dropout",       "Dropout",                        "💧", "Randomly zeroing neurons to prevent overfitting"),
     ("lr_schedule",   "Learning Rate Schedulers",       "📅", "Step decay, cosine annealing and warmup"),
     ("neural_net",    "Neural Network Architecture",    "🧬", "Layers, parameters and forward pass"),
@@ -89,7 +90,7 @@ CATALOGUE = [
 ML_KEYS     = {"bias_var","confusion","decision_tree","gradient","knn","linear_reg","logistic_reg",
                "loss","naive_bayes","overfit","pca","regularization"}
 DL_KEYS     = {"activation","attention","backprop","batch_size","cnn","dropout","lr_schedule",
-               "neural_net","neuron","normalization","optimizers","vanishing_grad"}
+               "neural_net","neuron","normalization","optimizers","rnn","vanishing_grad"}
 MATH_KEYS   = {"chain_rule","derivative","dot_product","eigenvalues","embeddings","integral","matrix_ops",
                "partial_deriv","probability","svd","vectors","vector_norms","vector_spaces"}
 AGENT_KEYS  = {"react_loop","tool_use","planning","agent_memory","multi_agent"}
@@ -6036,3 +6037,275 @@ elif section == "vector_spaces":
         st.markdown('<div class="formula-box">u₁ = v₁ / ‖v₁‖<br>u₂ = (v₂ − (v₂·u₁)u₁) / ‖…‖<br>u₃ = (v₃ − (v₃·u₁)u₁ − (v₃·u₂)u₂) / ‖…‖  …</div>', unsafe_allow_html=True)
         st.caption("At each step: subtract the projections onto all previous basis vectors, then normalise. "
                    "This is exactly what QR decomposition does algorithmically.")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# RECURRENT NETWORKS
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "rnn":
+    st.title("🔁 Recurrent Networks")
+    st.markdown("""
+    <div class="concept-card">
+    A <b>recurrent network</b> processes sequences by maintaining a <em>hidden state</em>
+    — a memory that carries information forward through time. Unlike feedforward networks
+    which treat each input independently, RNNs share the same weights at every timestep,
+    allowing them to model patterns across variable-length sequences.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["RNN — recurrence through time", "LSTM & GRU — gated memory", "RNN vs Transformer"])
+
+    # ── TAB 1: RNN basics ─────────────────────────────────────────────────
+    with tab1:
+        st.markdown("### The recurrence equation")
+        st.markdown("""
+        At each timestep **t**, the RNN takes the current input **xₜ** and the previous
+        hidden state **hₜ₋₁**, combines them linearly, and squashes the result through
+        an activation function (usually tanh) to produce the new hidden state **hₜ**.
+        """)
+        col_eq1, col_eq2 = st.columns(2)
+        with col_eq1:
+            st.markdown('<div class="formula-box">hₜ = tanh(Wₕ · hₜ₋₁ + Wₓ · xₜ + b)</div>', unsafe_allow_html=True)
+        with col_eq2:
+            st.markdown('<div class="formula-box">yₜ = Wᵧ · hₜ + bᵧ<br><small>(optional output at each step)</small></div>', unsafe_allow_html=True)
+
+        st.markdown("### Unrolled RNN — shared weights at every step")
+
+        n_steps = st.slider("Sequence length (timesteps)", 3, 7, 5, key="rnn_steps")
+        highlight = st.slider("Highlight timestep", 1, n_steps, 3, key="rnn_hl")
+
+        # Draw unrolled diagram as SVG-style figure with plotly
+        fig = go.Figure()
+        box_w, box_h = 0.8, 0.5
+        y_h, y_x, y_y = 1.5, 0.0, 3.0
+
+        for t in range(n_steps):
+            x = t * 2.0
+            col_h = "#534AB7" if t+1 == highlight else "#c5c1f0"
+            col_x = "#1D9E75" if t+1 == highlight else "#a8dbc9"
+            col_y = "#EF9F27" if t+1 == highlight else "#fde3a5"
+
+            # h box
+            fig.add_shape(type="rect", x0=x-box_w/2, y0=y_h-box_h/2,
+                x1=x+box_w/2, y1=y_h+box_h/2,
+                fillcolor=col_h, line=dict(color="#333", width=1.5))
+            fig.add_annotation(x=x, y=y_h, text=f"<b>h{t+1}</b>",
+                showarrow=False, font=dict(size=12, color="white"))
+
+            # x box
+            fig.add_shape(type="rect", x0=x-box_w/2, y0=y_x-box_h/2,
+                x1=x+box_w/2, y1=y_x+box_h/2,
+                fillcolor=col_x, line=dict(color="#333", width=1))
+            fig.add_annotation(x=x, y=y_x, text=f"x{t+1}",
+                showarrow=False, font=dict(size=11, color="#1a5c43"))
+
+            # y box
+            fig.add_shape(type="rect", x0=x-box_w/2, y0=y_y-box_h/2,
+                x1=x+box_w/2, y1=y_y+box_h/2,
+                fillcolor=col_y, line=dict(color="#333", width=1))
+            fig.add_annotation(x=x, y=y_y, text=f"y{t+1}",
+                showarrow=False, font=dict(size=11, color="#7a4e00"))
+
+            # x → h arrow
+            fig.add_annotation(x=x, y=y_h-box_h/2, ax=x, ay=y_x+box_h/2,
+                xref="x", yref="y", axref="x", ayref="y",
+                showarrow=True, arrowhead=2, arrowwidth=1.5, arrowcolor="#1D9E75")
+
+            # h → y arrow
+            fig.add_annotation(x=x, y=y_y-box_h/2, ax=x, ay=y_h+box_h/2,
+                xref="x", yref="y", axref="x", ayref="y",
+                showarrow=True, arrowhead=2, arrowwidth=1.5, arrowcolor="#EF9F27")
+
+            # h → h+1 arrow
+            if t < n_steps - 1:
+                fig.add_annotation(x=(t+1)*2.0-box_w/2, y=y_h,
+                    ax=x+box_w/2, ay=y_h,
+                    xref="x", yref="y", axref="x", ayref="y",
+                    showarrow=True, arrowhead=2, arrowwidth=2, arrowcolor="#534AB7")
+                fig.add_annotation(x=(x + (t+1)*2.0)/2, y=y_h+0.35,
+                    text="Wₕ (shared)", showarrow=False,
+                    font=dict(size=9, color="#534AB7"))
+
+        # h0 initial state
+        fig.add_shape(type="rect", x0=-2.0-box_w/2, y0=y_h-box_h/2,
+            x1=-2.0+box_w/2, y1=y_h+box_h/2,
+            fillcolor="#ddd", line=dict(color="#999", width=1.5))
+        fig.add_annotation(x=-2.0, y=y_h, text="<b>h₀</b>",
+            showarrow=False, font=dict(size=12, color="#555"))
+        fig.add_annotation(x=-0.0-box_w/2, y=y_h, ax=-2.0+box_w/2, ay=y_h,
+            xref="x", yref="y", axref="x", ayref="y",
+            showarrow=True, arrowhead=2, arrowwidth=2, arrowcolor="#534AB7")
+
+        # Labels on left
+        fig.add_annotation(x=-2.8, y=y_x, text="Inputs xₜ", showarrow=False,
+            font=dict(size=11, color="#1D9E75"))
+        fig.add_annotation(x=-2.8, y=y_h, text="Hidden hₜ", showarrow=False,
+            font=dict(size=11, color="#534AB7"))
+        fig.add_annotation(x=-2.8, y=y_y, text="Outputs yₜ", showarrow=False,
+            font=dict(size=11, color="#EF9F27"))
+
+        fig.update_layout(
+            height=320,
+            xaxis=dict(visible=False, range=[-3.5, (n_steps-1)*2.0+1.5]),
+            yaxis=dict(visible=False, range=[-0.6, 3.7]),
+            plot_bgcolor="white",
+            margin=dict(l=10, r=10, t=20, b=10),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        st.caption(f"Highlighted timestep {highlight}. The same weight matrices Wₕ, Wₓ, Wᵧ are reused at every step — "
+                   "this is what 'recurrent' means. h₀ is typically initialised to zeros.")
+
+        st.markdown("""
+        **Key properties of vanilla RNNs:**
+        - ✅ Handles variable-length sequences naturally
+        - ✅ Compact — same weights at every timestep (parameter efficient)
+        - ❌ **Vanishing gradient problem** — gradients shrink exponentially as they
+          flow back through many timesteps, making it hard to learn long-range dependencies
+        - ❌ Sequential computation — each step depends on the previous, so you can't
+          parallelise across timesteps the way Transformers can
+        """)
+
+    # ── TAB 2: LSTM & GRU ─────────────────────────────────────────────────
+    with tab2:
+        st.markdown("### Why vanilla RNNs struggle — and how LSTMs fix it")
+        st.markdown("""
+        When you backpropagate through many timesteps, you multiply gradients together
+        repeatedly. If the weights are small, gradients vanish; if large, they explode.
+        This makes vanilla RNNs forget events from more than ~10 steps ago.
+        """)
+        st.markdown('<div class="formula-box">∂Loss/∂h₁ = ∂Loss/∂hₜ · (Wₕ)^(t−1)  →  0 as t grows</div>', unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.markdown("### LSTM — Long Short-Term Memory")
+        st.markdown("""
+        The LSTM (Hochreiter & Schmidhuber, 1997) adds a **cell state** — a separate
+        memory highway — and three **gates** that control what to remember, what to forget,
+        and what to output. Gates are sigmoid-activated (0 = fully closed, 1 = fully open).
+        """)
+
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            st.markdown("**The four LSTM equations:**")
+            st.markdown('<div class="formula-box">'
+                'fₜ = σ(Wf·[hₜ₋₁, xₜ] + bf)   <small>forget gate</small><br>'
+                'iₜ = σ(Wi·[hₜ₋₁, xₜ] + bi)   <small>input gate</small><br>'
+                'c̃ₜ = tanh(Wc·[hₜ₋₁, xₜ] + bc)  <small>candidate cell</small><br>'
+                'oₜ = σ(Wo·[hₜ₋₁, xₜ] + bo)   <small>output gate</small>'
+                '</div>', unsafe_allow_html=True)
+            st.markdown('<div class="formula-box">'
+                'cₜ = fₜ ⊙ cₜ₋₁ + iₜ ⊙ c̃ₜ   <small>update cell state</small><br>'
+                'hₜ = oₜ ⊙ tanh(cₜ)            <small>new hidden state</small>'
+                '</div>', unsafe_allow_html=True)
+
+        with col2:
+            st.markdown("**Interactive gate demo — what each gate does:**")
+            forget = st.slider("Forget gate fₜ", 0.0, 1.0, 0.8, step=0.05, key="lstm_f")
+            inp    = st.slider("Input gate iₜ",  0.0, 1.0, 0.6, step=0.05, key="lstm_i")
+            out    = st.slider("Output gate oₜ", 0.0, 1.0, 0.9, step=0.05, key="lstm_o")
+            c_prev = st.slider("Previous cell cₜ₋₁", -2.0, 2.0, 1.0, step=0.1, key="lstm_c")
+            c_cand = st.slider("Candidate c̃ₜ (tanh)", -1.0, 1.0, 0.5, step=0.05, key="lstm_cc")
+
+            c_new = forget * c_prev + inp * c_cand
+            h_new = out * np.tanh(c_new)
+
+            st.metric("New cell state cₜ", f"{c_new:.3f}",
+                delta=f"{c_new - c_prev:.3f} from cₜ₋₁")
+            st.metric("New hidden state hₜ", f"{h_new:.3f}")
+
+            if forget < 0.2:
+                st.warning("Forget gate ≈ 0 → nearly all previous memory wiped.")
+            elif forget > 0.9:
+                st.info("Forget gate ≈ 1 → previous cell state passes through almost intact.")
+            if inp < 0.1:
+                st.warning("Input gate ≈ 0 → new candidate ignored.")
+            elif inp > 0.9:
+                st.info("Input gate ≈ 1 → new candidate written strongly.")
+
+        st.markdown("---")
+        st.markdown("### GRU — Gated Recurrent Unit  *(Cho et al., 2014)*")
+        st.markdown("""
+        The GRU simplifies the LSTM by merging the cell state and hidden state into one,
+        and collapsing the forget and input gates into a single **update gate**. Fewer
+        parameters, similar performance, faster to train.
+        """)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown('<div class="formula-box">'
+                'zₜ = σ(Wz·[hₜ₋₁, xₜ])   <small>update gate</small><br>'
+                'rₜ = σ(Wr·[hₜ₋₁, xₜ])   <small>reset gate</small><br>'
+                'h̃ₜ = tanh(W·[rₜ⊙hₜ₋₁, xₜ])  <small>candidate</small><br>'
+                'hₜ = (1−zₜ)⊙hₜ₋₁ + zₜ⊙h̃ₜ  <small>new hidden state</small>'
+                '</div>', unsafe_allow_html=True)
+        with col2:
+            st.markdown("""
+            - **Update gate zₜ** — blend of old and new (replaces forget + input)
+            - **Reset gate rₜ** — how much past hidden state to expose when computing candidate
+            - **No separate cell state** — simpler, 33% fewer parameters than LSTM
+            - **When to choose:** GRU for speed/simplicity; LSTM when you need finer
+              control over what to remember long-term
+            """)
+
+    # ── TAB 3: RNN vs Transformer ─────────────────────────────────────────
+    with tab3:
+        st.markdown("### When do RNNs still make sense?")
+        st.markdown("""
+        Transformers have largely replaced RNNs for NLP tasks, but RNNs retain real
+        advantages in certain settings. Here's an honest comparison.
+        """)
+
+        import pandas as pd
+        rows = [
+            ("Parallelism during training",   "❌ Sequential — step t needs step t−1",   "✅ All tokens processed simultaneously"),
+            ("Parallelism during inference",  "✅ Streaming — one step at a time",        "❌ Needs full context window"),
+            ("Memory (context length)",       "❌ Degrades for sequences > ~100 steps",  "✅ Scales to thousands of tokens"),
+            ("Parameter count",               "✅ Compact for small tasks",              "❌ Typically very large"),
+            ("Latency (real-time)",           "✅ Low — constant compute per step",      "❌ Higher — full attention per decode step"),
+            ("Long-range dependencies",       "⚠️ LSTMs help but still limited",        "✅ Attention reaches any position directly"),
+            ("Time-series (short context)",   "✅ Strong — natural sequential inductive bias", "⚠️ Possible but overkill"),
+            ("NLP at scale",                  "❌ Outperformed by Transformers",         "✅ State of the art"),
+            ("On-device / edge deployment",   "✅ Small footprint",                      "⚠️ Heavier models harder to deploy"),
+        ]
+        df = pd.DataFrame(rows, columns=["Property", "RNN / LSTM / GRU", "Transformer"])
+        st.dataframe(df, use_container_width=True, hide_index=True)
+
+        st.markdown("---")
+        st.markdown("### Architecture family tree")
+
+        timeline = [
+            ("1986", "Simple RNN\n(Elman)", "#aaa"),
+            ("1997", "LSTM\n(Hochreiter\n& Schmidhuber)", "#534AB7"),
+            ("2014", "GRU\n(Cho et al.)", "#534AB7"),
+            ("2015", "Bidirectional\nLSTM", "#1D9E75"),
+            ("2017", "Transformer\n(Vaswani et al.)", "#E24B4A"),
+            ("2023+", "SSMs / Mamba\n(new RNN revival)", "#EF9F27"),
+        ]
+
+        fig_tl = go.Figure()
+        fig_tl.update_layout(
+            height=260,
+            xaxis=dict(visible=False, range=[-0.5, len(timeline)-0.5]),
+            yaxis=dict(visible=False, range=[-1, 3.2]),
+            plot_bgcolor="white",
+            margin=dict(l=10, r=10, t=20, b=10),
+        )
+        for i, (year, name, color) in enumerate(timeline):
+            fig_tl.add_shape(type="circle",
+                x0=i-0.35, y0=0.6, x1=i+0.35, y1=1.4,
+                fillcolor=color, line=dict(color=color))
+            fig_tl.add_annotation(x=i, y=1.0, text=f"<b>{year}</b>",
+                showarrow=False, font=dict(size=9, color="white"))
+            fig_tl.add_annotation(x=i, y=0.15, text=name.replace("\n","<br>"),
+                showarrow=False, font=dict(size=9, color="#333"), align="center")
+            if i < len(timeline)-1:
+                fig_tl.add_shape(type="line", x0=i+0.35, y0=1.0, x1=i+0.65, y1=1.0,
+                    line=dict(color="#aaa", width=2))
+
+        st.plotly_chart(fig_tl, use_container_width=True)
+        st.caption("Red = Transformer displaced RNNs for most NLP. Orange = modern state-space models "
+                   "(Mamba, RWKV) are revisiting recurrence with linear-time attention alternatives.")
+
+        st.markdown("""
+        **Bottom line:** if you're building a streaming sensor pipeline, a character-level
+        model on a microcontroller, or a small time-series forecaster — RNNs (especially GRUs)
+        are still a solid choice. For language at scale, Transformers win. And watch the SSM
+        space (Mamba, RWKV) — they combine RNN-style streaming with Transformer-quality results.
+        """)
