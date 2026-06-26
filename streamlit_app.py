@@ -56,9 +56,12 @@ CATALOGUE = [
     ("attention",     "Attention Mechanism",            "👁️", "How transformers focus on relevant input tokens"),
     ("backprop",      "Backpropagation",                "🔄", "How the error propagates backwards"),
     ("batch_size",    "Batch Size & Gradient Noise",    "🎲", "How batch size affects gradient quality"),
-    ("central_tendency", "Central Tendency",           "📊", "Mean, median and mode — summarising where data is centred"),
+    ("bayes_theorem",     "Bayes' Theorem",              "🧪", "Conditional probability, priors and posteriors"),
+    ("central_tendency",  "Central Tendency",           "📊", "Mean, median and mode — summarising where data is centred"),
     ("cnn",           "Convolutional Layer (CNN)",      "🖼️", "Kernel sliding over input to detect local patterns"),
-    ("dispersion",    "Dispersion",                     "📏", "Variance, std dev, IQR — how spread out data is"),
+    ("correlation",       "Correlation & Covariance",    "📈", "How variables move together — Pearson r and the covariance matrix"),
+    ("dispersion",        "Dispersion",                  "📏", "Variance, std dev, IQR — how spread out data is"),
+    ("hypothesis_testing","Hypothesis Testing",          "🧪", "p-values, t-tests and statistical significance"),
     ("rnn",           "Recurrent Networks",             "🔁", "RNNs, LSTMs and GRUs — memory across time"),
     ("dropout",       "Dropout",                        "💧", "Randomly zeroing neurons to prevent overfitting"),
     ("lr_schedule",   "Learning Rate Schedulers",       "📅", "Step decay, cosine annealing and warmup"),
@@ -90,13 +93,13 @@ CATALOGUE = [
 ]
 
 ML_KEYS     = {"bias_var","confusion","decision_tree","gradient","knn","linear_reg","logistic_reg",
-               "loss","naive_bayes","overfit","pca","regularization"}
+               "loss","overfit","pca","regularization"}
 DL_KEYS     = {"activation","attention","backprop","batch_size","cnn","dropout","lr_schedule",
                "neural_net","neuron","normalization","optimizers","rnn","vanishing_grad"}
 MATH_KEYS   = {"chain_rule","derivative","dot_product","eigenvalues","embeddings","integral","matrix_ops",
-               "partial_deriv","probability","svd","vectors","vector_norms","vector_spaces"}
+               "partial_deriv","svd","vectors","vector_norms","vector_spaces"}
 AGENT_KEYS  = {"react_loop","tool_use","planning","agent_memory","multi_agent"}
-STAT_KEYS   = {"central_tendency","dispersion"}
+STAT_KEYS   = {"central_tendency","dispersion","probability","naive_bayes","bayes_theorem","correlation","hypothesis_testing"}
 # alphabetical within each group
 ALPHA_ML   = sorted([c for c in CATALOGUE if c[0] in ML_KEYS],   key=lambda x: x[1].lower())
 ALPHA_DL   = sorted([c for c in CATALOGUE if c[0] in DL_KEYS],   key=lambda x: x[1].lower())
@@ -124,16 +127,16 @@ with st.sidebar:
     for key, name, icon, _ in ALPHA_MATH:
         if st.button(name, key=f"sb_{key}", use_container_width=True):
             go_to(key)
+    st.markdown("**Statistics & Data Science**")
+    for key, name, icon, _ in ALPHA_STAT:
+        if st.button(name, key=f"sb_{key}", use_container_width=True):
+            go_to(key)
     st.markdown("**Machine Learning**")
     for key, name, icon, _ in ALPHA_ML:
         if st.button(name, key=f"sb_{key}", use_container_width=True):
             go_to(key)
     st.markdown("**Deep Learning**")
     for key, name, icon, _ in ALPHA_DL:
-        if st.button(name, key=f"sb_{key}", use_container_width=True):
-            go_to(key)
-    st.markdown("**Statistics & Data Science**")
-    for key, name, icon, _ in ALPHA_STAT:
         if st.button(name, key=f"sb_{key}", use_container_width=True):
             go_to(key)
     st.markdown("**Agentic AI**")
@@ -172,12 +175,12 @@ if section == "home":
 
     st.markdown("### 📐 Math Foundations")
     render_cards(ALPHA_MATH)
+    st.markdown("### 📊 Statistics & Data Science")
+    render_cards(ALPHA_STAT)
     st.markdown("### 🤖 Machine Learning")
     render_cards(ALPHA_ML)
     st.markdown("### 🧠 Deep Learning")
     render_cards(ALPHA_DL)
-    st.markdown("### 📊 Statistics & Data Science")
-    render_cards(ALPHA_STAT)
     st.markdown("### 🤝 Agentic AI")
     render_cards(ALPHA_AGENT)
 
@@ -6720,3 +6723,569 @@ elif section == "dispersion":
             "Dataset B": [f"{np.mean(db):.2f}", f"{np.std(db):.2f}", f"{np.var(db):.2f}", f"{db.max()-db.min():.2f}"],
         })
         st.dataframe(summary_df, use_container_width=True, hide_index=True)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# BAYES' THEOREM & CONDITIONAL PROBABILITY
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "bayes_theorem":
+    st.title("🧪 Bayes' Theorem")
+    st.markdown("""
+    <div class="concept-card">
+    <b>Bayes' theorem</b> tells you how to update a belief (prior) in light of new evidence
+    to get a revised belief (posterior). It is the mathematical backbone of probabilistic
+    reasoning, Naive Bayes classifiers, Bayesian optimisation, and many uncertainty
+    estimates in ML.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["The theorem", "Conditional probability", "Medical test — classic worked example"])
+
+    with tab1:
+        st.markdown("### Bayes' theorem")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown('<div class="formula-box">'
+                'P(A|B) = P(B|A) · P(A) / P(B)'
+                '</div>', unsafe_allow_html=True)
+            st.markdown("""
+            | Term | Name | Meaning |
+            |---|---|---|
+            | P(A) | **Prior** | Your belief in A before seeing B |
+            | P(B\\|A) | **Likelihood** | Probability of evidence B if A is true |
+            | P(B) | **Marginal** | Total probability of seeing B (normaliser) |
+            | P(A\\|B) | **Posterior** | Updated belief in A after seeing B |
+            """)
+            st.markdown('<div class="formula-box">'
+                'Posterior ∝ Likelihood × Prior'
+                '</div>', unsafe_allow_html=True)
+        with col2:
+            st.markdown("#### Intuition: updating beliefs")
+            st.markdown("""
+            Think of it as a two-step process:
+            1. Start with a **prior** — what do you believe before any evidence?
+            2. Observe **evidence** — how likely is that evidence under each hypothesis?
+            3. Multiply and normalise → **posterior** — your new, updated belief.
+
+            The more surprising the evidence (low P(B)), the more it shifts your belief.
+            If P(B|A) ≫ P(B|¬A), seeing B strongly supports A.
+            """)
+            st.markdown("#### Expanded form")
+            st.markdown('<div class="formula-box">'
+                'P(A|B) = P(B|A)·P(A) / [P(B|A)·P(A) + P(B|¬A)·P(¬A)]'
+                '</div>', unsafe_allow_html=True)
+            st.caption("This expanded denominator makes it clear that P(B) is a weighted average "
+                       "of the likelihood under A and under not-A.")
+
+        st.markdown("---")
+        st.markdown("### Interactive: update your belief")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            prior = st.slider("Prior P(A) — initial belief", 0.01, 0.99, 0.3, step=0.01, key="bt_prior")
+            lik_given_a  = st.slider("Likelihood P(B|A) — evidence if A true",  0.01, 0.99, 0.9, step=0.01, key="bt_lika")
+            lik_given_na = st.slider("Likelihood P(B|¬A) — evidence if A false", 0.01, 0.99, 0.2, step=0.01, key="bt_likna")
+
+            pb = lik_given_a * prior + lik_given_na * (1 - prior)
+            posterior = (lik_given_a * prior) / pb
+
+            st.metric("Posterior P(A|B)", f"{posterior:.3f}", delta=f"{posterior-prior:+.3f} from prior")
+            if posterior > prior:
+                st.success(f"Evidence B supports A — belief rose from {prior:.2f} → {posterior:.2f}")
+            else:
+                st.warning(f"Evidence B undermines A — belief fell from {prior:.2f} → {posterior:.2f}")
+
+        with col2:
+            fig = go.Figure()
+            priors_range = np.linspace(0.01, 0.99, 200)
+            pb_range = lik_given_a * priors_range + lik_given_na * (1 - priors_range)
+            posteriors_range = (lik_given_a * priors_range) / pb_range
+
+            fig.add_trace(go.Scatter(x=priors_range, y=priors_range,
+                mode="lines", line=dict(color="#ccc", width=1.5, dash="dot"),
+                name="No update (prior = posterior)"))
+            fig.add_trace(go.Scatter(x=priors_range, y=posteriors_range,
+                mode="lines", line=dict(color="#534AB7", width=2.5),
+                name="Posterior given evidence B"))
+            fig.add_trace(go.Scatter(x=[prior], y=[posterior],
+                mode="markers", marker=dict(size=14, color="#E24B4A", symbol="star"),
+                name=f"Current: prior={prior:.2f} → post={posterior:.2f}"))
+
+            fig.update_layout(height=350, plot_bgcolor="white",
+                xaxis=dict(title="Prior P(A)", range=[0,1]),
+                yaxis=dict(title="Posterior P(A|B)", range=[0,1]),
+                legend=dict(x=0.01, y=0.99),
+                margin=dict(l=40, r=20, t=20, b=40))
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption("The purple curve shows how the posterior changes across all possible priors "
+                       "given the same evidence. Grey diagonal = no update (uninformative evidence).")
+
+    with tab2:
+        st.markdown("### Conditional probability — the building block")
+        st.markdown('<div class="formula-box">P(A|B) = P(A ∩ B) / P(B)</div>', unsafe_allow_html=True)
+        st.markdown("""
+        P(A|B) reads: *"probability of A given that B has already happened"*.
+        You restrict your sample space to only the cases where B is true, then ask
+        what fraction of those also have A.
+        """)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("#### Key rules")
+            st.markdown('<div class="formula-box">'
+                '<b>Product rule</b><br>'
+                'P(A ∩ B) = P(A|B) · P(B) = P(B|A) · P(A)<br><br>'
+                '<b>Chain rule</b><br>'
+                'P(A,B,C) = P(A|B,C) · P(B|C) · P(C)<br><br>'
+                '<b>Independence</b><br>'
+                'A ⊥ B  ⟺  P(A|B) = P(A)  ⟺  P(A∩B) = P(A)·P(B)'
+                '</div>', unsafe_allow_html=True)
+        with col2:
+            st.markdown("#### Venn diagram intuition")
+            # Simple Venn diagram
+            theta = np.linspace(0, 2*np.pi, 200)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=np.cos(theta)-0.4, y=np.sin(theta),
+                mode="lines", fill="toself", fillcolor="rgba(83,74,183,0.2)",
+                line=dict(color="#534AB7", width=2), name="Event A"))
+            fig.add_trace(go.Scatter(x=np.cos(theta)+0.4, y=np.sin(theta),
+                mode="lines", fill="toself", fillcolor="rgba(29,158,117,0.2)",
+                line=dict(color="#1D9E75", width=2), name="Event B"))
+            fig.add_annotation(x=-0.8, y=0, text="A only", showarrow=False, font=dict(color="#534AB7"))
+            fig.add_annotation(x=0.8,  y=0, text="B only", showarrow=False, font=dict(color="#1D9E75"))
+            fig.add_annotation(x=0,    y=0, text="A∩B",    showarrow=False, font=dict(color="#333", size=13))
+            fig.update_layout(height=260, plot_bgcolor="white", showlegend=True,
+                xaxis=dict(visible=False, range=[-2,2]),
+                yaxis=dict(visible=False, range=[-1.4,1.4], scaleanchor="x"),
+                margin=dict(l=10,r=10,t=10,b=10))
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption("P(A|B) = area of overlap / area of B. Conditioning shrinks the sample space to B.")
+
+    with tab3:
+        st.markdown("### Classic example: medical screening test")
+        st.markdown("This is the most important application of Bayes' theorem — "
+                    "and the most counterintuitive result in statistics.")
+
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            prevalence   = st.slider("Disease prevalence P(Disease)", 0.001, 0.5, 0.01, step=0.001,
+                format="%.3f", key="bt_prev")
+            sensitivity  = st.slider("Test sensitivity P(+|Disease)", 0.5, 1.0, 0.99, step=0.01, key="bt_sens")
+            specificity  = st.slider("Test specificity P(−|Healthy)", 0.5, 1.0, 0.95, step=0.01, key="bt_spec")
+
+            false_pos_rate = 1 - specificity
+            p_pos = sensitivity * prevalence + false_pos_rate * (1 - prevalence)
+            ppv   = (sensitivity * prevalence) / p_pos   # Positive Predictive Value
+            npv   = (specificity * (1-prevalence)) / (specificity*(1-prevalence) + (1-sensitivity)*prevalence)
+
+            st.markdown(f'<div class="formula-box">'
+                f'P(+|Disease) = {sensitivity:.2f}  (sensitivity)<br>'
+                f'P(+|Healthy) = {false_pos_rate:.2f}  (false positive rate)<br><br>'
+                f'<b>If you test positive:</b><br>'
+                f'P(Disease|+) = <b>{ppv:.1%}</b><br><br>'
+                f'<b>If you test negative:</b><br>'
+                f'P(Healthy|−) = <b>{npv:.1%}</b>'
+                f'</div>', unsafe_allow_html=True)
+
+            if ppv < 0.5:
+                st.warning(f"⚠️ Despite a positive test, there's only a {ppv:.1%} chance of having the disease! "
+                           f"Low prevalence means most positives are false alarms.")
+            else:
+                st.success(f"A positive test means {ppv:.1%} probability of disease.")
+
+        with col2:
+            # Visualise with population of 10,000
+            N = 10000
+            n_sick     = int(N * prevalence)
+            n_healthy  = N - n_sick
+            tp = int(n_sick    * sensitivity)
+            fn = n_sick    - tp
+            fp = int(n_healthy * false_pos_rate)
+            tn = n_healthy - fp
+
+            fig = go.Figure(data=[
+                go.Bar(name="True Positive",  x=["Test +", "Test −"], y=[tp, 0],  marker_color="#1D9E75"),
+                go.Bar(name="False Positive", x=["Test +", "Test −"], y=[fp, 0],  marker_color="#E24B4A"),
+                go.Bar(name="False Negative", x=["Test +", "Test −"], y=[0,  fn], marker_color="#EF9F27"),
+                go.Bar(name="True Negative",  x=["Test +", "Test −"], y=[0,  tn], marker_color="#c5c1f0"),
+            ])
+            fig.update_layout(barmode="stack", height=340, plot_bgcolor="white",
+                title=dict(text=f"Out of {N:,} people tested", font=dict(size=13)),
+                yaxis_title="Count", legend=dict(orientation="h", y=1.18),
+                margin=dict(l=20,r=20,t=60,b=40))
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption(f"Test + column: {tp:,} true positives vs {fp:,} false positives. "
+                       f"PPV = {tp}/{tp+fp} = {ppv:.1%}")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CORRELATION & COVARIANCE
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "correlation":
+    st.title("📈 Correlation & Covariance")
+    st.markdown("""
+    <div class="concept-card">
+    <b>Covariance</b> measures whether two variables tend to move together. <b>Correlation</b>
+    normalises covariance to a [−1, 1] scale so you can compare across variables with
+    different units. Both are fundamental to feature selection, PCA, multicollinearity
+    detection, and understanding what your data is telling you.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["Covariance & Pearson r", "Correlation matrix", "Correlation ≠ causation"])
+
+    with tab1:
+        st.markdown("### From covariance to correlation")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown('<div class="formula-box">'
+                'Cov(X,Y) = E[(X−μₓ)(Y−μᵧ)]<br>'
+                '         = Σ(xᵢ−x̄)(yᵢ−ȳ) / (n−1)<br><br>'
+                'r = Cov(X,Y) / (σₓ · σᵧ)<br><br>'
+                'r ∈ [−1, 1]'
+                '</div>', unsafe_allow_html=True)
+        with col2:
+            st.markdown("""
+            | r value | Interpretation |
+            |---|---|
+            | +1.0 | Perfect positive linear relationship |
+            | +0.7 to +1.0 | Strong positive |
+            | +0.3 to +0.7 | Moderate positive |
+            | −0.3 to +0.3 | Weak / no linear relationship |
+            | −0.7 to −0.3 | Moderate negative |
+            | −1.0 | Perfect negative linear relationship |
+            """)
+
+        st.markdown("---")
+        st.markdown("### Interactive scatter — drag the correlation")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            target_r = st.slider("Target correlation r", -1.0, 1.0, 0.7, step=0.05, key="corr_r")
+            n_pts    = st.slider("Number of points", 20, 200, 80, step=10, key="corr_n")
+            noise_level = np.sqrt(1 - target_r**2)
+            rng = np.random.default_rng(42)
+            x = rng.standard_normal(n_pts)
+            y = target_r * x + noise_level * rng.standard_normal(n_pts)
+            actual_r = np.corrcoef(x, y)[0, 1]
+            cov_val  = np.cov(x, y)[0, 1]
+
+            st.metric("Actual Pearson r", f"{actual_r:.3f}")
+            st.metric("Covariance", f"{cov_val:.3f}")
+            st.markdown(f'<div class="formula-box">'
+                f'x̄ = {np.mean(x):.2f}, σₓ = {np.std(x):.2f}<br>'
+                f'ȳ = {np.mean(y):.2f}, σᵧ = {np.std(y):.2f}<br>'
+                f'Cov = {cov_val:.3f}<br>'
+                f'r = {cov_val:.3f} / ({np.std(x):.3f}·{np.std(y):.3f}) = {actual_r:.3f}'
+                f'</div>', unsafe_allow_html=True)
+
+        with col2:
+            color = "#1D9E75" if actual_r > 0.3 else ("#E24B4A" if actual_r < -0.3 else "#EF9F27")
+            # Regression line
+            m, b = np.polyfit(x, y, 1)
+            x_line = np.linspace(x.min(), x.max(), 100)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=x, y=y, mode="markers",
+                marker=dict(size=7, color=color, opacity=0.7), showlegend=False))
+            fig.add_trace(go.Scatter(x=x_line, y=m*x_line+b,
+                mode="lines", line=dict(color="#534AB7", width=2),
+                name=f"Best fit  r={actual_r:.2f}"))
+            fig.update_layout(height=360, plot_bgcolor="white",
+                xaxis_title="X", yaxis_title="Y",
+                legend=dict(x=0.01, y=0.99),
+                margin=dict(l=40,r=20,t=20,b=40))
+            st.plotly_chart(fig, use_container_width=True)
+
+    with tab2:
+        st.markdown("### Correlation matrix — all pairwise relationships at once")
+        st.markdown("A **correlation matrix** shows Pearson r between every pair of variables. "
+                    "It's the first thing you should look at in any new dataset.")
+
+        # Simulate a 5-variable dataset with known structure
+        rng2 = np.random.default_rng(0)
+        n = 300
+        age    = rng2.normal(40, 10, n)
+        income = 0.6*age + rng2.normal(0, 8, n)
+        spend  = 0.5*income - 0.3*age + rng2.normal(0, 5, n)
+        height = rng2.normal(170, 10, n)
+        noise  = rng2.normal(0, 1, n)
+
+        import pandas as pd
+        df = pd.DataFrame({"Age":age, "Income":income, "Spending":spend, "Height":height, "Noise":noise})
+        corr_mat = df.corr().round(2)
+
+        fig = go.Figure(data=go.Heatmap(
+            z=corr_mat.values, x=corr_mat.columns, y=corr_mat.columns,
+            colorscale="RdBu", zmid=0, zmin=-1, zmax=1,
+            text=corr_mat.values, texttemplate="%{text:.2f}",
+            showscale=True, colorbar=dict(title="r")
+        ))
+        fig.update_layout(height=360, margin=dict(l=10,r=10,t=30,b=10),
+            title=dict(text="Correlation matrix (simulated data)", font=dict(size=13)))
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("""
+        **Reading the matrix:**
+        - Diagonal is always 1.0 (a variable perfectly correlates with itself)
+        - Dark red = strong positive, dark blue = strong negative, white ≈ 0
+        - Age and Income are positively correlated (by design). Height and Noise are near-zero with everything.
+
+        **In ML:**
+        - Highly correlated features (|r| > 0.9) → multicollinearity in linear models → remove one
+        - PCA uses the covariance matrix to find uncorrelated principal components
+        - Feature selection: drop features with near-zero correlation to the target
+        """)
+
+    with tab3:
+        st.markdown("### Correlation ≠ causation")
+        st.markdown("""
+        A high r between X and Y can arise from three very different situations.
+        Confusing correlation with causation is one of the most common errors in data science.
+        """)
+        col1, col2, col3 = st.columns(3)
+        cases = [
+            ("X causes Y", "X → Y", "Ice cream sales correlate with drowning deaths because summer (heat) causes both.",
+             "Direct causation is possible but needs experimental evidence (randomised control trial).", "#1D9E75"),
+            ("Y causes X", "Y → X", "Shoe size correlates with reading ability in children — but shoe size doesn't teach reading.",
+             "Reverse causation: age (Y) causes both shoe size and reading ability.", "#EF9F27"),
+            ("Z causes both", "Z → X and Z → Y", "Nicolas Cage film releases correlate with pool drownings.",
+             "A lurking confounder Z (year, population growth) drives both X and Y.", "#E24B4A"),
+        ]
+        for col, (title, arrow, example, explain, color) in zip([col1,col2,col3], cases):
+            with col:
+                st.markdown(f"**{title}**")
+                st.markdown(f'<div class="formula-box" style="border-left:4px solid {color}">{arrow}</div>', unsafe_allow_html=True)
+                st.markdown(f"*{example}*")
+                st.caption(explain)
+
+        st.markdown("""
+        **Spearman rank correlation** is a non-parametric alternative to Pearson r — it measures
+        monotonic (not just linear) relationships and is less sensitive to outliers:
+        """)
+        st.markdown('<div class="formula-box">ρ = 1 − 6Σdᵢ² / (n(n²−1))   where dᵢ = rank(xᵢ) − rank(yᵢ)</div>',
+            unsafe_allow_html=True)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# HYPOTHESIS TESTING
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "hypothesis_testing":
+    st.title("🧪 Hypothesis Testing")
+    st.markdown("""
+    <div class="concept-card">
+    <b>Hypothesis testing</b> is a formal framework for deciding whether an observed
+    effect in data is real or just random noise. It underlies A/B testing, evaluating
+    whether one model is genuinely better than another, and validating that a feature
+    actually improves your pipeline.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["p-values & significance", "t-test interactive", "Type I & II errors"])
+
+    with tab1:
+        st.markdown("### The hypothesis testing framework")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("""
+            **The two hypotheses:**
+            - **H₀ (null)** — the boring default: no effect, no difference
+            - **H₁ (alternative)** — what you're trying to show: there IS an effect
+
+            **The p-value:**
+            > *"If H₀ were true, what is the probability of seeing data at least this extreme?"*
+
+            A small p-value means the data would be very surprising under H₀ — evidence against it.
+            """)
+            st.markdown('<div class="formula-box">'
+                'p-value = P(data this extreme | H₀ true)<br><br>'
+                'Reject H₀ if  p < α<br>'
+                'Common choice: α = 0.05'
+                '</div>', unsafe_allow_html=True)
+        with col2:
+            st.markdown("""
+            **What p-value is NOT:**
+            - ❌ "Probability that H₀ is true" — it's not
+            - ❌ "Probability your result is a false alarm" — also not
+            - ❌ A measure of effect size or practical importance
+
+            **What it IS:**
+            - ✅ A tail probability under H₀
+            - ✅ A decision threshold: below α → reject H₀
+            - ✅ Heavily influenced by sample size — large n → tiny p even for tiny effects
+            """)
+            st.markdown('<div class="formula-box">'
+                'Statistical significance ≠ practical significance<br>'
+                'Always report effect size alongside p-value'
+                '</div>', unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.markdown("### Visualising the p-value")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            z_stat = st.slider("Test statistic z", -4.0, 4.0, 2.1, step=0.1, key="ht_z")
+            tail   = st.radio("Test type", ["Two-tailed", "One-tailed (right)"], key="ht_tail")
+            alpha  = st.select_slider("Significance level α", options=[0.01, 0.05, 0.1], value=0.05, key="ht_alpha")
+            from scipy import stats as scipy_stats
+            if tail == "Two-tailed":
+                p_val = 2 * (1 - scipy_stats.norm.cdf(abs(z_stat)))
+                crit  = scipy_stats.norm.ppf(1 - alpha/2)
+            else:
+                p_val = 1 - scipy_stats.norm.cdf(z_stat)
+                crit  = scipy_stats.norm.ppf(1 - alpha)
+            reject = p_val < alpha
+            st.metric("p-value", f"{p_val:.4f}")
+            st.metric("Critical value", f"±{crit:.3f}" if tail=="Two-tailed" else f"{crit:.3f}")
+            if reject:
+                st.success(f"p={p_val:.4f} < α={alpha} → Reject H₀")
+            else:
+                st.warning(f"p={p_val:.4f} ≥ α={alpha} → Fail to reject H₀")
+
+        with col2:
+            x_range = np.linspace(-4.5, 4.5, 500)
+            y_norm  = scipy_stats.norm.pdf(x_range)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=x_range, y=y_norm,
+                mode="lines", line=dict(color="#534AB7", width=2.5), name="N(0,1) under H₀"))
+
+            # Shade rejection region(s)
+            if tail == "Two-tailed":
+                for sign in [-1, 1]:
+                    mask = x_range * sign > crit
+                    fig.add_trace(go.Scatter(
+                        x=np.concatenate([[sign*crit], x_range[mask], [x_range[mask][-1]]]),
+                        y=np.concatenate([[0], y_norm[mask], [0]]),
+                        fill="toself", fillcolor="rgba(226,75,74,0.25)",
+                        line=dict(color="rgba(0,0,0,0)"), showlegend=False))
+            else:
+                mask = x_range > crit
+                fig.add_trace(go.Scatter(
+                    x=np.concatenate([[crit], x_range[mask], [x_range[mask][-1]]]),
+                    y=np.concatenate([[0], y_norm[mask], [0]]),
+                    fill="toself", fillcolor="rgba(226,75,74,0.25)",
+                    line=dict(color="rgba(0,0,0,0)"), name=f"Rejection region α={alpha}"))
+
+            # Test statistic line
+            fig.add_vline(x=z_stat, line=dict(color="#E24B4A", width=2.5),
+                annotation_text=f"z={z_stat:.1f}", annotation_position="top right",
+                annotation_font=dict(color="#E24B4A"))
+            if tail == "Two-tailed":
+                fig.add_vline(x=-z_stat, line=dict(color="#E24B4A", width=1.5, dash="dot"))
+
+            fig.update_layout(height=320, plot_bgcolor="white",
+                xaxis_title="z statistic", yaxis_title="Density",
+                legend=dict(x=0.01, y=0.99),
+                margin=dict(l=40,r=20,t=20,b=40))
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption("Red shaded = rejection region (probability = α). "
+                       "If your test statistic falls in the red zone, p < α.")
+
+    with tab2:
+        st.markdown("### One-sample t-test — is this mean different from a target?")
+        st.markdown('<div class="formula-box">'
+            't = (x̄ − μ₀) / (s / √n)     df = n − 1'
+            '</div>', unsafe_allow_html=True)
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            mu0     = st.number_input("Null hypothesis mean μ₀", value=100.0, step=1.0, key="tt_mu0")
+            raw_tt  = st.text_area("Sample data (comma-separated)",
+                value="102, 108, 99, 105, 111, 103, 107, 98, 110, 106",
+                height=80, key="tt_raw")
+            alpha_t = st.select_slider("α", options=[0.01, 0.05, 0.1], value=0.05, key="tt_alpha")
+            try:
+                sample = np.array([float(v.strip()) for v in raw_tt.split(",") if v.strip()])
+            except ValueError:
+                sample = np.array([102,108,99,105,111,103,107,98,110,106], dtype=float)
+
+            n_s    = len(sample)
+            xbar   = np.mean(sample)
+            s      = np.std(sample, ddof=1)
+            t_stat = (xbar - mu0) / (s / np.sqrt(n_s))
+            p_t    = 2 * (1 - scipy_stats.t.cdf(abs(t_stat), df=n_s-1))
+            crit_t = scipy_stats.t.ppf(1 - alpha_t/2, df=n_s-1)
+
+            st.markdown(f'<div class="formula-box">'
+                f'n={n_s}, x̄={xbar:.2f}, s={s:.2f}<br>'
+                f't = ({xbar:.2f} − {mu0}) / ({s:.2f}/√{n_s})<br>'
+                f't = {t_stat:.3f},  df = {n_s-1}<br>'
+                f'p-value = {p_t:.4f}'
+                f'</div>', unsafe_allow_html=True)
+            if p_t < alpha_t:
+                st.success(f"Reject H₀ — mean significantly different from {mu0} (p={p_t:.4f})")
+            else:
+                st.warning(f"Fail to reject H₀ — no significant difference from {mu0} (p={p_t:.4f})")
+
+        with col2:
+            x_t = np.linspace(-5, 5, 500)
+            y_t = scipy_stats.t.pdf(x_t, df=n_s-1)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=x_t, y=y_t,
+                mode="lines", line=dict(color="#534AB7", width=2), name=f"t(df={n_s-1})"))
+            for sign in [-1, 1]:
+                mask = x_t * sign > crit_t
+                fig.add_trace(go.Scatter(
+                    x=np.concatenate([[sign*crit_t], x_t[mask], [x_t[mask][-1]]]),
+                    y=np.concatenate([[0], y_t[mask], [0]]),
+                    fill="toself", fillcolor="rgba(226,75,74,0.2)",
+                    line=dict(color="rgba(0,0,0,0)"), showlegend=False))
+            fig.add_vline(x=t_stat, line=dict(color="#E24B4A", width=2.5),
+                annotation_text=f"t={t_stat:.2f}", annotation_font=dict(color="#E24B4A"))
+            # Sample distribution
+            fig.add_trace(go.Histogram(x=(sample-mu0)/(s/np.sqrt(n_s)),
+                nbinsx=8, histnorm="probability density", opacity=0.3,
+                marker_color="#1D9E75", name="Standardised sample"))
+            fig.update_layout(height=320, plot_bgcolor="white",
+                xaxis_title="t statistic", yaxis_title="Density",
+                legend=dict(x=0.01, y=0.99),
+                margin=dict(l=40,r=20,t=20,b=40))
+            st.plotly_chart(fig, use_container_width=True)
+
+    with tab3:
+        st.markdown("### Type I and Type II errors — the two ways to be wrong")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("""
+            |  | H₀ True (no effect) | H₀ False (effect exists) |
+            |---|---|---|
+            | **Reject H₀** | ❌ Type I error (α) | ✅ Correct (Power = 1−β) |
+            | **Fail to reject H₀** | ✅ Correct | ❌ Type II error (β) |
+            """)
+            st.markdown("""
+            - **Type I error (false positive)** — you conclude there's an effect when there isn't.
+              Rate controlled by α (your significance threshold).
+            - **Type II error (false negative)** — you miss a real effect.
+              Rate = β; statistical **power** = 1−β.
+            - Lowering α (stricter threshold) reduces Type I but increases Type II.
+            - Increasing sample size n reduces **both** — the primary way to increase power.
+            """)
+        with col2:
+            st.markdown("#### Interactive: trade-off between α and power")
+            effect_size = st.slider("True effect size (Cohen's d)", 0.1, 2.0, 0.5, step=0.1, key="ht_es")
+            n_power     = st.slider("Sample size n", 5, 200, 40, step=5, key="ht_n")
+            alpha_p     = st.select_slider("α", options=[0.01, 0.05, 0.1], value=0.05, key="ht_ap")
+
+            # Power of one-sample z-test
+            se = 1 / np.sqrt(n_power)
+            z_crit_p = scipy_stats.norm.ppf(1 - alpha_p/2)
+            power = (1 - scipy_stats.norm.cdf(z_crit_p - effect_size/se) +
+                     scipy_stats.norm.cdf(-z_crit_p - effect_size/se))
+
+            st.metric("Statistical power (1−β)", f"{power:.1%}")
+            st.metric("Type II error rate β",    f"{1-power:.1%}")
+            if power < 0.5:
+                st.error("Very low power — you're likely to miss the effect. Increase n or effect size.")
+            elif power < 0.8:
+                st.warning("Power below the conventional 0.8 threshold — consider a larger sample.")
+            else:
+                st.success("Good power — the study is likely to detect the effect if it exists.")
+
+        st.markdown("---")
+        st.markdown("""
+        **In ML context:**
+        - **A/B testing** a new model: Type I = shipping a model that isn't actually better;
+          Type II = rejecting a model that is better
+        - **Feature selection** with statistical tests: Type I = including a useless feature;
+          Type II = excluding a useful one
+        - **Multiple comparisons problem**: testing 20 features at α=0.05 → expect ~1 false positive
+          by chance → use Bonferroni correction (α/m) or FDR control
+        """)
+        st.markdown('<div class="formula-box">'
+            'Bonferroni correction: use α* = α / m<br>'
+            'where m = number of simultaneous tests'
+            '</div>', unsafe_allow_html=True)

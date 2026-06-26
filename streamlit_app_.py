@@ -56,7 +56,9 @@ CATALOGUE = [
     ("attention",     "Attention Mechanism",            "👁️", "How transformers focus on relevant input tokens"),
     ("backprop",      "Backpropagation",                "🔄", "How the error propagates backwards"),
     ("batch_size",    "Batch Size & Gradient Noise",    "🎲", "How batch size affects gradient quality"),
+    ("central_tendency", "Central Tendency",           "📊", "Mean, median and mode — summarising where data is centred"),
     ("cnn",           "Convolutional Layer (CNN)",      "🖼️", "Kernel sliding over input to detect local patterns"),
+    ("dispersion",    "Dispersion",                     "📏", "Variance, std dev, IQR — how spread out data is"),
     ("rnn",           "Recurrent Networks",             "🔁", "RNNs, LSTMs and GRUs — memory across time"),
     ("dropout",       "Dropout",                        "💧", "Randomly zeroing neurons to prevent overfitting"),
     ("lr_schedule",   "Learning Rate Schedulers",       "📅", "Step decay, cosine annealing and warmup"),
@@ -94,11 +96,13 @@ DL_KEYS     = {"activation","attention","backprop","batch_size","cnn","dropout",
 MATH_KEYS   = {"chain_rule","derivative","dot_product","eigenvalues","embeddings","integral","matrix_ops",
                "partial_deriv","probability","svd","vectors","vector_norms","vector_spaces"}
 AGENT_KEYS  = {"react_loop","tool_use","planning","agent_memory","multi_agent"}
+STAT_KEYS   = {"central_tendency","dispersion"}
 # alphabetical within each group
 ALPHA_ML   = sorted([c for c in CATALOGUE if c[0] in ML_KEYS],   key=lambda x: x[1].lower())
 ALPHA_DL   = sorted([c for c in CATALOGUE if c[0] in DL_KEYS],   key=lambda x: x[1].lower())
 ALPHA_MATH = sorted([c for c in CATALOGUE if c[0] in MATH_KEYS], key=lambda x: x[1].lower())
 ALPHA_AGENT = sorted([c for c in CATALOGUE if c[0] in AGENT_KEYS], key=lambda x: x[1].lower())
+ALPHA_STAT  = sorted([c for c in CATALOGUE if c[0] in STAT_KEYS],  key=lambda x: x[1].lower())
 
 # ── State ────────────────────────────────────────────────────────────────────
 if "section" not in st.session_state:
@@ -126,6 +130,10 @@ with st.sidebar:
             go_to(key)
     st.markdown("**Deep Learning**")
     for key, name, icon, _ in ALPHA_DL:
+        if st.button(name, key=f"sb_{key}", use_container_width=True):
+            go_to(key)
+    st.markdown("**Statistics & Data Science**")
+    for key, name, icon, _ in ALPHA_STAT:
         if st.button(name, key=f"sb_{key}", use_container_width=True):
             go_to(key)
     st.markdown("**Agentic AI**")
@@ -168,6 +176,8 @@ if section == "home":
     render_cards(ALPHA_ML)
     st.markdown("### 🧠 Deep Learning")
     render_cards(ALPHA_DL)
+    st.markdown("### 📊 Statistics & Data Science")
+    render_cards(ALPHA_STAT)
     st.markdown("### 🤝 Agentic AI")
     render_cards(ALPHA_AGENT)
 
@@ -6309,3 +6319,404 @@ elif section == "rnn":
         are still a solid choice. For language at scale, Transformers win. And watch the SSM
         space (Mamba, RWKV) — they combine RNN-style streaming with Transformer-quality results.
         """)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CENTRAL TENDENCY
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "central_tendency":
+    st.title("📊 Central Tendency")
+    st.markdown("""
+    <div class="concept-card">
+    Measures of <b>central tendency</b> summarise a dataset with a single value that
+    represents the centre or most typical value. The choice of measure matters enormously
+    — mean, median and mode each tell a different story, and picking the wrong one can
+    seriously mislead you.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["Mean, median & mode", "Effect of outliers", "When to use which"])
+
+    # ── TAB 1: Definitions & live calculator ─────────────────────────────
+    with tab1:
+        st.markdown("### The three measures — live on your own data")
+
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            raw = st.text_area("Enter numbers (comma-separated)",
+                value="4, 7, 7, 8, 10, 12, 15, 15, 15, 100",
+                height=80, key="ct_raw")
+            try:
+                data_ct = np.array([float(x.strip()) for x in raw.split(",") if x.strip()])
+                valid = True
+            except ValueError:
+                st.error("Please enter valid numbers separated by commas.")
+                data_ct = np.array([4,7,7,8,10,12,15,15,15,100], dtype=float)
+                valid = False
+
+            n = len(data_ct)
+            mean_val   = np.mean(data_ct)
+            median_val = np.median(data_ct)
+            # mode: most frequent value(s)
+            vals, counts = np.unique(data_ct, return_counts=True)
+            max_count = counts.max()
+            modes = vals[counts == max_count]
+            mode_str = ", ".join([str(int(m) if m == int(m) else m) for m in modes])
+
+            st.markdown(f'<div class="formula-box">'
+                f'<b>Mean</b>   x̄ = Σxᵢ / n = {mean_val:.3f}<br>'
+                f'<b>Median</b>      = middle value = {median_val:.3f}<br>'
+                f'<b>Mode</b>        = most frequent = {mode_str}'
+                f'</div>', unsafe_allow_html=True)
+
+            st.markdown(f"n = {n} values &nbsp;|&nbsp; min = {data_ct.min():.2f} &nbsp;|&nbsp; max = {data_ct.max():.2f}")
+
+        with col2:
+            fig = go.Figure()
+            # Histogram
+            fig.add_trace(go.Histogram(x=data_ct, nbinsx=min(20, n),
+                marker_color="#c5c1f0", marker_line=dict(color="#534AB7", width=1),
+                name="Data", opacity=0.8))
+            # Vertical lines for each measure
+            for val, label, color in [
+                (mean_val,   f"Mean {mean_val:.2f}",   "#E24B4A"),
+                (median_val, f"Median {median_val:.2f}", "#1D9E75"),
+                (float(modes[0]), f"Mode {mode_str}", "#EF9F27"),
+            ]:
+                fig.add_vline(x=val, line=dict(color=color, width=2.5, dash="dash"),
+                    annotation_text=label, annotation_position="top",
+                    annotation_font=dict(color=color, size=11))
+            fig.update_layout(height=320, plot_bgcolor="white",
+                xaxis_title="Value", yaxis_title="Count",
+                legend=dict(orientation="h", y=1.1),
+                margin=dict(l=20, r=20, t=50, b=40))
+            st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("### Formulas")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.markdown("#### Mean (Arithmetic)")
+            st.markdown('<div class="formula-box">x̄ = (x₁ + x₂ + … + xₙ) / n<br><br>= Σxᵢ / n</div>', unsafe_allow_html=True)
+            st.markdown("Sum all values, divide by count. Sensitive to every data point equally.")
+        with col2:
+            st.markdown("#### Median")
+            st.markdown('<div class="formula-box">Sort the data.<br>If n is odd → middle value<br>If n is even → mean of the two middle values</div>', unsafe_allow_html=True)
+            st.markdown("The value that splits the dataset 50/50. Robust to outliers.")
+        with col3:
+            st.markdown("#### Mode")
+            st.markdown('<div class="formula-box">The value (or values) that appear most frequently.<br><br>A dataset can be unimodal, bimodal, or multimodal.</div>', unsafe_allow_html=True)
+            st.markdown("The only measure that works for categorical data (e.g. most common colour).")
+
+    # ── TAB 2: Effect of outliers ─────────────────────────────────────────
+    with tab2:
+        st.markdown("### How outliers pull the mean but not the median")
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            base = st.slider("Typical values (repeated 9×)", 5, 30, 15, key="ct_base")
+            outlier = st.slider("Outlier value", int(base), int(base)*20, int(base)*8, key="ct_out")
+            include_outlier = st.checkbox("Include outlier", value=True, key="ct_inc")
+
+            dataset = np.array([base]*9 + ([outlier] if include_outlier else []))
+            m_mean   = np.mean(dataset)
+            m_median = np.median(dataset)
+
+            st.metric("Mean",   f"{m_mean:.1f}", delta=f"{m_mean-base:+.1f} from typical" if include_outlier else None)
+            st.metric("Median", f"{m_median:.1f}", delta=f"{m_median-base:+.1f} from typical" if include_outlier else None)
+
+            if include_outlier:
+                pull = abs(m_mean - m_median)
+                st.markdown(f"The outlier pulls the **mean** {pull:.1f} units away from the median.")
+                st.info("Median barely moves — it only cares about rank, not magnitude.")
+
+        with col2:
+            fig = go.Figure()
+            jitter = np.random.default_rng(42).uniform(-0.05, 0.05, len(dataset))
+            fig.add_trace(go.Scatter(x=dataset, y=jitter,
+                mode="markers", marker=dict(size=14, color="#534AB7", opacity=0.7),
+                name="Data points"))
+            fig.add_vline(x=m_mean,   line=dict(color="#E24B4A", width=3, dash="dash"),
+                annotation_text=f"Mean {m_mean:.1f}", annotation_position="top left",
+                annotation_font=dict(color="#E24B4A", size=12))
+            fig.add_vline(x=m_median, line=dict(color="#1D9E75", width=3, dash="dot"),
+                annotation_text=f"Median {m_median:.1f}", annotation_position="top right",
+                annotation_font=dict(color="#1D9E75", size=12))
+            fig.update_layout(height=260, plot_bgcolor="white",
+                xaxis_title="Value", yaxis=dict(visible=False),
+                margin=dict(l=20, r=20, t=60, b=40))
+            st.plotly_chart(fig, use_container_width=True)
+
+            st.markdown("""
+            **Real-world examples of outlier distortion:**
+            - Average household income in a neighbourhood with one billionaire → mean is misleading, median is honest
+            - Average response time in a web service with occasional 30-second timeouts → use median or p99
+            - Test scores when one student scored 0 due to absence → median better represents the class
+            """)
+
+    # ── TAB 3: When to use which ─────────────────────────────────────────
+    with tab3:
+        st.markdown("### Choosing the right measure")
+
+        import pandas as pd
+        rows = [
+            ("Symmetric, no outliers (e.g. height)", "✅ Mean — uses all data efficiently", "✅ Median — similar result", "⚠️ Mode — may not be unique"),
+            ("Skewed distribution (e.g. income)",    "❌ Distorted by tail",               "✅ Median — robust",         "⚠️ Mode — only shows peak"),
+            ("Outliers present",                     "❌ Pulled toward outliers",           "✅ Median — ignores magnitude", "⚠️ Unaffected but limited"),
+            ("Categorical data (e.g. colours)",      "❌ Not applicable",                   "❌ Not applicable",          "✅ Mode — only option"),
+            ("Reporting 'typical' salary",           "❌ Misleading if skewed",             "✅ Standard practice",       "⚠️ Possible but unusual"),
+            ("ML: imputing missing values",          "✅ Common — preserves mean",          "✅ Robust to outliers",      "✅ For categorical features"),
+            ("ML: loss function centre",             "✅ MSE minimised at mean",            "✅ MAE minimised at median", "—"),
+        ]
+        df = pd.DataFrame(rows, columns=["Situation", "Mean", "Median", "Mode"])
+        st.dataframe(df, use_container_width=True, hide_index=True)
+
+        st.markdown("---")
+        st.markdown("### Skewness and the mean-median relationship")
+        col1, col2, col3 = st.columns(3)
+        skew_cases = [
+            ("Symmetric", "Mean ≈ Median ≈ Mode", "Normal distribution, balanced data", "#534AB7"),
+            ("Right-skewed\n(positive)", "Mode < Median < Mean", "Income, house prices, response times — long right tail pulls mean up", "#E24B4A"),
+            ("Left-skewed\n(negative)", "Mean < Median < Mode", "Age at retirement, exam scores with ceiling — long left tail pulls mean down", "#1D9E75"),
+        ]
+        for col, (name, order, example, color) in zip([col1,col2,col3], skew_cases):
+            with col:
+                st.markdown(f"**{name}**")
+                st.markdown(f'<div class="formula-box" style="border-left:4px solid {color}">{order}</div>', unsafe_allow_html=True)
+                st.caption(example)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DISPERSION
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "dispersion":
+    st.title("📏 Dispersion")
+    st.markdown("""
+    <div class="concept-card">
+    Measures of <b>dispersion</b> describe how spread out data is around its centre.
+    Two datasets can have identical means yet look completely different — dispersion
+    captures that difference. It underpins concepts like variance in the bias-variance
+    tradeoff, standard deviation in normalisation, and IQR in outlier detection.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["Variance & std dev", "Range, IQR & box plot", "Connecting to ML"])
+
+    # ── TAB 1: Variance & std dev ─────────────────────────────────────────
+    with tab1:
+        st.markdown("### Variance and standard deviation — average squared deviation from the mean")
+
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            raw_d = st.text_area("Enter numbers (comma-separated)",
+                value="10, 12, 13, 14, 15, 16, 17, 18, 20, 50",
+                height=80, key="disp_raw")
+            try:
+                data_d = np.array([float(x.strip()) for x in raw_d.split(",") if x.strip()])
+            except ValueError:
+                st.error("Please enter valid numbers.")
+                data_d = np.array([10,12,13,14,15,16,17,18,20,50], dtype=float)
+
+            n_d    = len(data_d)
+            mean_d = np.mean(data_d)
+            # Population vs sample
+            pop_var  = np.var(data_d, ddof=0)
+            samp_var = np.var(data_d, ddof=1)
+            pop_std  = np.std(data_d, ddof=0)
+            samp_std = np.std(data_d, ddof=1)
+
+            kind = st.radio("Formula type", ["Population (÷n)", "Sample (÷n−1)"], horizontal=True, key="disp_kind")
+            var_show = pop_var  if kind.startswith("Population") else samp_var
+            std_show = pop_std  if kind.startswith("Population") else samp_std
+            denom    = "n" if kind.startswith("Population") else "n−1"
+
+            st.markdown(f'<div class="formula-box">'
+                f'Mean x̄ = {mean_d:.3f}<br><br>'
+                f'Variance σ² = Σ(xᵢ − x̄)² / {denom} = {var_show:.3f}<br>'
+                f'Std Dev  σ  = √σ² = {std_show:.3f}'
+                f'</div>', unsafe_allow_html=True)
+
+            st.caption("Population formula (÷n) for the full dataset. "
+                       "Sample formula (÷n−1, Bessel's correction) when estimating from a sample — "
+                       "this makes the estimate unbiased.")
+
+        with col2:
+            # Show deviations from mean
+            deviations = data_d - mean_d
+            colors_dev = ["#E24B4A" if d > 0 else "#1D9E75" for d in deviations]
+
+            fig = go.Figure()
+            xs = list(range(n_d))
+            fig.add_hline(y=mean_d, line=dict(color="#534AB7", width=2, dash="dash"),
+                annotation_text=f"Mean={mean_d:.2f}", annotation_position="right")
+            fig.add_hline(y=mean_d + std_show, line=dict(color="#EF9F27", width=1.5, dash="dot"),
+                annotation_text=f"+1σ={mean_d+std_show:.2f}", annotation_position="right")
+            fig.add_hline(y=mean_d - std_show, line=dict(color="#EF9F27", width=1.5, dash="dot"),
+                annotation_text=f"−1σ={mean_d-std_show:.2f}", annotation_position="right")
+
+            # Deviation bars
+            for i, (x, y, dev, col) in enumerate(zip(xs, data_d, deviations, colors_dev)):
+                fig.add_shape(type="line", x0=x, y0=mean_d, x1=x, y1=y,
+                    line=dict(color=col, width=2))
+
+            fig.add_trace(go.Scatter(x=xs, y=data_d, mode="markers",
+                marker=dict(size=10, color=colors_dev), showlegend=False))
+
+            fig.update_layout(height=320, plot_bgcolor="white",
+                xaxis_title="Index", yaxis_title="Value",
+                margin=dict(l=20, r=100, t=20, b=40))
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption("Red points are above the mean, green below. "
+                       "Vertical lines show each deviation (xᵢ − x̄). "
+                       "Orange dashed lines mark ±1 standard deviation.")
+
+        st.markdown("### Breakdown: deviation table")
+        import pandas as pd
+        dev_table = pd.DataFrame({
+            "xᵢ": data_d,
+            "xᵢ − x̄": np.round(deviations, 3),
+            "(xᵢ − x̄)²": np.round(deviations**2, 3),
+        })
+        st.dataframe(dev_table, use_container_width=True, hide_index=True, height=200)
+        st.markdown(f"Sum of (xᵢ − x̄)² = **{np.sum(deviations**2):.3f}**  "
+                    f"÷ {denom} → variance = **{var_show:.3f}** → std dev = **{std_show:.3f}**")
+
+    # ── TAB 2: Range, IQR & box plot ──────────────────────────────────────
+    with tab2:
+        st.markdown("### Range, IQR and the box plot")
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            raw_b = st.text_area("Enter numbers",
+                value="3, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 45",
+                height=80, key="box_raw")
+            try:
+                data_b = np.array([float(x.strip()) for x in raw_b.split(",") if x.strip()])
+            except ValueError:
+                data_b = np.array([3,7,8,9,10,11,12,13,14,15,16,18,45], dtype=float)
+
+            data_b_sorted = np.sort(data_b)
+            q1  = np.percentile(data_b, 25)
+            q2  = np.percentile(data_b, 50)
+            q3  = np.percentile(data_b, 75)
+            iqr = q3 - q1
+            rng = data_b.max() - data_b.min()
+            lower_fence = q1 - 1.5 * iqr
+            upper_fence = q3 + 1.5 * iqr
+            outliers_b  = data_b[(data_b < lower_fence) | (data_b > upper_fence)]
+
+            st.markdown('<div class="formula-box">'
+                f'Min = {data_b.min():.1f}<br>'
+                f'Q1  = {q1:.1f}  (25th percentile)<br>'
+                f'Q2  = {q2:.1f}  (median / 50th)<br>'
+                f'Q3  = {q3:.1f}  (75th percentile)<br>'
+                f'Max = {data_b.max():.1f}<br><br>'
+                f'Range = max − min = {rng:.1f}<br>'
+                f'IQR   = Q3 − Q1  = {iqr:.1f}'
+                '</div>', unsafe_allow_html=True)
+
+            if len(outliers_b) > 0:
+                st.warning(f"Outliers (beyond Q1−1.5×IQR or Q3+1.5×IQR): {outliers_b}")
+            else:
+                st.success("No outliers detected by the 1.5×IQR rule.")
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Box(y=data_b, boxpoints="all", jitter=0.3,
+                marker=dict(color="#534AB7", size=8, opacity=0.7),
+                line=dict(color="#534AB7", width=2),
+                fillcolor="#c5c1f0",
+                name="Data"))
+
+            # Annotations for quartiles
+            for val, label in [(q1,"Q1"),(q2,"Q2 (median)"),(q3,"Q3")]:
+                fig.add_annotation(x=0.45, y=val, text=f"  {label}={val:.1f}",
+                    showarrow=False, font=dict(size=11, color="#534AB7"),
+                    xref="paper")
+
+            fig.update_layout(height=380, plot_bgcolor="white",
+                yaxis_title="Value", showlegend=False,
+                margin=dict(l=20, r=120, t=20, b=40))
+            st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("""
+        **Reading the box plot:**
+        - **Box** spans Q1 to Q3 — contains the middle 50% of data (the IQR)
+        - **Line inside box** = median (Q2)
+        - **Whiskers** extend to the last point within 1.5×IQR of the box
+        - **Dots beyond whiskers** = outliers by Tukey's rule
+        - **Wide box** = high spread; **narrow box** = concentrated data
+
+        **Range vs IQR:**
+        | | Range | IQR |
+        |---|---|---|
+        | Formula | max − min | Q3 − Q1 |
+        | Sensitive to outliers | ❌ Yes — heavily | ✅ No — ignores top/bottom 25% |
+        | Use when | Quick rough spread | Robust spread for skewed data |
+        """)
+
+    # ── TAB 3: Connecting to ML ───────────────────────────────────────────
+    with tab3:
+        st.markdown("### Why dispersion is central to ML")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("#### Feature normalisation")
+            st.markdown("""
+            Most ML models are sensitive to the scale of features. Dispersion measures
+            define the two most common normalisation strategies:
+            """)
+            st.markdown('<div class="formula-box">'
+                '<b>Z-score (standardisation)</b><br>'
+                'x′ = (x − μ) / σ<br><br>'
+                '<b>Min-max scaling</b><br>'
+                'x′ = (x − min) / (max − min)<br><br>'
+                '<b>Robust scaling</b><br>'
+                'x′ = (x − Q2) / IQR'
+                '</div>', unsafe_allow_html=True)
+            st.caption("Robust scaling uses median and IQR — best when outliers are present.")
+
+        with col2:
+            st.markdown("#### Bias-variance tradeoff")
+            st.markdown("""
+            The **variance** of a model's predictions across different training sets is
+            literally the statistical variance you saw in Tab 1 — it measures how much
+            the model's output fluctuates when trained on different data samples.
+            """)
+            st.markdown('<div class="formula-box">'
+                'Expected Error =<br>'
+                'Bias² + Variance + Irreducible Noise'
+                '</div>', unsafe_allow_html=True)
+            st.caption("High-variance models (deep trees, large nets) overfit — "
+                       "their predictions have high spread across training sets.")
+
+        st.markdown("---")
+        st.markdown("### Interactive: same mean, different spread")
+        st.markdown("Two datasets can have identical central tendency but very different dispersion:")
+
+        spread_a = st.slider("Spread of Dataset A (std dev)", 0.5, 10.0, 1.5, step=0.5, key="disp_a")
+        spread_b = st.slider("Spread of Dataset B (std dev)", 0.5, 10.0, 6.0, step=0.5, key="disp_b")
+
+        rng_d = np.random.default_rng(42)
+        da = rng_d.normal(loc=10, scale=spread_a, size=200)
+        db = rng_d.normal(loc=10, scale=spread_b, size=200)
+
+        fig = go.Figure()
+        fig.add_trace(go.Histogram(x=da, nbinsx=30, name=f"A  σ={spread_a}",
+            marker_color="#534AB7", opacity=0.6))
+        fig.add_trace(go.Histogram(x=db, nbinsx=30, name=f"B  σ={spread_b}",
+            marker_color="#E24B4A", opacity=0.6))
+        fig.add_vline(x=10, line=dict(color="#333", width=2, dash="dash"),
+            annotation_text="Mean=10", annotation_position="top")
+        fig.update_layout(barmode="overlay", height=280, plot_bgcolor="white",
+            xaxis_title="Value", yaxis_title="Count",
+            legend=dict(orientation="h", y=1.1),
+            margin=dict(l=20, r=20, t=40, b=40))
+        st.plotly_chart(fig, use_container_width=True)
+        st.caption("Both distributions have mean = 10. A model predicting only the mean "
+                   "would be equally wrong about both — yet B's errors are far more severe.")
+
+        import pandas as pd
+        summary_df = pd.DataFrame({
+            "Measure": ["Mean", "Std Dev", "Variance", "Range (approx)"],
+            "Dataset A": [f"{np.mean(da):.2f}", f"{np.std(da):.2f}", f"{np.var(da):.2f}", f"{da.max()-da.min():.2f}"],
+            "Dataset B": [f"{np.mean(db):.2f}", f"{np.std(db):.2f}", f"{np.var(db):.2f}", f"{db.max()-db.min():.2f}"],
+        })
+        st.dataframe(summary_df, use_container_width=True, hide_index=True)
