@@ -5997,6 +5997,7 @@ elif section == "vector_spaces":
                     xref="x", yref="y", axref="x", ayref="y",
                     showarrow=True, arrowhead=2, arrowwidth=1.5,
                     arrowcolor=color,
+                    line=dict(dash="dot"),
                     text=f"<b>{label}</b>", font=dict(color=color, size=11))
 
             # right-angle marker at origin
