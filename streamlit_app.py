@@ -2959,7 +2959,7 @@ elif section == "integral":
 
         # numerical true integral
         x_fine = np.linspace(a_i, b_i, 2000)
-        true_integral = float(np.trapz([f_i(xi) for xi in x_fine], x_fine))
+        true_integral = float(np.trapezoid([f_i(xi) for xi in x_fine], x_fine))
 
         with col2:
             fig = go.Figure()
