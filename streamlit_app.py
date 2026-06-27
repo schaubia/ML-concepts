@@ -62,6 +62,7 @@ CATALOGUE = [
     ("correlation",       "Correlation & Covariance",    "📈", "How variables move together — Pearson r and the covariance matrix"),
     ("dispersion",        "Dispersion",                  "📏", "Variance, std dev, IQR — how spread out data is"),
     ("hypothesis_testing","Hypothesis Testing",          "🧪", "p-values, t-tests and statistical significance"),
+    ("sampling_estimation","Sampling & Estimation",     "🎯", "Standard error, confidence intervals and the Central Limit Theorem"),
     ("rnn",           "Recurrent Networks",             "🔁", "RNNs, LSTMs and GRUs — memory across time"),
     ("dropout",       "Dropout",                        "💧", "Randomly zeroing neurons to prevent overfitting"),
     ("lr_schedule",   "Learning Rate Schedulers",       "📅", "Step decay, cosine annealing and warmup"),
@@ -99,7 +100,7 @@ DL_KEYS     = {"activation","attention","backprop","batch_size","cnn","dropout",
 MATH_KEYS   = {"chain_rule","derivative","dot_product","eigenvalues","embeddings","integral","matrix_ops",
                "partial_deriv","svd","vectors","vector_norms","vector_spaces"}
 AGENT_KEYS  = {"react_loop","tool_use","planning","agent_memory","multi_agent"}
-STAT_KEYS   = {"central_tendency","dispersion","probability","naive_bayes","bayes_theorem","correlation","hypothesis_testing"}
+STAT_KEYS   = {"central_tendency","dispersion","probability","naive_bayes","bayes_theorem","correlation","hypothesis_testing","sampling_estimation"}
 # alphabetical within each group
 ALPHA_ML   = sorted([c for c in CATALOGUE if c[0] in ML_KEYS],   key=lambda x: x[1].lower())
 ALPHA_DL   = sorted([c for c in CATALOGUE if c[0] in DL_KEYS],   key=lambda x: x[1].lower())
@@ -7288,3 +7289,302 @@ elif section == "hypothesis_testing":
             'Bonferroni correction: use α* = α / m<br>'
             'where m = number of simultaneous tests'
             '</div>', unsafe_allow_html=True)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SAMPLING & ESTIMATION
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "sampling_estimation":
+    st.title("🎯 Sampling & Estimation")
+    st.markdown("""
+    <div class="concept-card">
+    When you can't measure a whole population, you take a <b>sample</b> and use it to
+    <em>estimate</em> population parameters. <b>Standard error</b> quantifies how uncertain
+    that estimate is; the <b>Central Limit Theorem</b> explains why it works; and
+    <b>confidence intervals</b> turn the estimate into a range you can communicate.
+    These three ideas are the engine behind every model evaluation metric you report.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["Standard error", "Central Limit Theorem", "Confidence intervals"])
+
+    # ── TAB 1: Standard Error ─────────────────────────────────────────────
+    with tab1:
+        st.markdown("### Standard error — uncertainty of an estimate")
+        st.markdown("""
+        The **standard deviation** describes spread in your *data*.
+        The **standard error** describes uncertainty in your *estimate of the mean* —
+        how much would the sample mean jump around if you drew a new sample?
+        """)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown('<div class="formula-box">'
+                'SE = σ / √n<br><br>'
+                'or, when σ unknown (usual case):<br><br>'
+                'SE = s / √n'
+                '</div>', unsafe_allow_html=True)
+            st.markdown("""
+            | Symbol | Meaning |
+            |---|---|
+            | σ | Population std dev (rarely known) |
+            | s | Sample std dev (Bessel-corrected, ÷n−1) |
+            | n | Sample size |
+            | SE | Std dev of the *sampling distribution of x̄* |
+            """)
+        with col2:
+            st.markdown("""
+            **Key intuitions:**
+            - SE shrinks as **√n** — doubling n halves SE, but quadrupling n is needed to halve SE again
+            - SE is NOT the std dev of your data — it's how precisely you know the *mean*
+            - Every statistic has its own SE: SE of proportion = √(p(1−p)/n), SE of regression coefficient = s/√(Σ(x−x̄)²)
+            - SE is the denominator of every t-statistic: t = (x̄ − μ₀) / SE
+            """)
+            st.markdown('<div class="formula-box">'
+                'std dev → spread of individual data points<br>'
+                'std error → spread of sample means across repeated samples'
+                '</div>', unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.markdown("### Interactive: how SE shrinks with sample size")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            pop_std = st.slider("Population std dev σ", 1.0, 30.0, 15.0, step=1.0, key="se_sigma")
+            n_se    = st.slider("Sample size n", 1, 500, 30, step=1, key="se_n")
+            se_val  = pop_std / np.sqrt(n_se)
+
+            st.metric("Standard Error", f"{se_val:.3f}")
+            st.markdown(f'<div class="formula-box">'
+                f'SE = {pop_std} / √{n_se} = {se_val:.3f}'
+                f'</div>', unsafe_allow_html=True)
+
+            st.markdown("**To halve SE, n must quadruple:**")
+            for factor in [1, 2, 4, 9, 16]:
+                se_f = pop_std / np.sqrt(n_se * factor)
+                st.markdown(f"n × {factor:2d} → SE = {se_f:.3f}  ({se_f/se_val:.0%} of original)")
+
+        with col2:
+            ns = np.arange(1, 501)
+            ses = pop_std / np.sqrt(ns)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=ns, y=ses, mode="lines",
+                line=dict(color="#534AB7", width=2.5), name="SE = σ/√n"))
+            fig.add_trace(go.Scatter(x=[n_se], y=[se_val], mode="markers",
+                marker=dict(size=14, color="#E24B4A", symbol="star"),
+                name=f"n={n_se}, SE={se_val:.2f}"))
+            fig.add_hline(y=pop_std, line=dict(color="#ccc", width=1.5, dash="dot"),
+                annotation_text="σ (n=1)", annotation_position="right")
+            fig.update_layout(height=360, plot_bgcolor="white",
+                xaxis_title="Sample size n", yaxis_title="Standard Error",
+                legend=dict(x=0.6, y=0.99),
+                margin=dict(l=40, r=60, t=20, b=40))
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption("The diminishing returns of larger samples — SE follows a 1/√n curve. "
+                       "Early gains (n: 1→10) are huge; gains from n=400→500 are tiny.")
+
+        st.markdown("---")
+        st.markdown("### SE in ML model evaluation")
+        st.markdown("""
+        When you report model accuracy on a test set of n examples, that accuracy is a
+        sample mean of n binary outcomes (correct/incorrect). It has a standard error:
+        """)
+        col1, col2 = st.columns(2)
+        with col1:
+            acc = st.slider("Reported accuracy p̂", 0.5, 0.99, 0.85, step=0.01, key="se_acc")
+            n_eval = st.slider("Test set size n", 50, 5000, 500, step=50, key="se_neval")
+            se_acc = np.sqrt(acc * (1 - acc) / n_eval)
+            st.markdown(f'<div class="formula-box">'
+                f'SE = √(p̂(1−p̂)/n)<br>'
+                f'   = √({acc}·{1-acc:.2f}/{n_eval})<br>'
+                f'   = {se_acc:.4f}'
+                f'</div>', unsafe_allow_html=True)
+            st.metric("±95% margin", f"±{1.96*se_acc:.3f}")
+            st.markdown(f"True accuracy is roughly **{acc-1.96*se_acc:.3f} – {acc+1.96*se_acc:.3f}** (95% CI)")
+        with col2:
+            st.markdown(f"""
+            At n={n_eval} examples, your reported accuracy of {acc:.0%} has SE = {se_acc:.4f}.
+
+            This means two models reporting **{acc:.0%}** and **{acc+2*se_acc:.1%}** on the same
+            test set may not actually be different — the gap is within noise.
+
+            **Rule of thumb:** to distinguish two models differing by Δ in accuracy,
+            you need roughly n ≈ (1.96/Δ)² · p̂(1−p̂) test examples.
+            """)
+            delta_needed = 0.01
+            n_needed = int((1.96 / delta_needed)**2 * acc * (1 - acc))
+            st.markdown(f'<div class="formula-box">'
+                f'To detect Δ=1% difference at p={acc:.0%}:<br>'
+                f'n ≈ {n_needed:,} test examples needed'
+                f'</div>', unsafe_allow_html=True)
+
+    # ── TAB 2: Central Limit Theorem ──────────────────────────────────────
+    with tab2:
+        st.markdown("### Central Limit Theorem — why everything becomes normal")
+        st.markdown("""
+        The **CLT** states: regardless of the shape of the population distribution,
+        the distribution of sample means approaches a **normal distribution** as n grows,
+        with mean μ and standard deviation SE = σ/√n.
+        """)
+        st.markdown('<div class="formula-box">'
+            'x̄ ~ N(μ, σ²/n)  as n → ∞<br><br>'
+            'regardless of the shape of the population'
+            '</div>', unsafe_allow_html=True)
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            dist_type = st.selectbox("Population distribution", 
+                ["Uniform", "Exponential", "Bimodal", "Skewed (log-normal)"], key="clt_dist")
+            n_clt     = st.slider("Sample size n", 1, 100, 5, step=1, key="clt_n")
+            n_sims    = st.slider("Number of simulations", 200, 3000, 1000, step=100, key="clt_sims")
+
+            rng_clt = np.random.default_rng(0)
+            if dist_type == "Uniform":
+                pop = rng_clt.uniform(0, 1, 100000)
+            elif dist_type == "Exponential":
+                pop = rng_clt.exponential(1, 100000)
+            elif dist_type == "Bimodal":
+                pop = np.concatenate([rng_clt.normal(2, 0.5, 50000),
+                                      rng_clt.normal(8, 0.5, 50000)])
+            else:
+                pop = rng_clt.lognormal(0, 1, 100000)
+
+            # Draw n_sims samples of size n and compute means
+            sample_means = [np.mean(rng_clt.choice(pop, n_clt, replace=False)) for _ in range(n_sims)]
+            sample_means = np.array(sample_means)
+
+            pop_mu  = np.mean(pop)
+            pop_sig = np.std(pop)
+            se_clt  = pop_sig / np.sqrt(n_clt)
+
+            st.metric("Population mean μ",  f"{pop_mu:.3f}")
+            st.metric("Expected SE = σ/√n", f"{se_clt:.3f}")
+            st.metric("Observed std of means", f"{np.std(sample_means):.3f}")
+
+        with col2:
+            fig = go.Figure()
+            # Population histogram (small, on right axis)
+            fig.add_trace(go.Histogram(x=pop[:2000], nbinsx=50,
+                histnorm="probability density", opacity=0.3,
+                marker_color="#ccc", name="Population dist"))
+            # Sample means histogram
+            fig.add_trace(go.Histogram(x=sample_means, nbinsx=50,
+                histnorm="probability density", opacity=0.7,
+                marker_color="#534AB7", name=f"Distribution of x̄ (n={n_clt})"))
+            # Normal overlay
+            x_norm = np.linspace(sample_means.min(), sample_means.max(), 300)
+            from scipy import stats as scipy_stats
+            y_norm = scipy_stats.norm.pdf(x_norm, pop_mu, se_clt)
+            fig.add_trace(go.Scatter(x=x_norm, y=y_norm, mode="lines",
+                line=dict(color="#E24B4A", width=2.5),
+                name=f"N(μ={pop_mu:.2f}, SE={se_clt:.2f})"))
+            fig.update_layout(height=380, plot_bgcolor="white",
+                xaxis_title="Value", yaxis_title="Density",
+                legend=dict(x=0.01, y=0.99),
+                margin=dict(l=40, r=20, t=20, b=40))
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption(f"Grey = population ({dist_type}). Blue = {n_sims} sample means of size n={n_clt}. "
+                       f"Red curve = theoretical N(μ, σ²/n). Increase n to watch the blue bars become more bell-shaped.")
+
+        st.markdown("""
+        **Why the CLT matters in ML:**
+        - Justifies using the normal distribution to build confidence intervals around any sample mean
+        - Explains why train/val loss averages over mini-batches follow predictable distributions
+        - Underpins permutation tests and bootstrap resampling used to compare models
+        - Requires n ≳ 30 for most distributions; skewed distributions need larger n
+        """)
+
+    # ── TAB 3: Confidence Intervals ───────────────────────────────────────
+    with tab3:
+        st.markdown("### Confidence intervals — putting a range on your estimate")
+        st.markdown("""
+        A **confidence interval** is a range computed from sample data that, under repeated
+        sampling, contains the true population parameter a specified percentage of the time.
+        """)
+        st.markdown('<div class="formula-box">'
+            'CI = x̄  ±  z* · SE<br><br>'
+            '95% CI:  x̄  ±  1.96 · (s/√n)<br>'
+            '99% CI:  x̄  ±  2.576 · (s/√n)'
+            '</div>', unsafe_allow_html=True)
+
+        st.markdown("""
+        > ⚠️ **Common misinterpretation:** a 95% CI does NOT mean "95% probability the true
+        > mean is in this interval." The true mean is fixed — it's either in the interval or not.
+        > What it means: if you repeated the experiment 100 times, ~95 of those intervals
+        > would contain the true mean.
+        """)
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            raw_ci = st.text_area("Sample data",
+                value="14, 18, 11, 13, 16, 20, 15, 12, 17, 19, 13, 16",
+                height=80, key="ci_raw")
+            conf_level = st.select_slider("Confidence level", 
+                options=[0.90, 0.95, 0.99], value=0.95, key="ci_conf")
+            try:
+                data_ci = np.array([float(v.strip()) for v in raw_ci.split(",") if v.strip()])
+            except ValueError:
+                data_ci = np.array([14,18,11,13,16,20,15,12,17,19,13,16], dtype=float)
+
+            n_ci   = len(data_ci)
+            mean_ci = np.mean(data_ci)
+            s_ci   = np.std(data_ci, ddof=1)
+            se_ci  = s_ci / np.sqrt(n_ci)
+            t_crit = scipy_stats.t.ppf((1 + conf_level) / 2, df=n_ci - 1)
+            margin = t_crit * se_ci
+            lo, hi = mean_ci - margin, mean_ci + margin
+
+            st.markdown(f'<div class="formula-box">'
+                f'n={n_ci}, x̄={mean_ci:.3f}<br>'
+                f's={s_ci:.3f}, SE={se_ci:.3f}<br>'
+                f't*={t_crit:.3f}  (df={n_ci-1})<br><br>'
+                f'{conf_level:.0%} CI:<br>'
+                f'[{lo:.3f},  {hi:.3f}]<br>'
+                f'margin = ±{margin:.3f}'
+                f'</div>', unsafe_allow_html=True)
+
+        with col2:
+            # Simulate many CIs to show coverage
+            n_trials = 100
+            true_mu  = mean_ci  # use sample mean as stand-in for true μ
+            rng_ci   = np.random.default_rng(7)
+            sim_data = rng_ci.normal(true_mu, s_ci, (n_trials, n_ci))
+            means_sim = sim_data.mean(axis=1)
+            ses_sim   = sim_data.std(axis=1, ddof=1) / np.sqrt(n_ci)
+            t_c       = scipy_stats.t.ppf((1 + conf_level) / 2, df=n_ci-1)
+            los_sim   = means_sim - t_c * ses_sim
+            his_sim   = means_sim + t_c * ses_sim
+            covers    = (los_sim <= true_mu) & (his_sim >= true_mu)
+            coverage  = covers.mean()
+
+            fig = go.Figure()
+            for i in range(n_trials):
+                color = "#1D9E75" if covers[i] else "#E24B4A"
+                fig.add_trace(go.Scatter(
+                    x=[los_sim[i], his_sim[i]], y=[i, i],
+                    mode="lines", line=dict(color=color, width=1.5),
+                    showlegend=False))
+            fig.add_vline(x=true_mu, line=dict(color="#534AB7", width=2),
+                annotation_text=f"True μ={true_mu:.2f}",
+                annotation_font=dict(color="#534AB7"))
+            fig.update_layout(height=400, plot_bgcolor="white",
+                xaxis_title="Value", yaxis_title="Simulation trial",
+                margin=dict(l=40, r=20, t=30, b=40),
+                title=dict(
+                    text=f"{n_trials} simulated {conf_level:.0%} CIs — {covers.sum()} contain true μ ({coverage:.0%})",
+                    font=dict(size=12)))
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption("Green = interval contains true μ. Red = it misses. "
+                       f"With {conf_level:.0%} confidence level, expect ~{conf_level:.0%} to be green.")
+
+        st.markdown("---")
+        st.markdown("### Width of CI and what controls it")
+        col1, col2, col3 = st.columns(3)
+        factors = [
+            ("↑ Confidence level", "Wider CI", "More certainty requires a bigger net", "#EF9F27"),
+            ("↑ Sample size n",    "Narrower CI", "More data → smaller SE → tighter estimate", "#1D9E75"),
+            ("↑ Std dev s",        "Wider CI", "More variable data → more uncertain mean", "#E24B4A"),
+        ]
+        for col, (factor, effect, reason, color) in zip([col1,col2,col3], factors):
+            with col:
+                st.markdown(f"**{factor}**")
+                st.markdown(f'<div class="formula-box" style="border-left:4px solid {color}">{effect}</div>',
+                    unsafe_allow_html=True)
+                st.caption(reason)
