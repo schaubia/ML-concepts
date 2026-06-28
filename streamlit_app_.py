@@ -2221,70 +2221,100 @@ elif section == "neuron":
         - The **bias** shifts the curve left or right, controlling the threshold at which the neuron activates, independently of any input.
         """)
 
-    # ── TAB 3: how learning connects to backprop ─────────────────────────
+    # ── TAB 3: one learning step ─────────────────────────────────────────
     with tab3:
-        st.markdown("### How a single neuron connects to the full training loop")
-        st.markdown("""
-        A single neuron already contains all the ingredients of training:
+        st.markdown("### Full learning step — forward pass → loss → gradient → weight update")
+        st.markdown("A single neuron learning to output a target value from one input.")
 
-        1. **Forward pass** — compute z = w·x + b, then ŷ = activation(z)
-        2. **Loss** — measure how wrong ŷ is: e.g. L = ½(ŷ − y)²
-        3. **Backward pass** — use the chain rule to find dL/dw and dL/db
-        4. **Update** — nudge each weight opposite to its gradient: w ← w − η·dL/dw
-
-        When you stack many neurons into layers, step 3 becomes **backpropagation** —
-        the chain rule applied recursively from the output layer back to the input layer.
-        """)
-
-        col1, col2 = st.columns(2)
+        col1, col2 = st.columns([1, 2])
         with col1:
-            st.markdown("**The chain rule for one neuron:**")
-            st.markdown('<div class="formula-box">'
-                'dL/dw = dL/dŷ &middot; dŷ/dz &middot; dz/dw<br><br>'
-                '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= (ŷ−y) &middot; f&#39;(z) &middot; x'
-                '</div>', unsafe_allow_html=True)
-            st.markdown("""
-            Each factor has a clear role:
-            - **(ŷ−y)** — how wrong is the output?
-            - **f'(z)** — how sensitive is the activation to z?
-            - **x** — how much did this input contribute to z?
-            """)
+            x_learn  = st.slider("Input x", -3.0, 3.0, 1.5, step=0.1, key="nl_x")
+            y_target_n = st.slider("Target output y", -2.0, 2.0, 1.0, step=0.1, key="nl_y")
+            w_learn  = st.slider("Current weight w", -3.0, 3.0, -1.0, step=0.1, key="nl_w")
+            b_learn  = st.slider("Current bias b",   -3.0, 3.0,  0.0, step=0.1, key="nl_b")
+            lr_learn = st.select_slider("Learning rate", [0.01,0.05,0.1,0.3,0.5,1.0], value=0.1, key="nl_lr")
+            act_learn = st.selectbox("Activation", ["None (linear)", "ReLU", "Tanh"], key="nl_act2")
+
+        def fwd(w, b, x, act):
+            z = w*x + b
+            if act == "ReLU":          return max(0.0, z), z
+            elif act == "Tanh":        return float(np.tanh(z)), z
+            else:                      return z, z
+
+        def act_deriv(z, act):
+            if act == "ReLU":    return 1.0 if z > 0 else 0.0
+            elif act == "Tanh":  return 1.0 - float(np.tanh(z))**2
+            else:                return 1.0
+
+        y_hat, z_learn = fwd(w_learn, b_learn, x_learn, act_learn)
+        loss_learn = 0.5*(y_hat - y_target_n)**2
+        dl_dyhat   = y_hat - y_target_n
+        dyhat_dz   = act_deriv(z_learn, act_learn)
+        dz_dw      = x_learn
+        dz_db      = 1.0
+        grad_w = dl_dyhat * dyhat_dz * dz_dw
+        grad_b = dl_dyhat * dyhat_dz * dz_db
+        w_new  = w_learn - lr_learn * grad_w
+        b_new  = b_learn - lr_learn * grad_b
+        y_hat_new, _ = fwd(w_new, b_new, x_learn, act_learn)
+        loss_new = 0.5*(y_hat_new - y_target_n)**2
+
         with col2:
-            st.markdown("**The learning loop:**")
-            st.code("""
-for each batch:
-    # 1. Forward
-    z    = w @ x + b
-    y_hat = activation(z)
-    loss  = criterion(y_hat, y)
+            st.markdown("**Step-by-step breakdown**")
+            st.code(f"""
+FORWARD PASS
+────────────
+z    = w·x + b  =  {w_learn:.2f}·{x_learn:.2f} + {b_learn:.2f}  =  {z_learn:.4f}
+ŷ    = {act_learn}(z)  =  {y_hat:.4f}
+Loss = ½·(ŷ − y)²  =  ½·({y_hat:.4f} − {y_target_n:.2f})²  =  {loss_learn:.4f}
 
-    # 2. Backward
-    loss.backward()   # chain rule
+BACKWARD PASS (chain rule)
+──────────────────────────
+dL/dŷ  = ŷ − y          =  {dl_dyhat:.4f}
+dŷ/dz  = {act_learn}'(z)   =  {dyhat_dz:.4f}
+dz/dw  = x               =  {dz_dw:.4f}
+dz/db  = 1               =  1.0000
 
-    # 3. Update
-    w -= lr * w.grad
-    b -= lr * b.grad
-    optimizer.zero_grad()
-""", language="python")
+grad_w = dL/dŷ · dŷ/dz · dz/dw  =  {grad_w:.4f}
+grad_b = dL/dŷ · dŷ/dz · dz/db  =  {grad_b:.4f}
 
-        st.info("👉 For the full interactive step-by-step breakdown with a 2-layer network, "
-                "see the **Backpropagation** concept in Deep Learning.")
+WEIGHT UPDATE  (lr = {lr_learn})
+────────────────────────────────
+w_new = {w_learn:.4f} − {lr_learn}·({grad_w:.4f})  =  {w_new:.4f}
+b_new = {b_learn:.4f} − {lr_learn}·({grad_b:.4f})  =  {b_new:.4f}
 
-        st.markdown("---")
-        st.markdown("### Why activation functions must be differentiable")
+RESULT
+──────
+Loss before: {loss_learn:.4f}
+Loss after:  {loss_new:.4f}   {'✅ improved' if loss_new < loss_learn else '⚠️ got worse (lr too large?)'}
+""", language="text")
+
+        # show loss landscape and where we moved
+        w_range = np.linspace(-3, 3, 200)
+        loss_curve = np.array([0.5*(fwd(wv, b_learn, x_learn, act_learn)[0] - y_target_n)**2
+                                for wv in w_range])
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=w_range, y=loss_curve,
+            name="Loss vs w", line=dict(color='#AFA9EC', width=2.5)))
+        fig.add_scatter(x=[w_learn], y=[loss_learn], mode='markers',
+            marker=dict(color='#E24B4A', size=14, symbol='circle'), name='Current w')
+        fig.add_annotation(x=w_learn, y=loss_learn, text=f"  before<br>  w={w_learn:.2f}",
+            showarrow=True, arrowhead=2, ax=30, ay=-30, font=dict(color='#E24B4A'))
+        fig.add_scatter(x=[w_new], y=[loss_new], mode='markers',
+            marker=dict(color='#1D9E75', size=14, symbol='star'), name='Updated w')
+        fig.add_annotation(x=w_new, y=loss_new, text=f"  after<br>  w={w_new:.2f}",
+            showarrow=True, arrowhead=2, ax=30, ay=30, font=dict(color='#1D9E75'))
+        fig.add_shape(type='line', x0=w_learn, y0=loss_learn, x1=w_new, y1=loss_new,
+            line=dict(color='#EF9F27', width=2, dash='dash'))
+        fig.update_layout(xaxis_title="Weight w", yaxis_title="Loss",
+            height=340, legend=dict(orientation='h', y=1.12))
+        st.plotly_chart(fig, use_container_width=True)
+
         st.markdown("""
-        The backward pass requires computing f'(z) — the derivative of the activation.
-        This is why step functions (which have zero gradient almost everywhere) can't be
-        used in deep networks: the gradient signal vanishes completely.
-
-        | Activation | f'(z) | Vanishing gradient risk |
-        |---|---|---|
-        | ReLU | 1 if z>0 else 0 | Low (but "dead ReLU" for z<0) |
-        | Sigmoid | σ(z)·(1−σ(z)) | High — max 0.25, shrinks fast |
-        | Tanh | 1 − tanh²(z) | Moderate — max 1.0 at z=0 |
-        | Linear | 1 | None — but no non-linearity |
-
-        > 📖 See **Vanishing Gradients** in Deep Learning for the full treatment.
+        > **This is the full loop:** forward pass computes the output and loss;
+        > the chain rule decomposes how much each weight contributed to the error;
+        > the update nudges every weight in the direction that reduces loss.
+        > Repeat this millions of times across many neurons — that's training a neural network.
         """)
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -3191,10 +3221,9 @@ elif section == "dot_product":
         """)
         st.markdown('<div class="formula-box">score(Q,K) = Q·Kᵀ / √dₖ</div>', unsafe_allow_html=True)
         st.markdown("""
-        **4. Projection** — how much of b lies along a (scalar: a·b̂; vector: (a·b/|b|²)·b).
-        For the full interactive treatment including perpendicular components and the
-        connection to PCA and attention, see **Vector Spaces** in Math Foundations.
+        **4. Projection** — how much of b lies along a:
         """)
+        st.markdown('<div class="formula-box">proj_a(b) = (a·b / |a|²) · a</div>', unsafe_allow_html=True)
 
         st.markdown("### Interactive cosine similarity between two word embeddings (simulated)")
         col1, col2 = st.columns(2)
@@ -4112,46 +4141,20 @@ elif section == "probability":
         c2.metric("Variance", f"{var_d:.3f}")
 
     with tab3:
-        st.markdown("### Entropy & uncertainty — what the shape of a distribution tells you")
-        st.markdown("""
-        Two distributions with the same mean can look completely different in spread.
-        **Entropy** quantifies this uncertainty — a wide, flat distribution has high entropy
-        (many outcomes are nearly equally likely); a sharp, narrow one has low entropy.
-        """)
-        st.markdown('<div class="formula-box">'
-            'H(X) = −Σ p(x) · log p(x)    (discrete)<br>'
-            'H(X) = −∫ p(x) · log p(x) dx  (continuous)<br><br>'
-            'For N(μ, σ²):  H = ½ ln(2πeσ²)'
-            '</div>', unsafe_allow_html=True)
-
-        mean_cmp = st.slider("Shared mean μ", -2.0, 2.0, 0.0, step=0.2, key="prob_mu_cmp")
-        x_cmp = np.linspace(-8, 8, 600)
+        st.markdown("### Shape comparison — same mean, different distributions")
+        mean_cmp = st.slider("Shared mean", -2.0, 2.0, 0.0, step=0.2)
+        x_cmp = np.linspace(-6, 8, 400)
         fig = go.Figure()
-        for sigma_cmp, col_c, lbl in [
-            (0.5,'#E24B4A','σ=0.5  (low entropy, high certainty)'),
-            (1.0,'#534AB7','σ=1.0'),
-            (2.5,'#1D9E75','σ=2.5  (high entropy, high uncertainty)')
-        ]:
+        for sigma_cmp, col_c, lbl in [(0.5,'#E24B4A','σ=0.5 (narrow)'),(1.0,'#534AB7','σ=1.0'),(2.0,'#1D9E75','σ=2.0 (wide)')]:
             y_cmp = np.exp(-0.5*((x_cmp-mean_cmp)/sigma_cmp)**2)/(sigma_cmp*np.sqrt(2*np.pi))
-            entropy = 0.5*np.log(2*np.pi*np.e*sigma_cmp**2)
-            fig.add_trace(go.Scatter(x=x_cmp, y=y_cmp, name=f"{lbl}  H={entropy:.2f}",
-                line=dict(color=col_c, width=2.5)))
+            fig.add_trace(go.Scatter(x=x_cmp, y=y_cmp, name=lbl, line=dict(color=col_c, width=2.5)))
         fig.update_layout(xaxis_title="x", yaxis_title="PDF", height=320,
-            legend=dict(orientation='h', y=1.15))
+            legend=dict(orientation='h', y=1.12))
         st.plotly_chart(fig, use_container_width=True)
-
         st.markdown("""
-        **In ML:**
-        - **VAEs** learn both μ and σ for each latent dimension — a narrow σ means the encoder
-          is confident about where a point belongs; wide σ means uncertainty
-        - **KL divergence** measures how far one distribution is from another — used as the
-          regularisation term in VAE training: KL(q ∥ p)
-        - **Softmax output** forms a categorical distribution — high-entropy outputs signal
-          the model is uncertain between classes
-        - **Cross-entropy loss** = negative log-likelihood under the true distribution
-
-        > 📊 For the connection between σ, variance, and spread in data,
-        > see **Dispersion** in Statistics & Data Science.
+        - **Narrow (low σ)** — model is very certain, low entropy
+        - **Wide (high σ)** — high uncertainty, high entropy
+        - In VAEs and Bayesian ML, learning the right σ is as important as learning the mean
         """)
 
 
