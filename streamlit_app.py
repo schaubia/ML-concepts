@@ -7664,9 +7664,9 @@ elif section == "rag":
             showarrow=False, font=dict(size=11, color="#555"))
         fig.add_annotation(x=3.1, y=2.55, text="<b>Indexing (offline)</b>",
             showarrow=False, font=dict(size=11, color="#888"))
-        fig.add_shape(type="rect", x0=0, y0=3.2, x1=10.5, y1=5.0,
+        fig.add_shape(type="rect", x0=-0.2, y0=3.2, x1=10.7, y1=5.0,
             fillcolor="rgba(83,74,183,0.04)", line=dict(color="#ccc", width=1))
-        fig.add_shape(type="rect", x0=0, y0=0.9, x1=5.5, y1=2.55,
+        fig.add_shape(type="rect", x0=0.9, y0=0.9, x1=5.5, y1=2.55,
             fillcolor="rgba(136,136,136,0.05)", line=dict(color="#ccc", width=1, dash="dot"))
 
         st.plotly_chart(fig, use_container_width=True)
