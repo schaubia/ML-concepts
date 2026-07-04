@@ -7621,10 +7621,10 @@ elif section == "rag":
 
         fig = go.Figure()
         fig.update_layout(
-            xaxis=dict(visible=False, range=[0, 10.5]),
+            xaxis=dict(visible=False, range=[-0.3, 10.8]),
             yaxis=dict(visible=False, range=[0.5, 5.5]),
             height=380, plot_bgcolor="white",
-            margin=dict(l=10, r=10, t=10, b=10),
+            margin=dict(l=30, r=30, t=10, b=10),
         )
 
         box_w, box_h = 1.3, 0.65

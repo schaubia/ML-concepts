@@ -75,6 +75,7 @@ CATALOGUE = [
     ("agent_memory", "Agent Memory Types",        "🧠", "In-context, external (RAG) and parametric memory"),
     ("multi_agent",  "Multi-Agent Systems",        "🤝", "Orchestrators, workers and message passing"),
     ("planning",     "Planning & Task Decomposition","🗺️","Breaking goals into subtasks and dependency graphs"),
+    ("rag",          "RAG Pipeline",               "📚", "Retrieval-Augmented Generation — grounding LLMs in external knowledge"),
     ("react_loop",   "ReAct Loop",                 "🔄", "Reason → Act → Observe cycle for tool-using agents"),
     ("tool_use",     "Tool Use",                   "🔧", "How agents call functions and parse results"),
     # ── Math Foundations ──
@@ -99,7 +100,7 @@ DL_KEYS     = {"activation","attention","backprop","batch_size","cnn","dropout",
                "neural_net","neuron","normalization","optimizers","rnn","vanishing_grad"}
 MATH_KEYS   = {"chain_rule","derivative","dot_product","eigenvalues","embeddings","integral","matrix_ops",
                "partial_deriv","svd","vectors","vector_norms","vector_spaces"}
-AGENT_KEYS  = {"react_loop","tool_use","planning","agent_memory","multi_agent"}
+AGENT_KEYS  = {"react_loop","tool_use","planning","agent_memory","multi_agent","rag"}
 STAT_KEYS   = {"central_tendency","dispersion","probability","naive_bayes","bayes_theorem","correlation","hypothesis_testing","sampling_estimation"}
 # alphabetical within each group
 ALPHA_ML   = sorted([c for c in CATALOGUE if c[0] in ML_KEYS],   key=lambda x: x[1].lower())
@@ -7585,3 +7586,362 @@ elif section == "sampling_estimation":
                 st.markdown(f'<div class="formula-box" style="border-left:4px solid {color}">{effect}</div>',
                     unsafe_allow_html=True)
                 st.caption(reason)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# RAG PIPELINE
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "rag":
+    st.title("📚 RAG Pipeline")
+    st.markdown("""
+    <div class="concept-card">
+    <b>Retrieval-Augmented Generation (RAG)</b> grounds an LLM's responses in external
+    knowledge by retrieving relevant documents at query time and injecting them into the
+    prompt. Instead of relying solely on weights learned during training, the model can
+    access up-to-date, domain-specific, or proprietary information — without retraining.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["The pipeline", "Retrieval — how similarity search works", "RAG vs fine-tuning"])
+
+    # ── TAB 1: Pipeline flow diagram ─────────────────────────────────────
+    with tab1:
+        st.markdown("### End-to-end RAG process flow")
+
+        # Draw the pipeline as an interactive Plotly diagram
+        stages = [
+            ("1. User\nQuery",         0.5,  4.0, "#534AB7", "The user's natural-language question"),
+            ("2. Embed\nQuery",        2.2,  4.0, "#534AB7", "Query → dense vector via embedding model\n(e.g. text-embedding-ada-002)"),
+            ("3. Vector\nSearch",      4.0,  4.0, "#1D9E75", "Cosine similarity against all document\nvectors in the vector store"),
+            ("4. Top-k\nChunks",       5.8,  4.0, "#1D9E75", "Retrieve the k most similar\ndocument chunks"),
+            ("5. Build\nPrompt",       7.6,  4.0, "#EF9F27", "Inject retrieved chunks into\nthe LLM prompt as context"),
+            ("6. LLM\nGenerate",       9.4,  4.0, "#E24B4A", "LLM generates answer\ngrounded in retrieved context"),
+            ("Vector\nStore",          4.0,  1.8, "#1D9E75", "Pre-built index of document\nvectors (offline step)"),
+            ("Document\nIngestion",    2.2,  1.8, "#888",    "Chunk → embed → store\n(offline indexing pipeline)"),
+        ]
+
+        fig = go.Figure()
+        fig.update_layout(
+            xaxis=dict(visible=False, range=[0, 10.5]),
+            yaxis=dict(visible=False, range=[0.5, 5.5]),
+            height=380, plot_bgcolor="white",
+            margin=dict(l=10, r=10, t=10, b=10),
+        )
+
+        box_w, box_h = 1.3, 0.65
+        # Main pipeline arrows
+        for i in range(5):
+            x0 = stages[i][1] + box_w/2
+            x1 = stages[i+1][1] - box_w/2
+            fig.add_annotation(x=x1, y=4.0, ax=x0, ay=4.0,
+                xref="x", yref="y", axref="x", ayref="y",
+                showarrow=True, arrowhead=3, arrowwidth=2, arrowcolor="#555")
+
+        # Vector store arrow up to search
+        fig.add_annotation(x=4.0, y=4.0-box_h/2, ax=4.0, ay=1.8+box_h/2,
+            xref="x", yref="y", axref="x", ayref="y",
+            showarrow=True, arrowhead=2, arrowwidth=1.5, arrowcolor="#1D9E75")
+
+        # Document ingestion arrow to vector store
+        fig.add_annotation(x=4.0-box_w/2, y=1.8, ax=2.2+box_w/2, ay=1.8,
+            xref="x", yref="y", axref="x", ayref="y",
+            showarrow=True, arrowhead=2, arrowwidth=1.5, arrowcolor="#888")
+
+        # Draw boxes
+        for label, cx, cy, color, tooltip in stages:
+            is_offline = cy < 3.0
+            fig.add_shape(type="rect",
+                x0=cx-box_w/2, y0=cy-box_h/2, x1=cx+box_w/2, y1=cy+box_h/2,
+                fillcolor=color if not is_offline else "white",
+                line=dict(color=color, width=2, dash="dot" if is_offline else "solid"),
+                opacity=0.85)
+            fig.add_annotation(x=cx, y=cy,
+                text=f"<b>{label}</b>", showarrow=False,
+                font=dict(size=10, color="white" if not is_offline else color),
+                align="center")
+
+        # Labels
+        fig.add_annotation(x=5.2, y=5.3, text="<b>Query-time (online)</b>",
+            showarrow=False, font=dict(size=11, color="#555"))
+        fig.add_annotation(x=3.1, y=2.55, text="<b>Indexing (offline)</b>",
+            showarrow=False, font=dict(size=11, color="#888"))
+        fig.add_shape(type="rect", x0=0, y0=3.2, x1=10.5, y1=5.0,
+            fillcolor="rgba(83,74,183,0.04)", line=dict(color="#ccc", width=1))
+        fig.add_shape(type="rect", x0=0, y0=0.9, x1=5.5, y1=2.55,
+            fillcolor="rgba(136,136,136,0.05)", line=dict(color="#ccc", width=1, dash="dot"))
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Stage-by-stage detail
+        selected_stage = st.selectbox("Zoom into a stage", [
+            "1. User Query",
+            "2. Embed Query",
+            "3. Vector Search",
+            "4. Top-k Chunks",
+            "5. Build Prompt",
+            "6. LLM Generate",
+            "Offline: Document Ingestion & Indexing",
+        ], key="rag_stage")
+
+        details = {
+            "1. User Query": (
+                "The user asks a natural-language question — no special syntax needed.",
+                'Example: *"What were the key findings of the Q3 2024 earnings report?"*',
+                "The query can be a question, a keyword, or even a sentence fragment. RAG works with all of them.",
+            ),
+            "2. Embed Query": (
+                "The query is converted into a dense vector using the **same embedding model** used to index the documents.",
+                '<div class="formula-box">query_vec = embed_model(query)  → ℝᵈ</div>',
+                "Critical: query and documents **must use the same embedding model** — mismatched models break similarity search.",
+            ),
+            "3. Vector Search": (
+                "The query vector is compared against all stored document vectors using cosine similarity (or dot product for normalised vectors).",
+                '<div class="formula-box">score(q, dᵢ) = q · dᵢ / (‖q‖ · ‖dᵢ‖)</div>',
+                "Modern vector databases (Pinecone, Weaviate, pgvector, FAISS) do this in milliseconds even over millions of vectors using approximate nearest-neighbour (ANN) algorithms.",
+            ),
+            "4. Top-k Chunks": (
+                "The k documents/chunks with the highest similarity scores are retrieved.",
+                "Typical k = 3–10. Too few → missing context. Too many → prompt bloat and distraction.",
+                "A **reranker** (e.g. cross-encoder) is sometimes applied as a second-pass to reorder the top-k by relevance before injection.",
+            ),
+            "5. Build Prompt": (
+                "Retrieved chunks are injected into the LLM prompt as context, typically before the user question.",
+                "```\nSYSTEM: You are a helpful assistant. Use the context below to answer.\n\nCONTEXT:\n[chunk 1]...\n[chunk 2]...\n\nQUESTION: {user_query}\nANSWER:\n```",
+                "Prompt design matters enormously — instruct the model to cite sources, say 'I don't know' if context is insufficient, and not to hallucinate beyond the context.",
+            ),
+            "6. LLM Generate": (
+                "The LLM generates an answer conditioned on both the retrieved context and its parametric knowledge.",
+                "A well-designed RAG system instructs the model to **prefer the retrieved context** over its training knowledge — reducing hallucination.",
+                "Post-generation, a **faithfulness check** can verify whether the answer is grounded in the retrieved chunks (e.g. via an LLM-as-judge).",
+            ),
+            "Offline: Document Ingestion & Indexing": (
+                "Before RAG can work, documents must be pre-processed: **chunk** → **embed** → **store**.",
+                "**Chunking strategy** is critical: too small = lost context; too large = irrelevant noise mixed in. Common approaches: fixed-size with overlap, sentence-aware, or semantic chunking.",
+                "The resulting vector index is stored in a vector database and updated whenever documents are added or changed — unlike fine-tuning, this requires no model retraining.",
+            ),
+        }
+        title, formula_or_example, note = details[selected_stage]
+        st.markdown(f"**{title}**")
+        if formula_or_example.startswith('<'):
+            st.markdown(formula_or_example, unsafe_allow_html=True)
+        elif formula_or_example.startswith('```'):
+            st.code(formula_or_example.strip('`\n').replace('```\n','').replace('\n```',''), language="text")
+        else:
+            st.markdown(formula_or_example)
+        st.caption(note)
+
+    # ── TAB 2: How retrieval works ────────────────────────────────────────
+    with tab2:
+        st.markdown("### Retrieval — similarity search in embedding space")
+        st.markdown("""
+        The heart of RAG is finding the documents most semantically similar to the query.
+        This is exactly **cosine similarity in embedding space** — the same operation
+        covered in the Embeddings and Vector Spaces concepts.
+        """)
+        st.markdown('<div class="formula-box">score(q, d) = (q · d) / (‖q‖ · ‖d‖)  ∈ [−1, 1]</div>',
+            unsafe_allow_html=True)
+
+        # Simulate a toy retrieval scenario
+        st.markdown("### Interactive: toy document retrieval")
+        st.markdown("Simulated 2D embeddings — in practice these are 768–3072 dimensional.")
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            query_topic = st.selectbox("Query topic", [
+                "machine learning", "cooking recipes", "financial markets",
+                "climate change", "sports results"
+            ], key="rag_query")
+            top_k = st.slider("Top-k to retrieve", 1, 5, 3, key="rag_k")
+            threshold = st.slider("Similarity threshold", 0.0, 1.0, 0.3, step=0.05, key="rag_thresh")
+
+        # Toy document embeddings clustered by topic
+        docs = {
+            "ML paper: transformers":        (np.array([0.8,  0.6]),  "machine learning"),
+            "ML blog: neural networks":      (np.array([0.9,  0.5]),  "machine learning"),
+            "ML tutorial: gradient descent": (np.array([0.7,  0.7]),  "machine learning"),
+            "Recipe: pasta carbonara":       (np.array([-0.7, 0.6]),  "cooking recipes"),
+            "Recipe: chocolate cake":        (np.array([-0.8, 0.5]),  "cooking recipes"),
+            "Finance: stock market outlook": (np.array([0.2, -0.9]),  "financial markets"),
+            "Finance: interest rates":       (np.array([0.1, -0.8]),  "financial markets"),
+            "Climate: CO2 emissions":        (np.array([-0.5,-0.7]),  "climate change"),
+            "Sports: Premier League":        (np.array([0.3,  0.9]),  "sports results"),
+            "Sports: Olympics 2024":         (np.array([0.4,  0.85]), "sports results"),
+        }
+        query_centroids = {
+            "machine learning":   np.array([0.82, 0.58]),
+            "cooking recipes":    np.array([-0.73, 0.55]),
+            "financial markets":  np.array([0.15, -0.87]),
+            "climate change":     np.array([-0.48, -0.73]),
+            "sports results":     np.array([0.34, 0.90]),
+        }
+        q_vec = query_centroids[query_topic] + np.random.default_rng(7).normal(0, 0.04, 2)
+        q_vec = q_vec / np.linalg.norm(q_vec)
+
+        # Compute similarities
+        sims = {}
+        for doc_name, (dvec, topic) in docs.items():
+            dvec_n = dvec / np.linalg.norm(dvec)
+            sims[doc_name] = float(np.dot(q_vec, dvec_n))
+
+        ranked = sorted(sims.items(), key=lambda x: -x[1])
+        retrieved = [(name, score) for name, score in ranked[:top_k] if score >= threshold]
+
+        with col1:
+            st.markdown("**Similarity scores (ranked):**")
+            for name, score in ranked:
+                bar_len = int(max(0, score) * 20)
+                bar = "█" * bar_len
+                retrieved_flag = "✅" if (name, score) in retrieved else "  "
+                st.markdown(f"{retrieved_flag} `{score:+.2f}` {bar}  \n&nbsp;&nbsp;&nbsp;&nbsp;*{name}*")
+
+        with col2:
+            fig = go.Figure()
+            topic_colors = {
+                "machine learning": "#534AB7", "cooking recipes": "#1D9E75",
+                "financial markets": "#E24B4A", "climate change": "#EF9F27",
+                "sports results": "#D4537E"
+            }
+            retrieved_names = {n for n, _ in retrieved}
+
+            for doc_name, (dvec, topic) in docs.items():
+                dvec_n = dvec / np.linalg.norm(dvec)
+                is_ret = doc_name in retrieved_names
+                fig.add_trace(go.Scatter(
+                    x=[dvec_n[0]], y=[dvec_n[1]], mode="markers+text",
+                    marker=dict(
+                        size=18 if is_ret else 10,
+                        color=topic_colors[topic],
+                        symbol="star" if is_ret else "circle",
+                        line=dict(color="#333", width=1.5 if is_ret else 0.5),
+                    ),
+                    text=[doc_name.split(":")[0]], textposition="top center",
+                    textfont=dict(size=9),
+                    showlegend=False,
+                ))
+                # Line from origin to point
+                fig.add_trace(go.Scatter(
+                    x=[0, dvec_n[0]], y=[0, dvec_n[1]], mode="lines",
+                    line=dict(color=topic_colors[topic], width=1, dash="dot"),
+                    showlegend=False, opacity=0.4
+                ))
+
+            # Query vector
+            fig.add_annotation(x=q_vec[0], y=q_vec[1], ax=0, ay=0,
+                xref="x", yref="y", axref="x", ayref="y",
+                showarrow=True, arrowhead=3, arrowwidth=3, arrowcolor="#222",
+                text="<b>Query</b>", font=dict(color="#222", size=12))
+
+            # Unit circle
+            theta_c = np.linspace(0, 2*np.pi, 200)
+            fig.add_trace(go.Scatter(x=np.cos(theta_c), y=np.sin(theta_c),
+                mode="lines", line=dict(color="#eee", width=1), showlegend=False))
+
+            fig.update_layout(
+                height=430,
+                xaxis=dict(range=[-1.3,1.3], zeroline=True, zerolinecolor="#eee",
+                           scaleanchor="y", title="dim 1"),
+                yaxis=dict(range=[-1.3,1.3], zeroline=True, zerolinecolor="#eee", title="dim 2"),
+                plot_bgcolor="white", showlegend=False,
+                margin=dict(l=40, r=20, t=20, b=40),
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption("Stars = retrieved documents. Black arrow = query vector. "
+                       "Cosine similarity = angle between query and each document vector.")
+
+        if retrieved:
+            st.success(f"Retrieved {len(retrieved)} document(s) above threshold {threshold:.2f}: "
+                       + " | ".join(f"*{n}* ({s:.2f})" for n,s in retrieved))
+        else:
+            st.warning(f"No documents above threshold {threshold:.2f}. Lower the threshold or change the query.")
+
+        st.markdown("---")
+        st.markdown("### Key retrieval design decisions")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.markdown("**Chunking**")
+            st.markdown("""
+            - Fixed-size (e.g. 512 tokens, 50-token overlap)
+            - Sentence / paragraph aware
+            - Semantic chunking (split at topic boundaries)
+            - Smaller chunks → more precise retrieval; larger → more context per hit
+            """)
+        with col2:
+            st.markdown("**Embedding model**")
+            st.markdown("""
+            - Must match at index and query time
+            - General: `text-embedding-3-large`, `BGE`, `E5`
+            - Domain-specific models outperform general ones on specialist corpora
+            - Dimension 768–3072; higher → richer but slower
+            """)
+        with col3:
+            st.markdown("**Search algorithm**")
+            st.markdown("""
+            - Exact: brute-force cosine (small corpora)
+            - ANN: HNSW, IVF, ScaNN (millions of vectors)
+            - Hybrid: sparse (BM25 keyword) + dense (embedding) — often best
+            - Reranker as second-pass improves precision
+            """)
+
+    # ── TAB 3: RAG vs fine-tuning ─────────────────────────────────────────
+    with tab3:
+        st.markdown("### RAG vs fine-tuning — when to use which")
+        st.markdown("""
+        Both RAG and fine-tuning can improve an LLM's performance on a specific task,
+        but they solve different problems. Choosing wrong is expensive.
+        """)
+
+        import pandas as pd
+        rows = [
+            ("Knowledge type",        "Factual, retrievable documents",         "Style, format, reasoning patterns"),
+            ("Knowledge freshness",   "✅ Update index, no retraining",         "❌ Retrain to add new knowledge"),
+            ("Data required",         "Document corpus (unstructured OK)",      "High-quality prompt-completion pairs"),
+            ("Cost",                  "✅ Low — embedding + vector DB",         "❌ High — GPU training time"),
+            ("Latency",               "⚠️ Adds retrieval step (~50–200ms)",     "✅ No retrieval overhead"),
+            ("Hallucination risk",    "✅ Lower — answer grounded in docs",     "❌ Higher — relies on memorisation"),
+            ("Auditability",          "✅ Can cite source chunks",              "❌ Knowledge baked into weights"),
+            ("Handles novel queries", "✅ Retrieves relevant docs dynamically", "⚠️ Only what was in training data"),
+            ("Private data",          "✅ Keep data in your own vector DB",     "⚠️ Data used in training run"),
+            ("Adapting tone/style",   "❌ Doesn't change model behaviour",     "✅ Strong — model learns the style"),
+            ("Domain reasoning",      "⚠️ Depends on base model capability",   "✅ Model learns domain-specific logic"),
+        ]
+        df = pd.DataFrame(rows, columns=["Dimension", "RAG", "Fine-tuning"])
+        st.dataframe(df, use_container_width=True, hide_index=True)
+
+        st.markdown("---")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("### When RAG is the right choice")
+            st.markdown("""
+            - Your knowledge base changes frequently (product docs, news, regulations)
+            - You need to cite sources or show your work
+            - You have proprietary data that can't leave your infrastructure
+            - You want to add knowledge without touching the model
+            - Your queries are diverse and hard to anticipate at training time
+            - Budget is constrained — indexing is cheap, training is not
+
+            **Common RAG stacks:** LangChain / LlamaIndex + pgvector / Pinecone / Weaviate + OpenAI / Anthropic
+            """)
+        with col2:
+            st.markdown("### When fine-tuning is the right choice")
+            st.markdown("""
+            - You need the model to adopt a specific **tone, format, or persona** consistently
+            - The task requires **domain-specific reasoning** the base model doesn't have
+            - You want faster inference without a retrieval round-trip
+            - Your knowledge is **stable** and well-captured in training examples
+            - You want to **distil** a large model's capability into a smaller one
+            - The base model frequently makes the same **systematic errors** on your task
+
+            **Common fine-tuning approaches:** LoRA / QLoRA, full fine-tune, RLHF, DPO
+            """)
+
+        st.markdown("---")
+        st.markdown("### Advanced RAG patterns")
+        patterns = [
+            ("Naive RAG", "Query → retrieve → generate. Simple but suffers when query is vague."),
+            ("HyDE", "Generate a hypothetical answer first, embed that, then retrieve. Improves recall for abstract queries."),
+            ("RAG Fusion", "Expand query into multiple sub-queries, retrieve for each, fuse results. Better coverage."),
+            ("Agentic RAG", "LLM decides when and what to retrieve — can issue multiple retrieval calls in a ReAct loop."),
+            ("GraphRAG", "Documents represented as a knowledge graph; retrieval traverses relationships, not just similarity."),
+        ]
+        for name, desc in patterns:
+            with st.expander(f"**{name}**"):
+                st.markdown(desc)
