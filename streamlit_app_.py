@@ -76,6 +76,7 @@ CATALOGUE = [
     ("multi_agent",  "Multi-Agent Systems",        "🤝", "Orchestrators, workers and message passing"),
     ("planning",     "Planning & Task Decomposition","🗺️","Breaking goals into subtasks and dependency graphs"),
     ("rag",          "RAG Pipeline",               "📚", "Retrieval-Augmented Generation — grounding LLMs in external knowledge"),
+    ("reflection",   "Reflection & Self-Critique",  "🪞", "Generate, critique and revise — how agents improve their own output"),
     ("react_loop",   "ReAct Loop",                 "🔄", "Reason → Act → Observe cycle for tool-using agents"),
     ("tool_use",     "Tool Use",                   "🔧", "How agents call functions and parse results"),
     # ── Math Foundations ──
@@ -100,7 +101,7 @@ DL_KEYS     = {"activation","attention","backprop","batch_size","cnn","dropout",
                "neural_net","neuron","normalization","optimizers","rnn","vanishing_grad"}
 MATH_KEYS   = {"chain_rule","derivative","dot_product","eigenvalues","embeddings","integral","matrix_ops",
                "partial_deriv","svd","vectors","vector_norms","vector_spaces"}
-AGENT_KEYS  = {"react_loop","tool_use","planning","agent_memory","multi_agent","rag"}
+AGENT_KEYS  = {"react_loop","tool_use","planning","agent_memory","multi_agent","rag","reflection"}
 STAT_KEYS   = {"central_tendency","dispersion","probability","naive_bayes","bayes_theorem","correlation","hypothesis_testing","sampling_estimation"}
 # alphabetical within each group
 ALPHA_ML   = sorted([c for c in CATALOGUE if c[0] in ML_KEYS],   key=lambda x: x[1].lower())
@@ -5022,6 +5023,193 @@ elif section == "multi_agent":
         for q, a in decisions.items():
             with st.expander(q):
                 st.markdown(a)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# REFLECTION & SELF-CRITIQUE
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "reflection":
+    st.title("🪞 Reflection & Self-Critique")
+    st.markdown("""
+    <div class="concept-card">
+    <b>Reflection</b> is an agentic pattern where the model doesn't just produce an answer —
+    it <b>critiques its own output</b> against the goal, then <b>revises</b>. Instead of a single
+    forward pass, the agent loops through <b>Generate → Critique → Revise</b> until the result is
+    good enough or a step budget runs out. This is the core idea behind methods like
+    <b>Self-Refine</b> and <b>Reflexion</b>, and it's one of the most reliable ways to improve
+    agent output quality without any extra training.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Reflection loop simulation", "Why it works"])
+
+    with tab1:
+        st.markdown("### Watch a draft improve across reflection rounds")
+
+        TASKS = {
+            "Write a cold outreach email": [
+                ("Draft", "Hi, I saw your company and think we should talk. Let me know if interested.",
+                 "✍️", "#534AB7", 35),
+                ("Critique", "Too generic — no specific value proposition, no clear ask, could be sent to anyone.",
+                 "🔍", "#E24B4A", None),
+                ("Revise", "Hi Maria, I noticed your team shipped the new billing API — nice work. We built a tool "
+                 "that cuts integration time in half; open to a 15-min call this week?",
+                 "✏️", "#1D9E75", 78),
+                ("Critique", "Better and specific, but the opening compliment feels slightly generic. Tighten the CTA.",
+                 "🔍", "#E24B4A", None),
+                ("Revise", "Hi Maria, saw the new billing API your team shipped last week — the webhook retry logic "
+                 "was clever. We built a tool that cuts integration time like that in half. Worth a 15-min call Thursday?",
+                 "✏️", "#1D9E75", 93),
+            ],
+            "Summarise a technical incident report": [
+                ("Draft", "The system had an error and it was fixed after some investigation.",
+                 "✍️", "#534AB7", 25),
+                ("Critique", "Missing root cause, impact, and timeline — reads as filler, not a summary.",
+                 "🔍", "#E24B4A", None),
+                ("Revise", "A misconfigured cache TTL caused a 12-minute outage affecting 8% of API requests; "
+                 "fixed by rolling back the config and adding a canary check.",
+                 "✏️", "#1D9E75", 82),
+                ("Critique", "Good detail. Could still clarify who was affected and add a one-line prevention step.",
+                 "🔍", "#E24B4A", None),
+                ("Revise", "A misconfigured cache TTL caused a 12-minute outage for EU-region API requests (8% of "
+                 "traffic); rolled back and added a canary check. Prevention: TTL changes now require staged rollout.",
+                 "✏️", "#1D9E75", 96),
+            ],
+            "Solve a word problem": [
+                ("Draft", "A train travels 60 miles in 1.5 hours, so its speed is 60/1.5... about 45 mph.",
+                 "✍️", "#534AB7", 20),
+                ("Critique", "Arithmetic error: 60 ÷ 1.5 = 40, not 45. Recompute before finalising.",
+                 "🔍", "#E24B4A", None),
+                ("Revise", "60 miles ÷ 1.5 hours = 40 mph.",
+                 "✏️", "#1D9E75", 90),
+                ("Critique", "Correct now, but doesn't show the check step — verify by multiplying back.",
+                 "🔍", "#E24B4A", None),
+                ("Revise", "60 ÷ 1.5 = 40 mph. Check: 40 mph × 1.5 h = 60 miles ✓. Answer: 40 mph.",
+                 "✏️", "#1D9E75", 99),
+            ],
+        }
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            task = st.selectbox("Task", list(TASKS.keys()))
+            steps = TASKS[task]
+            n_steps = len(steps)
+            step_idx = st.slider("Show up to step", 1, n_steps, 1,
+                help="Drag to reveal each generate/critique/revise round")
+            st.markdown("---")
+            st.markdown("**Step types:**")
+            for label, col_s in [("✍️ Draft/Generate","#534AB7"),("🔍 Critique","#E24B4A"),
+                                   ("✏️ Revise","#1D9E75")]:
+                st.markdown(f'<span style="color:{col_s}">●</span> {label}', unsafe_allow_html=True)
+
+        with col2:
+            for i, (stype, content_s, icon, color, score) in enumerate(steps[:step_idx]):
+                bg = "#f0eefc" if stype == "Draft" else \
+                     "#fdecea" if stype == "Critique" else "#f0faf5"
+                score_html = f'<span style="float:right;font-weight:700">{score}/100</span>' if score is not None else ""
+                st.markdown(f"""
+                <div style="border-left:2px solid {color};background:{bg};
+                            padding:0.7rem 1rem;border-radius:0 8px 8px 0;
+                            margin-bottom:8px">
+                    <div style="font-size:0.75rem;font-weight:600;color:{color};
+                                text-transform:uppercase;letter-spacing:0.05em">
+                        {icon} {stype} — step {i+1}{score_html}</div>
+                    <div style="font-size:0.9rem;margin-top:4px">{content_s}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            if step_idx < n_steps:
+                st.caption(f"▶ {n_steps - step_idx} more step{'s' if n_steps-step_idx>1 else ''} to go")
+            else:
+                st.success("✅ Converged to a high-quality final answer")
+
+        # quality trajectory chart
+        scores_shown = [(i+1, s[4]) for i, s in enumerate(steps[:step_idx]) if s[4] is not None]
+        if scores_shown:
+            xs, ys = zip(*scores_shown)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=list(xs), y=list(ys), mode="lines+markers",
+                line=dict(color="#1D9E75", width=3), marker=dict(size=10, color="#1D9E75"),
+                name="Quality score"))
+            fig.update_layout(title="Output quality across reflection rounds",
+                xaxis=dict(title="Step", tickmode="array", tickvals=list(xs)),
+                yaxis=dict(title="Quality score", range=[0, 100]),
+                height=280, margin=dict(l=40, r=20, t=40, b=40))
+            st.plotly_chart(fig, use_container_width=True)
+
+    with tab2:
+        st.markdown("### The generate → critique → revise cycle")
+        fig = go.Figure()
+        fig.update_layout(xaxis=dict(visible=False, range=[0, 10]),
+            yaxis=dict(visible=False, range=[0, 10]),
+            height=380, plot_bgcolor="white",
+            margin=dict(l=20, r=20, t=20, b=20))
+
+        nodes = [
+            (2, 7, "✍️ GENERATE\n(Draft answer)", "#EDE9FE", "#534AB7", 12),
+            (8, 7, "🔍 CRITIQUE\n(Self-evaluate)", "#FDECEA", "#B71C1C", 12),
+            (5, 3, "✏️ REVISE\n(Improve draft)", "#E8F5E9", "#1B5E20", 12),
+            (5, 0.7, "✅ Good enough?\nStop.", "#FFF8E1", "#8A6D00", 11),
+        ]
+        for x, y, label, fill, border, fsize in nodes:
+            w, h = 1.6, 0.8
+            fig.add_shape(type="rect", x0=x-w, y0=y-h, x1=x+w, y1=y+h,
+                fillcolor=fill, line=dict(color=border, width=2.5), layer="below")
+            for di, line in enumerate(label.split("\n")):
+                fig.add_annotation(x=x, y=y + 0.2 - di*0.45, text=line,
+                    showarrow=False, font=dict(size=fsize, color=border))
+
+        arrows = [
+            (3.6, 7, 6.4, 7, "draft"),
+            (8, 6.2, 6, 3.8, "critique"),
+            (4, 3.8, 2, 6.2, "loop back if not done"),
+            (5, 2.2, 5, 1.5, "check"),
+        ]
+        for x0, y0, x1, y1, lbl in arrows:
+            fig.add_shape(type="line", x0=x0, y0=y0, x1=x1, y1=y1,
+                line=dict(color="#888", width=1.5))
+            if lbl:
+                mx, my = (x0+x1)/2, (y0+y1)/2
+                fig.add_annotation(x=mx, y=my, text=lbl, showarrow=False,
+                    font=dict(size=9, color="#555"),
+                    bgcolor="rgba(255,255,255,0.7)", borderpad=1)
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("### Why reflection improves output")
+        cols = st.columns(3)
+        with cols[0]:
+            st.markdown("**🎯 Separates generation from evaluation**")
+            st.caption("Critiquing is often an easier task than producing the right answer the "
+                       "first time — the model just has to spot what's wrong.")
+        with cols[1]:
+            st.markdown("**🔁 More inference-time compute**")
+            st.caption("Extra reasoning steps at inference time trade latency/cost for quality, "
+                       "similar to how deeper search improves game-playing agents.")
+        with cols[2]:
+            st.markdown("**🧯 Catches errors before the user sees them**")
+            st.caption("Factual slips, weak arguments, or arithmetic mistakes get caught and "
+                       "fixed internally instead of shipping in the final answer.")
+
+        st.markdown("### Common variants")
+        variants = [
+            ("Self-Refine", "Same model plays generator and critic, iterating on its own output with no external feedback."),
+            ("Reflexion", "Adds persistent memory of past mistakes across attempts, so the agent avoids repeating them."),
+            ("Actor–Critic agents", "A separate critic model or rubric scores the actor's output, decoupling the two roles."),
+            ("RAG-grounded critique", "Critique step checks the draft against retrieved sources to catch factual errors."),
+        ]
+        st.dataframe(pd.DataFrame(variants, columns=["Variant", "Description"]),
+            use_container_width=True, hide_index=True)
+
+        st.markdown("""
+        <div class="concept-card">
+        <b>Trade-off:</b> reflection costs extra tokens and latency for every round — it's most
+        valuable for tasks where correctness matters more than speed (code, math, high-stakes
+        writing), and least valuable for simple, low-risk generations. It also composes with the
+        <b>ReAct Loop</b> (reflection can trigger a new tool call) and <b>Multi-Agent Systems</b>
+        (the critic can be a separate agent rather than the same model wearing two hats).
+        </div>
+        """, unsafe_allow_html=True)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # VECTOR NORMS

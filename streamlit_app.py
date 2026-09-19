@@ -60,6 +60,7 @@ CATALOGUE = [
     ("central_tendency",  "Central Tendency",           "📊", "Mean, median and mode — summarising where data is centred"),
     ("cnn",           "Convolutional Layer (CNN)",      "🖼️", "Kernel sliding over input to detect local patterns"),
     ("correlation",       "Correlation & Covariance",    "📈", "How variables move together — Pearson r and the covariance matrix"),
+    ("cooks_distance",    "Cook's Distance",            "🎯", "How much one data point alone can drag a regression line around"),
     ("dispersion",        "Dispersion",                  "📏", "Variance, std dev, IQR — how spread out data is"),
     ("hypothesis_testing","Hypothesis Testing",          "🧪", "p-values, t-tests and statistical significance"),
     ("sampling_estimation","Sampling & Estimation",     "🎯", "Standard error, confidence intervals and the Central Limit Theorem"),
@@ -102,7 +103,7 @@ DL_KEYS     = {"activation","attention","backprop","batch_size","cnn","dropout",
 MATH_KEYS   = {"chain_rule","derivative","dot_product","eigenvalues","embeddings","integral","matrix_ops",
                "partial_deriv","svd","vectors","vector_norms","vector_spaces"}
 AGENT_KEYS  = {"react_loop","tool_use","planning","agent_memory","multi_agent","rag","reflection"}
-STAT_KEYS   = {"central_tendency","dispersion","probability","naive_bayes","bayes_theorem","correlation","hypothesis_testing","sampling_estimation"}
+STAT_KEYS   = {"central_tendency","dispersion","probability","naive_bayes","bayes_theorem","correlation","hypothesis_testing","sampling_estimation","cooks_distance"}
 # alphabetical within each group
 ALPHA_ML   = sorted([c for c in CATALOGUE if c[0] in ML_KEYS],   key=lambda x: x[1].lower())
 ALPHA_DL   = sorted([c for c in CATALOGUE if c[0] in DL_KEYS],   key=lambda x: x[1].lower())
@@ -7246,6 +7247,134 @@ elif section == "correlation":
         """)
         st.markdown('<div class="formula-box">ρ = 1 − 6Σdᵢ² / (n(n²−1))   where dᵢ = rank(xᵢ) − rank(yᵢ)</div>',
             unsafe_allow_html=True)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# COOK'S DISTANCE
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "cooks_distance":
+    st.title("🎯 Cook's Distance")
+    st.markdown("""
+    <div class="concept-card">
+    <b>Cook's distance</b> measures how much the fitted regression line would change if
+    a single point were removed from the dataset. A point earns a high Cook's distance
+    by combining two things: an unusual <b>x</b> position (<em>leverage</em>) and a
+    <b>large residual</b> (the model fits it badly). Either alone is often harmless —
+    together, they mean one point is quietly steering the whole model.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Interactive influence", "Leverage vs. residual"])
+
+    def _fit_ols(x, y):
+        n = len(x)
+        X_mat = np.column_stack([x, np.ones(n)])
+        beta = np.linalg.lstsq(X_mat, y, rcond=None)[0]
+        y_pred = X_mat @ beta
+        resid = y - y_pred
+        p = X_mat.shape[1]
+        H = X_mat @ np.linalg.pinv(X_mat.T @ X_mat) @ X_mat.T
+        h = np.clip(np.diag(H), 1e-9, 1 - 1e-9)
+        mse = np.sum(resid ** 2) / max(n - p, 1)
+        cooks_d = (resid ** 2 / (p * mse)) * (h / (1 - h) ** 2)
+        return beta, resid, h, cooks_d, mse
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            n_cd = st.slider("Number of points", 10, 40, 20, key="cd_n")
+            noise_cd = st.slider("Noise", 0.1, 2.0, 0.6, step=0.1, key="cd_noise")
+            outlier_idx = st.slider("Point to displace", 0, n_cd - 1, 0, key="cd_idx")
+            outlier_x_shift = st.slider("Push its x outward", 0.0, 6.0, 0.0, step=0.2, key="cd_xshift",
+                help="Increases leverage — how extreme this point's x position is")
+            outlier_y_shift = st.slider("Push its y away from the line", 0.0, 8.0, 0.0, step=0.2, key="cd_yshift",
+                help="Increases the residual — how badly the point is fit")
+
+        np.random.seed(7)
+        x_cd = np.random.uniform(-4, 4, n_cd)
+        y_cd = 1.2 * x_cd + 0.5 + np.random.normal(0, noise_cd, n_cd)
+        # x-shift pushes the point to the right edge and beyond (pure leverage control);
+        # y-shift is then applied relative to the true line at its new x (pure residual
+        # control) — this keeps both sliders monotonic no matter where the point started.
+        x_cd[outlier_idx] = 4.0 + outlier_x_shift
+        y_cd[outlier_idx] = 1.2 * x_cd[outlier_idx] + 0.5 + outlier_y_shift
+
+        beta_full, resid_full, h_full, cooks_full, mse_full = _fit_ols(x_cd, y_cd)
+
+        mask = np.ones(n_cd, dtype=bool)
+        mask[outlier_idx] = False
+        beta_loo = np.linalg.lstsq(
+            np.column_stack([x_cd[mask], np.ones(mask.sum())]), y_cd[mask], rcond=None)[0]
+
+        with col2:
+            fig = go.Figure()
+            colors = np.where(np.arange(n_cd) == outlier_idx, "#E24B4A", "#534AB7")
+            sizes = np.where(np.arange(n_cd) == outlier_idx, 13, 7)
+            fig.add_trace(go.Scatter(x=x_cd, y=y_cd, mode='markers', name='Data',
+                marker=dict(color=colors, size=sizes)))
+            x_fit = np.linspace(min(x_cd.min(), -5), max(x_cd.max(), 5), 100)
+            fig.add_trace(go.Scatter(x=x_fit, y=beta_full[0] * x_fit + beta_full[1],
+                name=f'With all points: y={beta_full[0]:.2f}x + {beta_full[1]:.2f}',
+                line=dict(color='#534AB7', width=2.5)))
+            fig.add_trace(go.Scatter(x=x_fit, y=beta_loo[0] * x_fit + beta_loo[1],
+                name=f'Without flagged point: y={beta_loo[0]:.2f}x + {beta_loo[1]:.2f}',
+                line=dict(color='#E24B4A', width=2, dash='dash')))
+            fig.update_layout(xaxis_title="x", yaxis_title="y",
+                height=360, legend=dict(orientation='h', y=1.16))
+            st.plotly_chart(fig, use_container_width=True)
+
+        thresh = 4 / n_cd
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Cook's D (flagged point)", f"{cooks_full[outlier_idx]:.3f}")
+        c2.metric("Leverage hᵢᵢ", f"{h_full[outlier_idx]:.3f}")
+        c3.metric("Residual", f"{resid_full[outlier_idx]:+.2f}")
+        c4.metric("Rule-of-thumb cutoff (4/n)", f"{thresh:.3f}")
+
+        fig_bar = go.Figure()
+        bar_colors = np.where(cooks_full > thresh, "#E24B4A", "#534AB7")
+        fig_bar.add_trace(go.Bar(x=[f"P{i}" for i in range(n_cd)], y=cooks_full,
+            marker_color=bar_colors, name="Cook's D"))
+        fig_bar.add_hline(y=thresh, line=dict(color="#EF9F27", dash="dot"),
+            annotation_text="4/n cutoff", annotation_position="top left")
+        fig_bar.update_layout(xaxis_title="Point", yaxis_title="Cook's distance", height=280)
+        st.plotly_chart(fig_bar, use_container_width=True)
+        st.caption("Bars above the orange line are flagged as unusually influential — "
+                   "the model's fit depends meaningfully on that single point.")
+
+    with tab2:
+        st.markdown("""
+        Cook's distance is really a **combination of two ingredients**:
+        """)
+        st.markdown('<div class="formula-box">Dᵢ = eᵢ² / (p·MSE) · hᵢᵢ / (1−hᵢᵢ)²</div>',
+            unsafe_allow_html=True)
+        st.markdown("""
+        - **eᵢ** — the residual at point *i* (how far off the prediction is)
+        - **hᵢᵢ** — the *leverage* of point *i* (how extreme its x-value is; from the diagonal
+          of the hat matrix **H = X(XᵀX)⁻¹Xᵀ**)
+        - **p** — number of fitted parameters (2 for simple linear regression: slope + intercept)
+
+        A point needs **both** a sizeable residual **and** high leverage to get a large
+        Cook's distance — that's why it catches influence that plain residual plots miss.
+        """)
+
+        quad_labels = ["Low leverage,\nlow residual", "High leverage,\nlow residual",
+                       "Low leverage,\nhigh residual", "High leverage,\nhigh residual"]
+        fig_q = go.Figure()
+        fig_q.add_trace(go.Scatter(
+            x=h_full, y=np.abs(resid_full), mode='markers',
+            marker=dict(size=8 + 60 * cooks_full / (cooks_full.max() + 1e-9),
+                        color=cooks_full, colorscale='RdPu', showscale=True,
+                        colorbar=dict(title="Cook's D", thickness=12)),
+            text=[f"P{i}: D={cooks_full[i]:.3f}" for i in range(n_cd)],
+            hoverinfo='text'))
+        fig_q.add_vline(x=2 * 2 / n_cd, line=dict(color="#999", dash="dot"),
+            annotation_text="leverage cutoff (2p/n)", annotation_position="top")
+        fig_q.update_layout(xaxis_title="Leverage hᵢᵢ", yaxis_title="|Residual|",
+            height=380)
+        st.plotly_chart(fig_q, use_container_width=True)
+        st.caption("Bubble size and color both track Cook's distance. The dangerous "
+                   "quadrant is far right and high up — high leverage **and** a bad fit. "
+                   "Try widening the x-shift or y-shift sliders in the first tab and watch "
+                   "the flagged point (red) move into that corner.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # HYPOTHESIS TESTING
