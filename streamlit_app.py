@@ -61,6 +61,7 @@ CATALOGUE = [
     ("cnn",           "Convolutional Layer (CNN)",      "🖼️", "Kernel sliding over input to detect local patterns"),
     ("correlation",       "Correlation & Covariance",    "📈", "How variables move together — Pearson r and the covariance matrix"),
     ("cooks_distance",    "Cook's Distance",            "🎯", "How much one data point alone can drag a regression line around"),
+    ("aic_bic",           "AIC / BIC",                   "🧮", "Scoring models on fit vs. complexity to pick the right one"),
     ("dispersion",        "Dispersion",                  "📏", "Variance, std dev, IQR — how spread out data is"),
     ("hypothesis_testing","Hypothesis Testing",          "🧪", "p-values, t-tests and statistical significance"),
     ("sampling_estimation","Sampling & Estimation",     "🎯", "Standard error, confidence intervals and the Central Limit Theorem"),
@@ -103,7 +104,7 @@ DL_KEYS     = {"activation","attention","backprop","batch_size","cnn","dropout",
 MATH_KEYS   = {"chain_rule","derivative","dot_product","eigenvalues","embeddings","integral","matrix_ops",
                "partial_deriv","svd","vectors","vector_norms","vector_spaces"}
 AGENT_KEYS  = {"react_loop","tool_use","planning","agent_memory","multi_agent","rag","reflection"}
-STAT_KEYS   = {"central_tendency","dispersion","probability","naive_bayes","bayes_theorem","correlation","hypothesis_testing","sampling_estimation","cooks_distance"}
+STAT_KEYS   = {"central_tendency","dispersion","probability","naive_bayes","bayes_theorem","correlation","hypothesis_testing","sampling_estimation","cooks_distance","aic_bic"}
 # alphabetical within each group
 ALPHA_ML   = sorted([c for c in CATALOGUE if c[0] in ML_KEYS],   key=lambda x: x[1].lower())
 ALPHA_DL   = sorted([c for c in CATALOGUE if c[0] in DL_KEYS],   key=lambda x: x[1].lower())
@@ -7375,6 +7376,125 @@ elif section == "cooks_distance":
                    "quadrant is far right and high up — high leverage **and** a bad fit. "
                    "Try widening the x-shift or y-shift sliders in the first tab and watch "
                    "the flagged point (red) move into that corner.")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# AIC / BIC
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "aic_bic":
+    st.title("🧮 AIC & BIC")
+    st.markdown("""
+    <div class="concept-card">
+    The <b>Akaike</b> and <b>Bayesian Information Criteria</b> score a model on two things
+    at once: how well it fits the data, and how many parameters it needed to get there.
+    Adding parameters always makes the in-sample fit look better — AIC/BIC add a penalty
+    for that, so the model with the <em>lowest</em> score is the best trade-off, not just
+    the best fit. They're the formal, single-number version of the eyeball test in
+    <b>Overfitting & Underfitting</b>.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Interactive model selection", "Formula & AIC vs. BIC"])
+
+    def _aic_bic(y_true, y_pred, k, n):
+        rss = max(np.sum((y_true - y_pred) ** 2), 1e-10)
+        aic = n * np.log(rss / n) + 2 * k
+        bic = n * np.log(rss / n) + k * np.log(n)
+        return aic, bic
+
+    with tab1:
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            sel_degree = st.slider("Selected polynomial degree", 1, 10, 3, key="aicbic_deg")
+            noise_ab = st.slider("Noise", 0.1, 1.0, 0.4, step=0.1, key="aicbic_noise")
+            n_train_ab = st.slider("Training points", 15, 35, 20, key="aicbic_n")
+
+        np.random.seed(7)
+        x_tr = np.sort(np.random.uniform(-3, 3, n_train_ab))
+        y_tr = np.sin(x_tr) + np.random.normal(0, noise_ab, n_train_ab)
+
+        degrees = list(range(1, 11))
+        aics, bics = [], []
+        for d in degrees:
+            k = d + 1
+            c = np.polyfit(x_tr, y_tr, d)
+            pp = np.poly1d(c)
+            a, b = _aic_bic(y_tr, pp(x_tr), k, n_train_ab)
+            aics.append(a); bics.append(b)
+
+        best_aic_deg = degrees[int(np.argmin(aics))]
+        best_bic_deg = degrees[int(np.argmin(bics))]
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=degrees, y=aics, name='AIC',
+                mode='lines+markers', line=dict(color='#534AB7', width=2.5)))
+            fig.add_trace(go.Scatter(x=degrees, y=bics, name='BIC',
+                mode='lines+markers', line=dict(color='#E24B4A', width=2.5)))
+            fig.add_vline(x=sel_degree, line=dict(color='#EF9F27', dash='dash'),
+                annotation_text=f"Selected: degree {sel_degree}")
+            fig.add_trace(go.Scatter(x=[best_aic_deg], y=[aics[best_aic_deg - 1]],
+                mode='markers', marker=dict(color='#534AB7', size=14, symbol='star'),
+                name=f'AIC minimum (degree {best_aic_deg})'))
+            fig.add_trace(go.Scatter(x=[best_bic_deg], y=[bics[best_bic_deg - 1]],
+                mode='markers', marker=dict(color='#E24B4A', size=14, symbol='star'),
+                name=f'BIC minimum (degree {best_bic_deg})'))
+            fig.update_layout(xaxis_title="Polynomial degree", yaxis_title="Score (lower is better)",
+                height=360, legend=dict(orientation='h', y=1.16))
+            st.plotly_chart(fig, use_container_width=True)
+
+        k_sel = sel_degree + 1
+        c_sel = np.polyfit(x_tr, y_tr, sel_degree)
+        pp_sel = np.poly1d(c_sel)
+        aic_sel, bic_sel = _aic_bic(y_tr, pp_sel(x_tr), k_sel, n_train_ab)
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Selected AIC", f"{aic_sel:.1f}")
+        c2.metric("Selected BIC", f"{bic_sel:.1f}")
+        c3.metric("Best degree by AIC", best_aic_deg)
+        c4.metric("Best degree by BIC", best_bic_deg)
+
+        if best_bic_deg <= best_aic_deg:
+            st.info(f"**BIC picks degree {best_bic_deg}, AIC picks degree {best_aic_deg}** — "
+                    "BIC's heavier penalty on parameter count usually makes it choose an "
+                    "equally simple or simpler model than AIC.")
+        else:
+            st.info(f"AIC and BIC both point to a similarly simple model here "
+                    f"(degree {best_aic_deg} vs {best_bic_deg}).")
+
+    with tab2:
+        st.markdown("Both criteria trade off **fit** against **complexity**, but weigh the penalty differently:")
+        st.markdown('<div class="formula-box">AIC = 2k − 2ln(L̂)  &nbsp;≈&nbsp;  n·ln(RSS/n) + 2k</div>',
+            unsafe_allow_html=True)
+        st.markdown('<div class="formula-box">BIC = k·ln(n) − 2ln(L̂)  &nbsp;≈&nbsp;  n·ln(RSS/n) + k·ln(n)</div>',
+            unsafe_allow_html=True)
+        st.markdown("""
+        - **k** — number of fitted parameters (for a degree-*d* polynomial, k = d + 1)
+        - **n** — number of training observations
+        - **L̂** — the model's maximised likelihood; for ordinary least squares with
+          Gaussian errors this reduces to the RSS-based approximation shown above
+        - **RSS** — residual sum of squares on the training data
+
+        The only difference is the penalty term: **2k** for AIC versus **k·ln(n)** for BIC.
+        """)
+
+        ns = np.arange(2, 500)
+        aic_penalty = np.full_like(ns, 2, dtype=float)
+        bic_penalty = np.log(ns)
+        fig2 = go.Figure()
+        fig2.add_trace(go.Scatter(x=ns, y=aic_penalty, name='AIC penalty per parameter (2)',
+            line=dict(color='#534AB7', width=2.5)))
+        fig2.add_trace(go.Scatter(x=ns, y=bic_penalty, name='BIC penalty per parameter (ln n)',
+            line=dict(color='#E24B4A', width=2.5)))
+        fig2.add_vline(x=np.e**2, line=dict(color='#888780', dash='dot'),
+            annotation_text="n ≈ 7.4: BIC overtakes AIC")
+        fig2.update_layout(xaxis_title="n (training size)", yaxis_title="Penalty per extra parameter",
+            height=300, legend=dict(orientation='h', y=1.14))
+        st.plotly_chart(fig2, use_container_width=True)
+        st.caption("Once a dataset has more than about 8 points, BIC's ln(n) penalty exceeds "
+                   "AIC's flat penalty of 2 — and keeps growing. That's why BIC tends to favour "
+                   "sparser models than AIC as the sample gets larger, especially useful when "
+                   "comparing models with very different parameter counts. For a penalty applied "
+                   "directly inside training rather than after the fact, see **Regularization**.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # HYPOTHESIS TESTING
