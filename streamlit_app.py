@@ -40,6 +40,7 @@ st.markdown("""
 CATALOGUE = [
     # ── Machine Learning ──
     ("bias_var",      "Bias-Variance Tradeoff",         "↔️", "Decomposing prediction error into bias and variance"),
+    ("clustering",     "Clustering (K-Means & Hierarchical)", "🧩", "Grouping unlabeled data by similarity — centroids and dendrograms"),
     ("confusion",     "Confusion Matrix & Metrics",     "🔢", "Precision, recall, F1 and the threshold effect"),
     ("decision_tree", "Decision Tree",                  "🌳", "Recursive feature splits that form a tree of rules"),
     ("ensemble_trees","Ensemble Trees (Bagging, RF, Boosting)", "🌲", "Combining many trees to beat any single one of them"),
@@ -52,6 +53,7 @@ CATALOGUE = [
     ("overfit",       "Overfitting / Underfitting",     "⚖️", "Too much or too little training"),
     ("pca",           "PCA",                            "🔍", "Dimensionality reduction via principal components"),
     ("regularization","Regularization",                 "🔒", "L1 and L2 penalty to prevent overfitting"),
+    ("svm",           "Support Vector Machines",         "🧱", "Maximum-margin boundaries and the kernel trick for non-linear data"),
     # ── Deep Learning ──
     ("activation",    "Activation Functions",           "🎯", "ReLU, Sigmoid, Tanh and their properties"),
     ("attention",     "Attention Mechanism",            "👁️", "How transformers focus on relevant input tokens"),
@@ -99,8 +101,8 @@ CATALOGUE = [
     ("vector_norms",  "Vector Norms",                   "‖·‖", "L1, L2 and Lp norms — measuring size and distance"),
 ]
 
-ML_KEYS     = {"bias_var","confusion","decision_tree","ensemble_trees","gradient","knn","linear_reg","logistic_reg",
-               "loss","overfit","pca","regularization"}
+ML_KEYS     = {"bias_var","confusion","clustering","decision_tree","ensemble_trees","gradient","knn","linear_reg","logistic_reg",
+               "loss","overfit","pca","regularization","svm"}
 DL_KEYS     = {"activation","attention","backprop","batch_size","cnn","dropout","lr_schedule",
                "neural_net","neuron","normalization","optimizers","rnn","vanishing_grad"}
 MATH_KEYS   = {"chain_rule","derivative","dot_product","eigenvalues","embeddings","integral","matrix_ops",
@@ -887,6 +889,142 @@ elif section == "knn":
                 showlegend=False), row=1, col=col_idx+1)
     fig2.update_layout(height=320)
     st.plotly_chart(fig2, use_container_width=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SUPPORT VECTOR MACHINES
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "svm":
+    st.title("🧱 Support Vector Machines")
+    st.markdown("""
+    <div class="concept-card">
+    Instead of just finding <em>a</em> line that separates two classes, an SVM finds the
+    one that leaves the <b>widest possible margin</b> on both sides. Only the points
+    closest to that boundary — the <b>support vectors</b> — actually determine where it
+    goes. When a straight line can't separate the classes at all, the <b>kernel trick</b>
+    lets the same idea work in a much higher-dimensional space, without ever computing
+    that space directly.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Maximal margin & the C parameter", "The kernel trick"])
+
+    from sklearn.svm import SVC
+    from sklearn.datasets import make_blobs, make_circles, make_moons
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            C_svm = st.slider("C (log scale)", -2.0, 3.0, 0.0, step=0.5, key="svm_c_log",
+                help="Lower C → wider margin, tolerates more violations. Higher C → narrower margin, fits training points more tightly.")
+            C_val = 10 ** C_svm
+            sep_svm = st.slider("Class separation", 0.5, 3.0, 1.5, step=0.1, key="svm_sep")
+            n_svm = st.slider("Points per class", 15, 60, 30, key="svm_n")
+
+        np.random.seed(7)
+        X_svm, y_svm = make_blobs(n_samples=n_svm * 2, centers=2, cluster_std=sep_svm, random_state=7)
+        clf_svm = SVC(kernel='linear', C=C_val).fit(X_svm, y_svm)
+
+        xx, yy = np.meshgrid(
+            np.linspace(X_svm[:, 0].min() - 1, X_svm[:, 0].max() + 1, 200),
+            np.linspace(X_svm[:, 1].min() - 1, X_svm[:, 1].max() + 1, 200))
+        Z = clf_svm.decision_function(np.c_[xx.ravel(), yy.ravel()]).reshape(xx.shape)
+        w = clf_svm.coef_[0]
+        margin_width = 2 / np.linalg.norm(w)
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Contour(x=xx[0], y=yy[:, 0], z=Z, showscale=False,
+                contours=dict(start=0, end=0, size=1, coloring='lines'),
+                line=dict(color='#534AB7', width=2.5), name='Boundary', hoverinfo='skip'))
+            fig.add_trace(go.Contour(x=xx[0], y=yy[:, 0], z=Z, showscale=False,
+                contours=dict(start=-1, end=1, size=2, coloring='lines'),
+                line=dict(color='#888780', width=1, dash='dash'), hoverinfo='skip', showlegend=False))
+            for cls, c in [(0, '#534AB7'), (1, '#E24B4A')]:
+                m = y_svm == cls
+                fig.add_trace(go.Scatter(x=X_svm[m, 0], y=X_svm[m, 1], mode='markers',
+                    name=f'Class {cls}', marker=dict(color=c, size=8)))
+            fig.add_trace(go.Scatter(x=clf_svm.support_vectors_[:, 0], y=clf_svm.support_vectors_[:, 1],
+                mode='markers', name='Support vectors',
+                marker=dict(color='rgba(0,0,0,0)', size=16, line=dict(color='black', width=2))))
+            fig.update_layout(height=400, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, use_container_width=True)
+
+        c1, c2s, c3 = st.columns(3)
+        c1.metric("C", f"{C_val:.2g}")
+        c2s.metric("Support vectors", sum(clf_svm.n_support_))
+        c3.metric("Margin width", f"{margin_width:.2f}")
+
+        if C_svm <= -1:
+            st.info("**Low C — soft margin.** The model tolerates points inside or across "
+                    "the margin in exchange for a wider, more stable boundary.")
+        elif C_svm >= 2:
+            st.warning("**High C — hard margin.** The boundary hugs the training data "
+                       "closely, using few support vectors — watch for overfitting.")
+        else:
+            st.success("**Balanced C** — a reasonable tradeoff between margin width and "
+                       "training accuracy.")
+        st.caption("Circled points are the support vectors — the only points that would "
+                   "change the boundary if moved. Every other point could be deleted "
+                   "without affecting the fit at all.")
+
+    with tab2:
+        st.markdown("""
+        When classes aren't linearly separable, a straight-line boundary simply can't work
+        — no choice of C fixes that. The **kernel trick** solves this by implicitly mapping
+        points into a higher-dimensional space where they *are* separable, computing only
+        the similarity between pairs of points rather than the mapping itself:
+        """)
+        st.markdown('<div class="formula-box">K(x, x′) = φ(x) · φ(x′)&nbsp;&nbsp;&nbsp;'
+                    'RBF: K(x, x′) = exp(−γ‖x − x′‖²)</div>', unsafe_allow_html=True)
+        st.markdown("φ is the (possibly infinite-dimensional) mapping — the kernel lets "
+                    "the SVM use it without ever computing φ(x) explicitly.")
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            dataset_svm = st.radio("Dataset", ["Circles", "Moons"], key="svm_dataset")
+            kernel_svm = st.radio("Kernel", ["linear", "poly", "rbf"], key="svm_kernel")
+            gamma_svm = st.slider("gamma (rbf/poly)", 0.1, 5.0, 1.0, step=0.1, key="svm_gamma")
+            noise_svm = st.slider("Noise", 0.05, 0.3, 0.15, step=0.05, key="svm_noise")
+
+        if dataset_svm == "Circles":
+            X_k, y_k = make_circles(n_samples=150, noise=noise_svm, factor=0.4, random_state=7)
+        else:
+            X_k, y_k = make_moons(n_samples=150, noise=noise_svm, random_state=7)
+
+        clf_k = SVC(kernel=kernel_svm, gamma=gamma_svm, C=1.0, degree=3).fit(X_k, y_k)
+        acc_k = clf_k.score(X_k, y_k)
+
+        xx2, yy2 = np.meshgrid(np.linspace(X_k[:, 0].min()-0.5, X_k[:, 0].max()+0.5, 150),
+                                np.linspace(X_k[:, 1].min()-0.5, X_k[:, 1].max()+0.5, 150))
+        Z2 = clf_k.predict(np.c_[xx2.ravel(), yy2.ravel()]).reshape(xx2.shape)
+
+        with col2:
+            fig2 = go.Figure()
+            fig2.add_trace(go.Contour(x=xx2[0], y=yy2[:, 0], z=Z2, showscale=False,
+                colorscale=[[0, 'rgba(83,74,183,0.15)'], [1, 'rgba(226,75,74,0.15)']],
+                contours=dict(coloring='fill'), line=dict(width=0)))
+            for cls, c in [(0, '#534AB7'), (1, '#E24B4A')]:
+                m = y_k == cls
+                fig2.add_trace(go.Scatter(x=X_k[m, 0], y=X_k[m, 1], mode='markers',
+                    name=f'Class {cls}', marker=dict(color=c, size=7)))
+            fig2.update_layout(height=380, legend=dict(orientation='h', y=1.1))
+            st.plotly_chart(fig2, use_container_width=True)
+
+        st.metric(f"Training accuracy ({kernel_svm} kernel)", f"{acc_k:.1%}")
+
+        st.markdown("### Same data, every kernel")
+        rows = []
+        for k in ["linear", "poly", "rbf"]:
+            c = SVC(kernel=k, gamma=gamma_svm, C=1.0, degree=3).fit(X_k, y_k)
+            rows.append((k, c.score(X_k, y_k)))
+        fig3 = go.Figure(go.Bar(x=[r[0] for r in rows], y=[r[1] for r in rows],
+            marker_color=['#888780', '#EF9F27', '#534AB7']))
+        fig3.update_layout(yaxis_title="Training accuracy", yaxis_range=[0, 1], height=260)
+        st.plotly_chart(fig3, use_container_width=True)
+        st.caption("On circular or crescent-shaped data, the linear kernel is stuck near "
+                   "chance — no straight line helps. RBF (and often poly) recovers a clean "
+                   "boundary by working in a space where the classes really are separable.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -3531,6 +3669,126 @@ elif section == "pca":
         st.metric(f"Components needed for {threshold:.0%} variance",
                   f"{n_keep} out of {n_feat_s}",
                   f"{n_feat_s - n_keep} dimensions removed")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CLUSTERING (K-MEANS & HIERARCHICAL)
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "clustering":
+    st.title("🧩 Clustering (K-Means & Hierarchical)")
+    st.markdown("""
+    <div class="concept-card">
+    Clustering finds structure in data with <b>no labels at all</b> — it groups points by
+    similarity alone. <b>K-Means</b> commits to a fixed number of groups upfront and moves
+    centroids until each point is closest to its own; <b>Hierarchical clustering</b> builds
+    a full tree of nested groupings and lets you choose how many clusters you want
+    afterward, just by deciding where to cut the tree.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Interactive K-Means", "Hierarchical Clustering & Dendrograms"])
+
+    from sklearn.cluster import KMeans
+    from sklearn.datasets import make_blobs
+    from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
+
+    palette = ['#534AB7', '#E24B4A', '#1D9E75', '#EF9F27', '#888780', '#3AACC9', '#B24BE2', '#E2B24B']
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            true_k_km = st.slider("True number of groups (data)", 2, 5, 3, key="km_truek")
+            chosen_k = st.slider("k (clusters to find)", 1, 8, 3, key="km_k")
+            std_km = st.slider("Cluster spread", 0.5, 3.0, 1.2, step=0.1, key="km_std")
+            n_km = st.slider("Number of points", 50, 300, 150, key="km_n")
+
+        X_km, _ = make_blobs(n_samples=n_km, centers=true_k_km, cluster_std=std_km, random_state=7)
+        kmeans = KMeans(n_clusters=chosen_k, n_init=10, random_state=42).fit(X_km)
+        labels_km = kmeans.labels_
+        centers_km = kmeans.cluster_centers_
+
+        with col2:
+            fig = go.Figure()
+            for c in range(chosen_k):
+                m = labels_km == c
+                fig.add_trace(go.Scatter(x=X_km[m, 0], y=X_km[m, 1], mode='markers',
+                    name=f'Cluster {c}', marker=dict(color=palette[c % len(palette)], size=7)))
+            fig.add_trace(go.Scatter(x=centers_km[:, 0], y=centers_km[:, 1], mode='markers',
+                name='Centroids', marker=dict(color='black', size=14, symbol='x')))
+            fig.update_layout(height=400, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, use_container_width=True)
+
+        c1, c2m, c3 = st.columns(3)
+        c1.metric("Inertia (within-cluster SS)", f"{kmeans.inertia_:.1f}")
+        c2m.metric("k chosen", chosen_k)
+        c3.metric("True groups in data", true_k_km)
+
+        st.markdown("### Elbow method — choosing k")
+        ks = list(range(1, 9))
+        inertias = [KMeans(n_clusters=kk, n_init=10, random_state=42).fit(X_km).inertia_ for kk in ks]
+        fig2 = go.Figure()
+        fig2.add_trace(go.Scatter(x=ks, y=inertias, mode='lines+markers',
+            line=dict(color='#534AB7', width=2.5)))
+        fig2.add_vline(x=chosen_k, line=dict(color='#EF9F27', dash='dash'),
+            annotation_text=f"Selected k={chosen_k}")
+        fig2.update_layout(xaxis_title="k", yaxis_title="Inertia", height=280)
+        st.plotly_chart(fig2, use_container_width=True)
+        st.caption("The 'elbow' — where adding another cluster stops giving a big drop in "
+                   "inertia — is a common heuristic for picking k. There's no ground truth to "
+                   "check against in real unsupervised problems, so this is a judgment call, "
+                   "not something **Cross-Validation** can pick for you the way it does for "
+                   "supervised models.")
+
+    with tab2:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            n_h = st.slider("Number of points", 10, 40, 20, key="hc_n")
+            true_k_h = st.slider("True groups (data)", 2, 5, 3, key="hc_truek")
+            std_h = st.slider("Cluster spread", 0.5, 3.0, 1.2, step=0.1, key="hc_std")
+            linkage_method = st.selectbox("Linkage method",
+                ["ward", "complete", "average", "single"], key="hc_linkage")
+            cut_frac = st.slider("Cut height (fraction of tree height)", 0.0, 1.0, 0.5,
+                step=0.05, key="hc_cut_frac")
+
+        X_h, _ = make_blobs(n_samples=n_h, centers=true_k_h, cluster_std=std_h, random_state=11)
+        Z = linkage(X_h, method=linkage_method)
+        max_h = float(Z[:, 2].max())
+        cut_height = cut_frac * max_h
+        labels_h = fcluster(Z, cut_height, criterion='distance')
+        n_found = len(set(labels_h))
+
+        dn = dendrogram(Z, no_plot=True)
+        color_map = {'C0': '#534AB7', 'C1': '#E24B4A', 'C2': '#1D9E75', 'C3': '#EF9F27'}
+        with col2:
+            fig_dendro = go.Figure()
+            for xs, ys, c in zip(dn['icoord'], dn['dcoord'], dn['color_list']):
+                fig_dendro.add_trace(go.Scatter(x=xs, y=ys, mode='lines',
+                    line=dict(color=color_map.get(c, '#888780'), width=1.5),
+                    showlegend=False, hoverinfo='skip'))
+            fig_dendro.add_hline(y=cut_height, line=dict(color='#EF9F27', dash='dash'),
+                annotation_text=f"Cut → {n_found} clusters")
+            fig_dendro.update_layout(xaxis=dict(showticklabels=False, title="Points"),
+                yaxis_title="Linkage distance", height=380)
+            st.plotly_chart(fig_dendro, use_container_width=True)
+
+        st.markdown("### Resulting clusters at this cut height")
+        fig_scatter = go.Figure()
+        for i, lab in enumerate(sorted(set(labels_h))):
+            m = labels_h == lab
+            fig_scatter.add_trace(go.Scatter(x=X_h[m, 0], y=X_h[m, 1], mode='markers',
+                name=f'Cluster {lab}', marker=dict(color=palette[i % len(palette)], size=9)))
+        fig_scatter.update_layout(height=340, legend=dict(orientation='h', y=1.14))
+        st.plotly_chart(fig_scatter, use_container_width=True)
+
+        c1, c2m = st.columns(2)
+        c1.metric("Clusters at this cut", n_found)
+        c2m.metric("Linkage method", linkage_method)
+        st.caption("**Ward** merges the pair that increases within-cluster variance the "
+                   "least (usually the most balanced-looking clusters); **single** linkage "
+                   "merges on the nearest pair of points, which can chain together "
+                   "elongated clusters; **complete** and **average** sit in between. Cut "
+                   "higher for fewer, broader clusters — unlike K-Means, you don't have to "
+                   "commit to a cluster count before seeing the whole tree.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
