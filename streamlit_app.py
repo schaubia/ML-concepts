@@ -54,6 +54,8 @@ CATALOGUE = [
     ("overfit",       "Overfitting / Underfitting",     "⚖️", "Too much or too little training"),
     ("pca",           "PCA",                            "🔍", "Dimensionality reduction via principal components"),
     ("regularization","Regularization",                 "🔒", "L1 and L2 penalty to prevent overfitting"),
+    ("splines_gam",   "Splines & GAMs",                  "🎢", "Piecewise-smooth curves and additive models beyond straight lines"),
+    ("subset_selection","Subset Selection",              "🎛️", "Best subset and stepwise search for which predictors to keep"),
     ("svm",           "Support Vector Machines",         "🧱", "Maximum-margin boundaries and the kernel trick for non-linear data"),
     # ── Deep Learning ──
     ("activation",    "Activation Functions",           "🎯", "ReLU, Sigmoid, Tanh and their properties"),
@@ -103,7 +105,7 @@ CATALOGUE = [
 ]
 
 ML_KEYS     = {"bias_var","confusion","clustering","decision_tree","ensemble_trees","gradient","knn","lda_qda","linear_reg","logistic_reg",
-               "loss","overfit","pca","regularization","svm"}
+               "loss","overfit","pca","regularization","splines_gam","subset_selection","svm"}
 DL_KEYS     = {"activation","attention","backprop","batch_size","cnn","dropout","lr_schedule",
                "neural_net","neuron","normalization","optimizers","rnn","vanishing_grad"}
 MATH_KEYS   = {"chain_rule","derivative","dot_product","eigenvalues","embeddings","integral","matrix_ops",
@@ -547,6 +549,294 @@ elif section == "overfit":
         yaxis_title="MSE", yaxis_range=[0, 5], height=300,
         legend=dict(orientation='h', y=1.12))
     st.plotly_chart(fig2, use_container_width=True)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SPLINES & GAMs
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "splines_gam":
+    st.title("🎢 Splines & GAMs")
+    st.markdown("""
+    <div class="concept-card">
+    Instead of forcing one polynomial to fit the whole range of x (which tends to wobble
+    wildly near the edges), a <b>regression spline</b> stitches together several low-degree
+    polynomial pieces, joined smoothly at points called <b>knots</b>. A <b>Generalized
+    Additive Model (GAM)</b> takes this one step further for multiple features: fit a
+    separate smooth curve for each predictor and simply add them together.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Splines vs. polynomial", "Smoothing splines & a 2-feature GAM"])
+
+    from scipy.interpolate import BSpline, UnivariateSpline
+
+    def _spline_predict_fn(x, y, n_internal_knots, degree=3):
+        knots_internal = (np.quantile(x, np.linspace(0, 1, n_internal_knots + 2)[1:-1])
+                           if n_internal_knots > 0 else np.array([]))
+        knots = np.r_[[x.min()]*(degree+1), knots_internal, [x.max()]*(degree+1)]
+        n_basis = len(knots) - degree - 1
+        def basis_at(xq):
+            B = np.zeros((len(xq), n_basis))
+            for i in range(n_basis):
+                c = np.zeros(n_basis); c[i] = 1
+                B[:, i] = BSpline(knots, c, degree, extrapolate=True)(xq)
+            return B
+        beta, *_ = np.linalg.lstsq(basis_at(x), y, rcond=None)
+        return lambda xq: basis_at(xq) @ beta, knots_internal
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            n_knots = st.slider("Number of internal knots", 0, 8, 3, key="sp_knots")
+            noise_sp = st.slider("Noise", 0.1, 1.0, 0.4, step=0.1, key="sp_noise")
+            n_sp = st.slider("Data points", 20, 80, 40, key="sp_n")
+            show_poly = st.checkbox("Compare with polynomial of similar flexibility", True, key="sp_showpoly")
+
+        np.random.seed(7)
+        x_sp = np.sort(np.random.uniform(-3, 3, n_sp))
+        y_sp = x_sp * np.sin(x_sp) * 0.6 + np.random.normal(0, noise_sp, n_sp)
+
+        spline_fn, internal_knots = _spline_predict_fn(x_sp, y_sp, n_knots)
+        x_plot = np.linspace(-4, 4, 300)  # extends past the data range on purpose
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=x_sp, y=y_sp, mode='markers',
+                name='Data', marker=dict(color='#534AB7', size=7)))
+            fig.add_vrect(x0=-4, x1=x_sp.min(), fillcolor='rgba(226,75,74,0.06)', line_width=0)
+            fig.add_vrect(x0=x_sp.max(), x1=4, fillcolor='rgba(226,75,74,0.06)', line_width=0)
+            fig.add_trace(go.Scatter(x=x_plot, y=np.clip(spline_fn(x_plot), -8, 8),
+                name=f'Regression spline ({n_knots} knots)', line=dict(color='#1D9E75', width=2.5)))
+            if show_poly:
+                poly_degree = n_knots + 3  # roughly matching parameter count
+                c_poly = np.polyfit(x_sp, y_sp, poly_degree)
+                p_poly = np.poly1d(c_poly)
+                fig.add_trace(go.Scatter(x=x_plot, y=np.clip(p_poly(x_plot), -8, 8),
+                    name=f'Polynomial (degree {poly_degree})', line=dict(color='#E24B4A', width=2, dash='dash')))
+            for k in internal_knots:
+                fig.add_vline(x=k, line=dict(color='#888780', dash='dot', width=1))
+            fig.update_layout(xaxis_title="x", yaxis_title="y", yaxis_range=[-6, 6],
+                height=400, legend=dict(orientation='h', y=1.14))
+            st.plotly_chart(fig, use_container_width=True)
+
+        st.caption("Shaded bands are outside the training data (extrapolation). Dotted grey "
+                   "lines mark the knots. Try raising both the knot count and 'noise', and "
+                   "watch the polynomial swing wildly in the shaded bands while the spline "
+                   "stays comparatively tame — each spline piece only has local influence.")
+
+    with tab2:
+        st.markdown("### Smoothing splines: a knot at every point, controlled by a penalty")
+        st.markdown("""
+        A **smoothing spline** sidesteps choosing knot locations entirely — it places a
+        knot at every data point, then adds a roughness penalty to keep the curve from
+        interpolating the noise:
+        """)
+        st.markdown('<div class="formula-box">minimize  Σᵢ(yᵢ − f(xᵢ))² + λ∫f″(t)² dt</div>',
+            unsafe_allow_html=True)
+        st.markdown("λ controls the tradeoff — λ = 0 interpolates every point exactly; "
+                    "λ → ∞ forces f toward a straight line.")
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            smooth_s = st.select_slider("Smoothing (higher = smoother)",
+                options=[0.01, 0.1, 1, 5, 20, 100], value=1, key="sp_smooths")
+
+        np.random.seed(7)
+        n_ss = 50
+        x_ss = np.sort(np.random.uniform(-3, 3, n_ss))
+        y_ss = np.sin(x_ss) + np.random.normal(0, 0.3, n_ss)
+        spl = UnivariateSpline(x_ss, y_ss, k=3, s=smooth_s * n_ss * 0.05)
+        x_ssplot = np.linspace(-3, 3, 300)
+
+        with col2:
+            fig2 = go.Figure()
+            fig2.add_trace(go.Scatter(x=x_ss, y=y_ss, mode='markers',
+                marker=dict(color='#534AB7', size=6), name='Data'))
+            fig2.add_trace(go.Scatter(x=x_ssplot, y=spl(x_ssplot),
+                line=dict(color='#1D9E75', width=2.5), name='Smoothing spline'))
+            fig2.update_layout(height=330, legend=dict(orientation='h', y=1.14))
+            st.plotly_chart(fig2, use_container_width=True)
+        if smooth_s <= 0.1:
+            st.warning("Very low smoothing — the curve is chasing individual noisy points.")
+        elif smooth_s >= 20:
+            st.info("Very high smoothing — pushed nearly to a straight line.")
+
+        st.markdown("### A 2-feature GAM, fit by backfitting")
+        st.markdown("""
+        A GAM models **y ≈ f₁(x₁) + f₂(x₂)** — a separate smooth curve per feature, added
+        together. It's fit by **backfitting**: repeatedly fit a spline of one feature to
+        whatever the other feature's curve hasn't already explained, and alternate.
+        """)
+
+        np.random.seed(3)
+        n_gam = 200
+        x1_gam = np.random.uniform(-3, 3, n_gam)
+        x2_gam = np.random.uniform(-3, 3, n_gam)
+        f1_true = np.sin(x1_gam)
+        f2_true = 0.3 * x2_gam ** 2 - 1
+        y_gam = f1_true + f2_true + np.random.normal(0, 0.3, n_gam)
+
+        f1_hat = np.zeros(n_gam)
+        f2_hat = np.zeros(n_gam)
+        for _ in range(10):
+            fn1, _ = _spline_predict_fn(x1_gam, y_gam - f2_hat, n_internal_knots=4)
+            f1_hat = fn1(x1_gam); f1_hat -= f1_hat.mean()
+            fn2, _ = _spline_predict_fn(x2_gam, y_gam - f1_hat, n_internal_knots=4)
+            f2_hat = fn2(x2_gam); f2_hat -= f2_hat.mean()
+
+        order1 = np.argsort(x1_gam)
+        order2 = np.argsort(x2_gam)
+        col1, col2 = st.columns(2)
+        with col1:
+            fig3 = go.Figure()
+            fig3.add_trace(go.Scatter(x=x1_gam[order1], y=f1_hat[order1],
+                name='Estimated f̂₁(x₁)', line=dict(color='#534AB7', width=2.5)))
+            fig3.add_trace(go.Scatter(x=x1_gam[order1], y=f1_true[order1] - f1_true.mean(),
+                name='True f₁(x₁)', line=dict(color='#888780', width=1.5, dash='dot')))
+            fig3.update_layout(xaxis_title="x₁", yaxis_title="Partial effect", height=300,
+                legend=dict(orientation='h', y=1.16))
+            st.plotly_chart(fig3, use_container_width=True)
+        with col2:
+            fig4 = go.Figure()
+            fig4.add_trace(go.Scatter(x=x2_gam[order2], y=f2_hat[order2],
+                name='Estimated f̂₂(x₂)', line=dict(color='#E24B4A', width=2.5)))
+            fig4.add_trace(go.Scatter(x=x2_gam[order2], y=f2_true[order2] - f2_true.mean(),
+                name='True f₂(x₂)', line=dict(color='#888780', width=1.5, dash='dot')))
+            fig4.update_layout(xaxis_title="x₂", yaxis_title="Partial effect", height=300,
+                legend=dict(orientation='h', y=1.16))
+            st.plotly_chart(fig4, use_container_width=True)
+        st.caption("Each panel shows the effect of one feature *holding the other fixed* — "
+                   "exactly the interpretability a plain multiple linear regression gives you "
+                   "(one coefficient per feature), except each effect here is allowed to bend.")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SUBSET SELECTION
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "subset_selection":
+    st.title("🎛️ Subset Selection")
+    st.markdown("""
+    <div class="concept-card">
+    Instead of shrinking every coefficient toward zero (what <b>Regularization</b> does),
+    subset selection makes a harder choice: which predictors to <b>include at all</b>.
+    <b>Best subset</b> checks every possible combination; <b>stepwise</b> methods add or
+    remove one predictor at a time as a cheaper approximation.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Best subset vs. forward stepwise", "Choosing the model size"])
+
+    from itertools import combinations
+
+    def _fit_score(X, y, cols):
+        if len(cols) == 0:
+            resid = y - y.mean()
+            return np.sum(resid ** 2)
+        Xc = np.column_stack([X[:, c] for c in cols] + [np.ones(len(y))])
+        beta, *_ = np.linalg.lstsq(Xc, y, rcond=None)
+        resid = y - Xc @ beta
+        return np.sum(resid ** 2)
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            p_total = st.slider("Number of candidate predictors", 3, 8, 6, key="ss_p")
+            n_true = st.slider("Number that actually matter", 1, p_total, 3, key="ss_ntrue")
+            n_obs = st.slider("Training points", 30, 200, 80, key="ss_n")
+            noise_ss = st.slider("Noise", 0.2, 2.0, 0.8, step=0.1, key="ss_noise")
+
+        np.random.seed(7)
+        X_ss = np.random.randn(n_obs, p_total)
+        true_beta = np.zeros(p_total)
+        true_beta[:n_true] = np.random.uniform(1.5, 3.0, n_true)
+        np.random.shuffle(true_beta)
+        y_ss = X_ss @ true_beta + np.random.normal(0, noise_ss, n_obs)
+        true_cols = set(np.where(true_beta != 0)[0])
+
+        # best subset: exhaustively check all sizes up to a practical cap
+        max_size_bs = min(p_total, 8)
+        best_subset_by_size = {}
+        for size in range(0, max_size_bs + 1):
+            best_rss, best_cols = np.inf, ()
+            for cols in combinations(range(p_total), size):
+                rss = _fit_score(X_ss, y_ss, cols)
+                if rss < best_rss:
+                    best_rss, best_cols = rss, cols
+            best_subset_by_size[size] = (best_cols, best_rss)
+
+        # forward stepwise
+        remaining = list(range(p_total))
+        selected = []
+        fwd_by_size = {0: ((), _fit_score(X_ss, y_ss, ()))}
+        for size in range(1, p_total + 1):
+            best_rss, best_add = np.inf, None
+            for cand in remaining:
+                trial = tuple(sorted(selected + [cand]))
+                rss = _fit_score(X_ss, y_ss, trial)
+                if rss < best_rss:
+                    best_rss, best_add = rss, cand
+            selected.append(best_add)
+            remaining.remove(best_add)
+            fwd_by_size[size] = (tuple(sorted(selected)), best_rss)
+
+        with col2:
+            sizes = list(range(0, max_size_bs + 1))
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=sizes, y=[best_subset_by_size[s][1] for s in sizes],
+                name='Best subset', mode='lines+markers', line=dict(color='#534AB7', width=2.5)))
+            fig.add_trace(go.Scatter(x=sizes, y=[fwd_by_size[s][1] for s in sizes],
+                name='Forward stepwise', mode='lines+markers',
+                line=dict(color='#E24B4A', width=2, dash='dash')))
+            fig.update_layout(xaxis_title="Number of predictors in model", yaxis_title="Training RSS",
+                height=380, legend=dict(orientation='h', y=1.14))
+            st.plotly_chart(fig, use_container_width=True)
+
+        st.caption(f"True predictors that matter: {sorted(true_cols)}. "
+                   f"Best subset at that size picked: {sorted(best_subset_by_size.get(n_true,((),0))[0])}. "
+                   f"Forward stepwise at that size picked: {sorted(fwd_by_size.get(n_true,((),0))[0])}.")
+        st.info("Both curves always go down as you add predictors — training RSS can never "
+                "get worse with more variables. That's exactly why picking model size needs "
+                "something other than training error (see the next tab). Forward stepwise "
+                "can only match best subset when it happens to add the right variables "
+                "early — it never revisits a choice once made.")
+
+    with tab2:
+        st.markdown("""
+        Training RSS always improves with more predictors, so it can't tell you when to
+        stop. The usual fixes:
+        - **AIC / BIC / adjusted R²** — score each size with a complexity penalty (see
+          **AIC / BIC**) and pick the best-scoring size
+        - **Cross-validation** — hold out data and pick the size with the best validation
+          error (see **Cross-Validation**) — the most reliable option, since it needs no
+          assumption about the error distribution
+        """)
+
+        n_boot = min(p_total, 8)
+        sizes2 = list(range(0, n_boot + 1))
+        k_choices = [s + 1 for s in sizes2]  # +1 for intercept
+        n_fixed = n_obs
+        rss_vals = [best_subset_by_size[s][1] for s in sizes2]
+        aics = [n_fixed * np.log(max(r, 1e-10) / n_fixed) + 2 * k for r, k in zip(rss_vals, k_choices)]
+        bics = [n_fixed * np.log(max(r, 1e-10) / n_fixed) + k * np.log(n_fixed) for r, k in zip(rss_vals, k_choices)]
+
+        fig2 = go.Figure()
+        fig2.add_trace(go.Scatter(x=sizes2, y=aics, name='AIC', mode='lines+markers',
+            line=dict(color='#534AB7', width=2.5)))
+        fig2.add_trace(go.Scatter(x=sizes2, y=bics, name='BIC', mode='lines+markers',
+            line=dict(color='#E24B4A', width=2.5)))
+        best_aic_size = sizes2[int(np.argmin(aics))]
+        best_bic_size = sizes2[int(np.argmin(bics))]
+        fig2.add_vline(x=best_aic_size, line=dict(color='#534AB7', dash='dot'))
+        fig2.add_vline(x=best_bic_size, line=dict(color='#E24B4A', dash='dot'))
+        fig2.update_layout(xaxis_title="Number of predictors", yaxis_title="Score (lower is better)",
+            height=340, legend=dict(orientation='h', y=1.14))
+        st.plotly_chart(fig2, use_container_width=True)
+
+        c1, c2 = st.columns(2)
+        c1.metric("Best size by AIC", best_aic_size)
+        c2.metric("Best size by BIC", best_bic_size)
+        st.caption(f"Applied to the best-subset models from the previous tab (true number "
+                   f"of useful predictors was {n_true}). BIC's "
+                   f"heavier complexity penalty typically selects a model at least as small "
+                   f"as AIC's — the same tradeoff explored in **AIC / BIC**.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # ACTIVATION FUNCTIONS
