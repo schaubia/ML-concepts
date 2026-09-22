@@ -42,6 +42,7 @@ CATALOGUE = [
     ("bias_var",      "Bias-Variance Tradeoff",         "↔️", "Decomposing prediction error into bias and variance"),
     ("confusion",     "Confusion Matrix & Metrics",     "🔢", "Precision, recall, F1 and the threshold effect"),
     ("decision_tree", "Decision Tree",                  "🌳", "Recursive feature splits that form a tree of rules"),
+    ("ensemble_trees","Ensemble Trees (Bagging, RF, Boosting)", "🌲", "Combining many trees to beat any single one of them"),
     ("gradient",      "Gradient & Descent",             "🏔️", "Direction and step size of learning"),
     ("knn",           "K-Nearest Neighbors",            "🔵", "Classify by majority vote of closest points"),
     ("linear_reg",    "Linear Regression",              "📊", "Finding the best-fit line through data"),
@@ -98,7 +99,7 @@ CATALOGUE = [
     ("vector_norms",  "Vector Norms",                   "‖·‖", "L1, L2 and Lp norms — measuring size and distance"),
 ]
 
-ML_KEYS     = {"bias_var","confusion","decision_tree","gradient","knn","linear_reg","logistic_reg",
+ML_KEYS     = {"bias_var","confusion","decision_tree","ensemble_trees","gradient","knn","linear_reg","logistic_reg",
                "loss","overfit","pca","regularization"}
 DL_KEYS     = {"activation","attention","backprop","batch_size","cnn","dropout","lr_schedule",
                "neural_net","neuron","normalization","optimizers","rnn","vanishing_grad"}
@@ -3674,6 +3675,166 @@ Information gain = {gini_parent:.4f} − ({n_left}/{n_total}·{gini_left:.4f} + 
             elif ig > 0.05: st.info("Decent split")
             else: st.warning("Poor split — little gain")
 
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ENSEMBLE TREES (BAGGING, RANDOM FOREST, BOOSTING)
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "ensemble_trees":
+    st.title("🌲 Ensemble Trees")
+    st.markdown("""
+    <div class="concept-card">
+    A single <b>Decision Tree</b> is a high-variance model — small changes in the training
+    data can produce a very different tree. Ensembles fix this by combining many trees
+    instead of trusting one: <b>Bagging</b> and <b>Random Forests</b> average many trees
+    trained on resampled data to cancel out that variance, while <b>Boosting</b> builds
+    trees one at a time, each one correcting the mistakes of the ones before it.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Single tree vs. ensembles", "Bagging → Random Forest → Boosting"])
+
+    from sklearn.datasets import make_moons
+    from sklearn.tree import DecisionTreeClassifier
+    from sklearn.ensemble import BaggingClassifier, RandomForestClassifier, GradientBoostingClassifier
+    from sklearn.model_selection import train_test_split
+
+    def _make_ensemble(method, n_estimators, max_depth, seed=42):
+        if method == "Single Tree":
+            return DecisionTreeClassifier(max_depth=max_depth, random_state=seed)
+        elif method == "Bagging":
+            return BaggingClassifier(estimator=DecisionTreeClassifier(max_depth=max_depth),
+                n_estimators=n_estimators, random_state=seed)
+        elif method == "Random Forest":
+            return RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, random_state=seed)
+        else:  # Boosting
+            return GradientBoostingClassifier(n_estimators=n_estimators,
+                max_depth=min(max_depth, 3), learning_rate=0.15, random_state=seed)
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            method_et = st.radio("Method", ["Single Tree", "Bagging", "Random Forest", "Boosting"])
+            n_est_et = st.slider("Number of trees", 5, 150, 30, key="et_n_est",
+                disabled=(method_et == "Single Tree"))
+            depth_et = st.slider("Max tree depth", 1, 8, 4, key="et_depth")
+            noise_et = st.slider("Dataset noise", 0.1, 0.5, 0.25, step=0.05, key="et_noise")
+
+        X_et, y_et = make_moons(n_samples=220, noise=noise_et, random_state=7)
+        Xtr, Xte, ytr, yte = train_test_split(X_et, y_et, test_size=0.3, random_state=7)
+
+        clf_et = _make_ensemble(method_et, n_est_et, depth_et)
+        clf_et.fit(Xtr, ytr)
+        train_acc_et = clf_et.score(Xtr, ytr)
+        test_acc_et = clf_et.score(Xte, yte)
+
+        xx, yy = np.meshgrid(np.linspace(-2, 3, 150), np.linspace(-2, 2, 150))
+        Z = clf_et.predict(np.c_[xx.ravel(), yy.ravel()]).reshape(xx.shape)
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Contour(x=np.linspace(-2, 3, 150), y=np.linspace(-2, 2, 150), z=Z,
+                showscale=False, colorscale=[[0, 'rgba(83,74,183,0.15)'], [1, 'rgba(226,75,74,0.15)']],
+                contours=dict(coloring='fill'), line=dict(width=0)))
+            fig.add_trace(go.Scatter(x=Xtr[ytr==0,0], y=Xtr[ytr==0,1], mode='markers',
+                name='Class 0 (train)', marker=dict(color='#534AB7', size=7)))
+            fig.add_trace(go.Scatter(x=Xtr[ytr==1,0], y=Xtr[ytr==1,1], mode='markers',
+                name='Class 1 (train)', marker=dict(color='#E24B4A', size=7)))
+            fig.add_trace(go.Scatter(x=Xte[:,0], y=Xte[:,1], mode='markers',
+                name='Test points', marker=dict(color='#1D9E75', size=8, symbol='x')))
+            fig.update_layout(height=400, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, use_container_width=True)
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Train accuracy", f"{train_acc_et:.1%}")
+        c2.metric("Test accuracy", f"{test_acc_et:.1%}")
+        c3.metric("Gap (overfitting signal)", f"{train_acc_et - test_acc_et:+.1%}")
+
+        st.markdown("### All four methods, same settings")
+        rows = []
+        for m in ["Single Tree", "Bagging", "Random Forest", "Boosting"]:
+            c = _make_ensemble(m, n_est_et, depth_et)
+            c.fit(Xtr, ytr)
+            rows.append((m, c.score(Xtr, ytr), c.score(Xte, yte)))
+        fig_bar = go.Figure()
+        fig_bar.add_trace(go.Bar(x=[r[0] for r in rows], y=[r[1] for r in rows],
+            name='Train accuracy', marker_color='#888780'))
+        fig_bar.add_trace(go.Bar(x=[r[0] for r in rows], y=[r[2] for r in rows],
+            name='Test accuracy', marker_color='#534AB7'))
+        fig_bar.update_layout(barmode='group', yaxis_title="Accuracy", yaxis_range=[0, 1],
+            height=320, legend=dict(orientation='h', y=1.14))
+        st.plotly_chart(fig_bar, use_container_width=True)
+        st.caption("The single tree usually shows the widest train/test gap — that gap is "
+                   "exactly the variance the ensembles are cancelling out.")
+
+    with tab2:
+        st.markdown("""
+        All three methods build many trees, but they differ in **how each tree is trained**
+        and **why the ensemble is better than one tree**:
+        """)
+
+        st.markdown("""
+        **Bagging** (Bootstrap AGGregatING)
+        - Draws *n* bootstrap samples (random samples with replacement) from the training data
+        - Fits one full tree per sample, then **averages** the predictions (or majority-votes)
+        - Reduces variance — but trees trained on similar data with all features available
+          tend to look alike, so the variance reduction has a ceiling
+
+        **Random Forest**
+        - Bagging, plus one more twist: each split only considers a **random subset of
+          features** (typically √p of them)
+        - This decorrelates the trees — a strong predictor can't dominate every tree — so
+          averaging cancels out more variance than plain bagging can
+
+        **Boosting**
+        - Trees are built **sequentially**, not independently
+        - Each new tree focuses on the training examples the previous trees got wrong (or,
+          for regression, fits the residual errors left over)
+        - Reduces **bias** rather than variance — but with too many rounds or too high a
+          learning rate, it can start fitting noise
+        """)
+
+        st.markdown("### Test error vs. number of trees")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            depth_tab2 = st.slider("Max tree depth", 1, 6, 3, key="et2_depth")
+            noise_tab2 = st.slider("Dataset noise", 0.1, 0.5, 0.3, step=0.05, key="et2_noise")
+
+        X2, y2 = make_moons(n_samples=220, noise=noise_tab2, random_state=7)
+        Xtr2, Xte2, ytr2, yte2 = train_test_split(X2, y2, test_size=0.3, random_state=7)
+        est_range = [1, 3, 5, 10, 20, 40, 70, 100, 150]
+        bag_err, rf_err, boost_err = [], [], []
+        for ne in est_range:
+            b = BaggingClassifier(estimator=DecisionTreeClassifier(max_depth=depth_tab2),
+                n_estimators=ne, random_state=42).fit(Xtr2, ytr2)
+            r = RandomForestClassifier(n_estimators=ne, max_depth=depth_tab2,
+                random_state=42).fit(Xtr2, ytr2)
+            g = GradientBoostingClassifier(n_estimators=ne, max_depth=min(depth_tab2, 3),
+                learning_rate=0.15, random_state=42).fit(Xtr2, ytr2)
+            bag_err.append(1 - b.score(Xte2, yte2))
+            rf_err.append(1 - r.score(Xte2, yte2))
+            boost_err.append(1 - g.score(Xte2, yte2))
+
+        single_err = 1 - DecisionTreeClassifier(max_depth=depth_tab2, random_state=42
+            ).fit(Xtr2, ytr2).score(Xte2, yte2)
+
+        fig2 = go.Figure()
+        fig2.add_hline(y=single_err, line=dict(color='#888780', dash='dot'),
+            annotation_text="Single tree (doesn't change with 'n trees')")
+        fig2.add_trace(go.Scatter(x=est_range, y=bag_err, name='Bagging',
+            mode='lines+markers', line=dict(color='#EF9F27', width=2.5)))
+        fig2.add_trace(go.Scatter(x=est_range, y=rf_err, name='Random Forest',
+            mode='lines+markers', line=dict(color='#534AB7', width=2.5)))
+        fig2.add_trace(go.Scatter(x=est_range, y=boost_err, name='Boosting',
+            mode='lines+markers', line=dict(color='#E24B4A', width=2.5)))
+        fig2.update_layout(xaxis_title="Number of trees", yaxis_title="Test error rate",
+            height=340, legend=dict(orientation='h', y=1.14))
+        st.plotly_chart(fig2, use_container_width=True)
+        st.caption("Bagging and Random Forest error drops fast then flattens — adding more "
+                   "trees can't hurt, it just stops helping. Boosting keeps improving for "
+                   "longer since each round targets the remaining errors directly, which is "
+                   "also why it needs its **learning rate** and tree count tuned together to "
+                   "avoid eventually overfitting — see **Regularization** and "
+                   "**Cross-Validation** for how that tuning is usually done.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # NAIVE BAYES
