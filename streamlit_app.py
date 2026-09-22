@@ -46,6 +46,7 @@ CATALOGUE = [
     ("ensemble_trees","Ensemble Trees (Bagging, RF, Boosting)", "🌲", "Combining many trees to beat any single one of them"),
     ("gradient",      "Gradient & Descent",             "🏔️", "Direction and step size of learning"),
     ("knn",           "K-Nearest Neighbors",            "🔵", "Classify by majority vote of closest points"),
+    ("lda_qda",       "LDA & QDA",                       "🔮", "Classifying via class-conditional Gaussians — shared vs. per-class covariance"),
     ("linear_reg",    "Linear Regression",              "📊", "Finding the best-fit line through data"),
     ("logistic_reg",  "Logistic Regression",            "🔀", "Binary classification with sigmoid output"),
     ("loss",          "Loss Function",                  "📉", "How we measure model error"),
@@ -101,7 +102,7 @@ CATALOGUE = [
     ("vector_norms",  "Vector Norms",                   "‖·‖", "L1, L2 and Lp norms — measuring size and distance"),
 ]
 
-ML_KEYS     = {"bias_var","confusion","clustering","decision_tree","ensemble_trees","gradient","knn","linear_reg","logistic_reg",
+ML_KEYS     = {"bias_var","confusion","clustering","decision_tree","ensemble_trees","gradient","knn","lda_qda","linear_reg","logistic_reg",
                "loss","overfit","pca","regularization","svm"}
 DL_KEYS     = {"activation","attention","backprop","batch_size","cnn","dropout","lr_schedule",
                "neural_net","neuron","normalization","optimizers","rnn","vanishing_grad"}
@@ -1598,6 +1599,136 @@ elif section == "logistic_reg":
                 xaxis_range=[-4,4], yaxis_range=[-4,4],
                 height=400, legend=dict(orientation='h', y=1.12))
             st.plotly_chart(fig, use_container_width=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# LDA & QDA
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "lda_qda":
+    st.title("🔮 LDA & QDA")
+    st.markdown("""
+    <div class="concept-card">
+    Both methods model each class as a <b>Gaussian blob</b> and classify a new point by
+    which blob it's most likely to have come from. The only difference is what they
+    assume about the blobs' shapes: <b>LDA</b> forces every class to share the same
+    covariance — the exact assumption that makes its boundary a straight line. <b>QDA</b>
+    lets each class have its own covariance, which is what curves the boundary.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["LDA vs. QDA vs. Logistic Regression", "Why the boundary shape differs"])
+
+    from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
+    from sklearn.linear_model import LogisticRegression
+
+    def _gen_two_class(n_per_class, cov_diff, sep, seed):
+        rng = np.random.RandomState(seed)
+        mean0 = np.array([-sep, 0.0])
+        mean1 = np.array([sep, 0.0])
+        cov0 = np.array([[1.0, 0.0], [0.0, 1.0]])
+        theta = cov_diff * np.pi / 3
+        stretch = 1 + cov_diff * 4
+        R = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+        D = np.diag([stretch, 1 / np.sqrt(stretch)])
+        cov1 = R @ D @ cov0 @ D @ R.T
+        X0 = rng.multivariate_normal(mean0, cov0, n_per_class)
+        X1 = rng.multivariate_normal(mean1, cov1, n_per_class)
+        X = np.vstack([X0, X1])
+        y = np.array([0] * n_per_class + [1] * n_per_class)
+        return X, y
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            cov_diff_lq = st.slider("How different are the class covariances?", 0.0, 1.0, 0.7,
+                step=0.1, key="lq_covdiff")
+            sep_lq = st.slider("Class separation", 0.5, 3.0, 1.5, step=0.1, key="lq_sep")
+            n_lq = st.slider("Points per class", 20, 150, 60, key="lq_n")
+            method_lq = st.radio("Show boundary for", ["LDA", "QDA", "Logistic Regression"], key="lq_method")
+
+        X_lq, y_lq = _gen_two_class(n_lq, cov_diff_lq, sep_lq, seed=7)
+        models = {
+            "LDA": LinearDiscriminantAnalysis().fit(X_lq, y_lq),
+            "QDA": QuadraticDiscriminantAnalysis().fit(X_lq, y_lq),
+            "Logistic Regression": LogisticRegression().fit(X_lq, y_lq),
+        }
+        clf_lq = models[method_lq]
+
+        xx, yy = np.meshgrid(np.linspace(X_lq[:,0].min()-1, X_lq[:,0].max()+1, 200),
+                              np.linspace(X_lq[:,1].min()-1, X_lq[:,1].max()+1, 200))
+        Z = clf_lq.predict(np.c_[xx.ravel(), yy.ravel()]).reshape(xx.shape)
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Contour(x=xx[0], y=yy[:,0], z=Z, showscale=False,
+                colorscale=[[0,'rgba(83,74,183,0.15)'],[1,'rgba(226,75,74,0.15)']],
+                contours=dict(coloring='fill'), line=dict(width=0)))
+            for cls, c in [(0,'#534AB7'), (1,'#E24B4A')]:
+                m = y_lq == cls
+                fig.add_trace(go.Scatter(x=X_lq[m,0], y=X_lq[m,1], mode='markers',
+                    name=f'Class {cls}', marker=dict(color=c, size=7)))
+            fig.update_layout(height=400, legend=dict(orientation='h', y=1.12),
+                title=f"{method_lq} decision boundary")
+            st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("### All three methods, same data")
+        rows = [(name, m.score(X_lq, y_lq)) for name, m in models.items()]
+        fig_bar = go.Figure(go.Bar(x=[r[0] for r in rows], y=[r[1] for r in rows],
+            marker_color=['#534AB7','#E24B4A','#1D9E75']))
+        fig_bar.update_layout(yaxis_title="Training accuracy", yaxis_range=[0,1], height=260)
+        st.plotly_chart(fig_bar, use_container_width=True)
+        st.caption("Push the covariance-difference slider up and QDA's curved boundary "
+                   "should pull ahead — that gap is exactly what QDA's extra flexibility "
+                   "buys you when the classes really do have different shapes.")
+
+    with tab2:
+        st.markdown("Both methods classify using Bayes' rule on Gaussian class densities, "
+                     "but the assumption about **Σ** (the covariance matrix) changes everything:")
+        st.markdown('<div class="formula-box">LDA: δₖ(x) = xᵀΣ⁻¹μₖ − ½μₖᵀΣ⁻¹μₖ + log πₖ&nbsp;&nbsp;(linear in x — one shared Σ)</div>',
+            unsafe_allow_html=True)
+        st.markdown('<div class="formula-box">QDA: δₖ(x) = −½log|Σₖ| − ½(x−μₖ)ᵀΣₖ⁻¹(x−μₖ) + log πₖ&nbsp;&nbsp;(quadratic in x — one Σₖ per class)</div>',
+            unsafe_allow_html=True)
+        st.markdown("""
+        Because LDA shares one Σ, the quadratic terms **cancel** when you compare two
+        classes' discriminant scores, leaving a straight line. QDA keeps a separate Σₖ per
+        class, so those quadratic terms survive — giving a curved (elliptical or
+        hyperbolic) boundary. This is the same generative-classifier idea as **Naive
+        Bayes**, minus the assumption that features are independent.
+        """)
+
+        st.markdown("### The cost of flexibility: QDA needs more data")
+        st.markdown("""
+        QDA estimates a full covariance matrix **per class** — far more parameters than
+        LDA's single shared one. With few training points, those extra parameters are
+        estimated poorly, and QDA's flexibility works against it.
+        """)
+
+        Xtest_lq, ytest_lq = _gen_two_class(500, cov_diff=0.9, sep=1.0, seed=999)
+        n_range = [3, 4, 6, 10, 20, 35, 50, 80]
+        lda_curve, qda_curve = [], []
+        for n_pc in n_range:
+            lda_scores, qda_scores = [], []
+            for rep in range(25):
+                Xtr, ytr = _gen_two_class(n_pc, cov_diff=0.9, sep=1.0, seed=rep)
+                lda_scores.append(LinearDiscriminantAnalysis().fit(Xtr, ytr).score(Xtest_lq, ytest_lq))
+                qda_scores.append(QuadraticDiscriminantAnalysis().fit(Xtr, ytr).score(Xtest_lq, ytest_lq))
+            lda_curve.append(np.mean(lda_scores))
+            qda_curve.append(np.mean(qda_scores))
+
+        fig2 = go.Figure()
+        fig2.add_trace(go.Scatter(x=n_range, y=lda_curve, name='LDA', mode='lines+markers',
+            line=dict(color='#534AB7', width=2.5)))
+        fig2.add_trace(go.Scatter(x=n_range, y=qda_curve, name='QDA', mode='lines+markers',
+            line=dict(color='#E24B4A', width=2.5)))
+        fig2.update_layout(xaxis_title="Training points per class", yaxis_title="Test accuracy",
+            xaxis_type='log', height=320, legend=dict(orientation='h', y=1.14))
+        st.plotly_chart(fig2, use_container_width=True)
+        st.caption("With only a handful of points per class, LDA's single shared covariance "
+                   "(fewer parameters, lower variance) can beat QDA even though the true "
+                   "class shapes really are different — QDA only pulls ahead once there's "
+                   "enough data to estimate its extra parameters reliably. The same bias-"
+                   "variance logic as **Regularization** and **Cross-Validation**, just "
+                   "applied to model *assumptions* instead of model *complexity*.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
