@@ -60,7 +60,6 @@ CATALOGUE = [
     ("central_tendency",  "Central Tendency",           "📊", "Mean, median and mode — summarising where data is centred"),
     ("cnn",           "Convolutional Layer (CNN)",      "🖼️", "Kernel sliding over input to detect local patterns"),
     ("correlation",       "Correlation & Covariance",    "📈", "How variables move together — Pearson r and the covariance matrix"),
-    ("cross_validation",  "Cross-Validation",            "🗂️", "Splitting data into folds to estimate performance on unseen data"),
     ("cooks_distance",    "Cook's Distance",            "🎯", "How much one data point alone can drag a regression line around"),
     ("aic_bic",           "AIC / BIC",                   "🧮", "Scoring models on fit vs. complexity to pick the right one"),
     ("dispersion",        "Dispersion",                  "📏", "Variance, std dev, IQR — how spread out data is"),
@@ -105,7 +104,7 @@ DL_KEYS     = {"activation","attention","backprop","batch_size","cnn","dropout",
 MATH_KEYS   = {"chain_rule","derivative","dot_product","eigenvalues","embeddings","integral","matrix_ops",
                "partial_deriv","svd","vectors","vector_norms","vector_spaces"}
 AGENT_KEYS  = {"react_loop","tool_use","planning","agent_memory","multi_agent","rag","reflection"}
-STAT_KEYS   = {"central_tendency","dispersion","probability","naive_bayes","bayes_theorem","correlation","hypothesis_testing","sampling_estimation","cooks_distance","aic_bic","cross_validation"}
+STAT_KEYS   = {"central_tendency","dispersion","probability","naive_bayes","bayes_theorem","correlation","hypothesis_testing","sampling_estimation","cooks_distance","aic_bic"}
 # alphabetical within each group
 ALPHA_ML   = sorted([c for c in CATALOGUE if c[0] in ML_KEYS],   key=lambda x: x[1].lower())
 ALPHA_DL   = sorted([c for c in CATALOGUE if c[0] in DL_KEYS],   key=lambda x: x[1].lower())
@@ -7249,168 +7248,6 @@ elif section == "correlation":
         """)
         st.markdown('<div class="formula-box">ρ = 1 − 6Σdᵢ² / (n(n²−1))   where dᵢ = rank(xᵢ) − rank(yᵢ)</div>',
             unsafe_allow_html=True)
-
-# ═══════════════════════════════════════════════════════════════════════════
-# CROSS-VALIDATION
-# ═══════════════════════════════════════════════════════════════════════════
-elif section == "cross_validation":
-    st.title("🗂️ Cross-Validation")
-    st.markdown("""
-    <div class="concept-card">
-    Training error always looks better than a model deserves — it's graded on data it has
-    already seen. <b>Cross-validation</b> gets an honest estimate by splitting the data into
-    folds, training on some, and scoring on the rest, then rotating which fold is held out.
-    It's the workhorse behind choosing a model's complexity — the same job <b>AIC/BIC</b> do
-    with a formula instead of a held-out split.
-    </div>
-    """, unsafe_allow_html=True)
-
-    tab1, tab2 = st.tabs(["Interactive k-fold", "LOOCV & the bias-variance tradeoff"])
-
-    def _kfold_indices(n, k, seed=0):
-        rng = np.random.RandomState(seed)
-        idx = rng.permutation(n)
-        return np.array_split(idx, k)
-
-    def _cv_curve(x, y, k, degrees, seed=0):
-        folds = _kfold_indices(len(x), k, seed)
-        cv_scores = []
-        for d in degrees:
-            errs = []
-            for i in range(k):
-                val_idx = folds[i]
-                train_idx = np.concatenate([folds[j] for j in range(k) if j != i])
-                c = np.polyfit(x[train_idx], y[train_idx], d)
-                p = np.poly1d(c)
-                errs.append(np.mean((p(x[val_idx]) - y[val_idx]) ** 2))
-            cv_scores.append(np.mean(errs))
-        return np.array(cv_scores), folds
-
-    with tab1:
-        col1, col2 = st.columns([1, 3])
-        with col1:
-            k_cv = st.slider("Number of folds (k)", 2, 10, 5, key="cv_k")
-            fold_preview = st.slider("Fold to preview", 1, k_cv, 1, key="cv_fold_preview")
-            noise_cv = st.slider("Noise", 0.1, 1.0, 0.4, step=0.1, key="cv_noise")
-            n_cv = st.slider("Data points", 15, 40, 24, key="cv_n")
-
-        np.random.seed(7)
-        x_cv = np.sort(np.random.uniform(-3, 3, n_cv))
-        y_cv = np.sin(x_cv) + np.random.normal(0, noise_cv, n_cv)
-
-        degrees = list(range(1, 11))
-        cv_scores, folds = _cv_curve(x_cv, y_cv, k_cv, degrees)
-        train_mses = []
-        for d in degrees:
-            c = np.polyfit(x_cv, y_cv, d)
-            p = np.poly1d(c)
-            train_mses.append(np.mean((p(x_cv) - y_cv) ** 2))
-        best_cv_deg = degrees[int(np.argmin(cv_scores))]
-
-        fold_id = np.empty(n_cv, dtype=int)
-        for i, f in enumerate(folds):
-            fold_id[f] = i
-        val_mask = fold_id == (fold_preview - 1)
-
-        with col2:
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=degrees, y=train_mses, name='Training MSE (all data)',
-                mode='lines+markers', line=dict(color='#888780', width=2, dash='dot')))
-            fig.add_trace(go.Scatter(x=degrees, y=np.clip(cv_scores, 0, 3), name=f'{k_cv}-fold CV MSE',
-                mode='lines+markers', line=dict(color='#534AB7', width=2.5)))
-            fig.add_vline(x=best_cv_deg, line=dict(color='#EF9F27', dash='dash'),
-                annotation_text=f"CV picks degree {best_cv_deg}")
-            fig.update_layout(xaxis_title="Polynomial degree", yaxis_title="MSE",
-                yaxis_range=[0, 2], height=330, legend=dict(orientation='h', y=1.14))
-            st.plotly_chart(fig, use_container_width=True)
-
-        c1, c2 = st.columns(2)
-        c1.metric("Best degree by CV", best_cv_deg)
-        c2.metric(f"CV MSE at degree {best_cv_deg}", f"{cv_scores[best_cv_deg-1]:.3f}")
-
-        st.markdown(f"### Round {fold_preview} of {k_cv}: which points are held out")
-        fig2 = go.Figure()
-        fig2.add_trace(go.Scatter(x=x_cv[~val_mask], y=y_cv[~val_mask], mode='markers',
-            name='Train folds', marker=dict(color='#534AB7', size=8)))
-        fig2.add_trace(go.Scatter(x=x_cv[val_mask], y=y_cv[val_mask], mode='markers',
-            name=f'Held-out fold {fold_preview}', marker=dict(color='#E24B4A', size=11, symbol='x')))
-        c_prev = np.polyfit(x_cv[~val_mask], y_cv[~val_mask], best_cv_deg)
-        p_prev = np.poly1d(c_prev)
-        x_line = np.linspace(-3.5, 3.5, 200)
-        fig2.add_trace(go.Scatter(x=x_line, y=np.clip(p_prev(x_line), -3, 3),
-            name=f'Fit on train folds (degree {best_cv_deg})', line=dict(color='#1D9E75', width=2)))
-        fig2.update_layout(xaxis_title="x", yaxis_title="y", yaxis_range=[-3, 3],
-            height=320, legend=dict(orientation='h', y=1.14))
-        st.plotly_chart(fig2, use_container_width=True)
-        st.caption("This fold's held-out points never influence the line shown here — that's "
-                   "what makes the resulting error an honest estimate. Cycle through every "
-                   "fold and average, and you get the CV curve above.")
-
-    with tab2:
-        st.markdown("""
-        **k controls a tradeoff.** A small k (like 2) trains on less data each round, so
-        the estimate is *biased upward* — each model is trained on a smaller, weaker sample.
-        A large k — up to the extreme of **Leave-One-Out CV (LOOCV)**, where k = n — trains
-        on almost all the data each time, so bias drops, but the n training sets now overlap
-        almost completely, making the resulting folds highly *correlated* and the overall
-        estimate *higher variance*. **k = 5 or 10** is the standard compromise.
-        """)
-
-        st.markdown("#### LOOCV has a shortcut for linear models")
-        st.markdown("""
-        Refitting a model n times sounds expensive, but for ordinary least squares it never
-        needs to happen — the leave-one-out error at point *i* can be recovered from a
-        **single fit on all the data**, using the same leverage <b>hᵢᵢ</b> from the hat matrix
-        seen in <b>Cook's Distance</b>:
-        """, unsafe_allow_html=True)
-        st.markdown('<div class="formula-box">LOOCV = (1/n) Σᵢ [ eᵢ / (1 − hᵢᵢ) ]²</div>',
-            unsafe_allow_html=True)
-        st.markdown("""
-        A point with high leverage (large hᵢᵢ) gets its residual inflated more when removed —
-        because a high-leverage point pulls the fitted line toward itself, so the line moves
-        further away once that point is gone.
-        """)
-
-        np.random.seed(3)
-        n_demo = 15
-        x_demo = np.random.uniform(-3, 3, n_demo)
-        y_demo = 1.2 * x_demo + 0.4 + np.random.normal(0, 0.5, n_demo)
-        X_demo = np.column_stack([x_demo, np.ones(n_demo)])
-        beta_demo = np.linalg.lstsq(X_demo, y_demo, rcond=None)[0]
-        resid_demo = y_demo - X_demo @ beta_demo
-        H_demo = X_demo @ np.linalg.pinv(X_demo.T @ X_demo) @ X_demo.T
-        h_demo = np.diag(H_demo)
-        naive_errs = []
-        for i in range(n_demo):
-            mask = np.ones(n_demo, dtype=bool); mask[i] = False
-            b = np.linalg.lstsq(X_demo[mask], y_demo[mask], rcond=None)[0]
-            naive_errs.append((y_demo[i] - (b[0]*x_demo[i] + b[1])) ** 2)
-        shortcut_errs = (resid_demo / (1 - h_demo)) ** 2
-        c1, c2 = st.columns(2)
-        c1.metric("LOOCV (n refits, brute force)", f"{np.mean(naive_errs):.4f}")
-        c2.metric("LOOCV (one fit + shortcut formula)", f"{np.mean(shortcut_errs):.4f}")
-        st.caption("Same answer, computed two very different ways — one loop over n models, "
-                   "one line of algebra on a single fit.")
-
-        st.markdown("#### Why k = 5–10 in practice")
-        ks_demo = [2, 5, 10, n_cv]
-        reps = 30
-        variances = []
-        for kk in ks_demo:
-            scores = []
-            for rep in range(reps):
-                cvs, _ = _cv_curve(x_cv, y_cv, kk, [3], seed=rep)
-                scores.append(cvs[0])
-            variances.append(np.std(scores))
-        fig3 = go.Figure()
-        fig3.add_trace(go.Bar(x=[f"k={kk}" if kk < n_cv else "LOOCV" for kk in ks_demo],
-            y=variances, marker_color=['#E24B4A', '#EF9F27', '#1D9E75', '#534AB7']))
-        fig3.update_layout(xaxis_title="Fold count", yaxis_title="Std. dev. of CV score across random fold splits",
-            height=280)
-        st.plotly_chart(fig3, use_container_width=True)
-        st.caption("Fewer, larger folds (small k) give a CV score that swings more depending "
-                   "on how the data happened to be split — that's the variance cost of small k, "
-                   "on top of the bias cost from training on less data each round.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # COOK'S DISTANCE
