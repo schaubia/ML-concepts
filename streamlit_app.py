@@ -3313,6 +3313,9 @@ elif section == "derivative":
 
         x_range = np.linspace(-3.5, 3.5, 400)
         y_range = np.array([f(xi) for xi in x_range])
+        ln_invalid = fn_choice == "ln(x)" and x0 <= 0
+        if fn_choice == "ln(x)":
+            y_range = np.where(x_range > 0, y_range, np.nan)  # ln(x) only exists for x > 0
         slope = df(x0)
         y0_val = f(x0)
         tangent_y = slope*(x_range - x0) + y0_val
@@ -3321,11 +3324,12 @@ elif section == "derivative":
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=x_range, y=np.clip(y_range,-8,8), name=fn_choice,
                 line=dict(color='#534AB7', width=2.5)))
-            fig.add_trace(go.Scatter(x=x_range, y=np.clip(tangent_y,-8,8),
-                name=f"Tangent at x={x0:.2f}", line=dict(color='#E24B4A', width=2, dash='dash')))
-            fig.add_scatter(x=[x0], y=[y0_val], mode='markers',
-                marker=dict(color='#E24B4A', size=12), name='Point', showlegend=False)
-            if show_limit:
+            if not ln_invalid:
+                fig.add_trace(go.Scatter(x=x_range, y=np.clip(tangent_y,-8,8),
+                    name=f"Tangent at x={x0:.2f}", line=dict(color='#E24B4A', width=2, dash='dash')))
+                fig.add_scatter(x=[x0], y=[y0_val], mode='markers',
+                    marker=dict(color='#E24B4A', size=12), name='Point', showlegend=False)
+            if show_limit and not ln_invalid:
                 x1_s = x0 + h_val
                 y1_s = f(x1_s)
                 sec_slope = (y1_s - y0_val) / (h_val + 1e-12)
@@ -3338,8 +3342,12 @@ elif section == "derivative":
                 yaxis_range=[-8, 8], height=400, legend=dict(orientation='h', y=1.12))
             st.plotly_chart(fig, use_container_width=True)
 
-        st.markdown(f'<div class="formula-box">f(x) = {fn_choice} &nbsp;→&nbsp; f\'(x) = {df_str} &nbsp;→&nbsp; f\'({x0:.2f}) = {slope:.4f}</div>',
-            unsafe_allow_html=True)
+        if ln_invalid:
+            st.warning(f"ln(x) is only defined for x > 0, so there is no derivative at x₀ = {x0:.2f}. "
+                       "Move x₀ to the right of 0.")
+        else:
+            st.markdown(f'<div class="formula-box">f(x) = {fn_choice} &nbsp;→&nbsp; f\'(x) = {df_str} &nbsp;→&nbsp; f\'({x0:.2f}) = {slope:.4f}</div>',
+                unsafe_allow_html=True)
         st.caption("The tangent slope equals the derivative. As h→0, the orange secant converges to the red tangent.")
 
     with tab2:
@@ -3372,6 +3380,7 @@ elif section == "derivative":
             ("Power rule",     "f(x) = xⁿ",       "f'(x) = n·xⁿ⁻¹",              "x³ → 3x²"),
             ("Sum rule",       "f+g",               "(f+g)' = f'+g'",               "x²+sin(x) → 2x+cos(x)"),
             ("Product rule",   "f·g",               "(fg)' = f'g + fg'",            "x·sin(x) → sin(x)+x·cos(x)"),
+            ("Quotient rule",  "f/g",               "(f/g)' = (f'g − fg')/g²",  "x/sin(x) → (sin(x)−x·cos(x))/sin²(x)"),
             ("Chain rule",     "f(g(x))",           "f'(g(x))·g'(x)",               "sin(x²) → cos(x²)·2x"),
             ("Exponential",    "eˣ",                "eˣ",                           "e³ˣ → 3e³ˣ"),
             ("Logarithm",      "ln(x)",             "1/x",                          "ln(2x) → 1/x"),
