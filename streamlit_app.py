@@ -3738,10 +3738,13 @@ elif section == "dot_product":
             c4.metric("cos θ", f"{cos_sim:.4f}")
             c5.metric("Angle θ", f"{angle_dp:.1f}°")
 
-            if cos_sim > 0.9:   st.success("Vectors are nearly identical in direction")
-            elif cos_sim > 0.0: st.info("Vectors point in a similar direction")
-            elif cos_sim == 0:  st.warning("Vectors are orthogonal (perpendicular)")
-            else:               st.error("Vectors point in opposite directions")
+            if mag_a_dp < 1e-9 or mag_b_dp < 1e-9:
+                st.warning("One of the vectors is the zero vector - it has no direction, "
+                           "so cos θ and the angle are undefined.")
+            elif cos_sim > 0.9:          st.success("Vectors are nearly identical in direction")
+            elif abs(cos_sim) < 1e-9:    st.warning("Vectors are orthogonal (perpendicular)")
+            elif cos_sim > 0.0:          st.info("Vectors point in a similar direction")
+            else:                        st.error("Vectors point in opposite directions")
 
         # bar chart of contributions
         fig = go.Figure()
@@ -3771,7 +3774,7 @@ elif section == "dot_product":
         """)
         st.markdown('<div class="formula-box">score(Q,K) = Q·Kᵀ / √dₖ</div>', unsafe_allow_html=True)
         st.markdown("""
-        **4. Projection** - how much of b lies along a (scalar: a·b̂; vector: (a·b/|b|²)·b).
+        **4. Projection** - how much of a lies along b (scalar: a·b̂; vector: (a·b/|b|²)·b).
         For the full interactive treatment including perpendicular components and the
         connection to PCA and attention, see **Vector Spaces** in Math Foundations.
         """)
