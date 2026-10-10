@@ -1,5 +1,6 @@
 import streamlit as st
 import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
@@ -132,28 +133,28 @@ with st.sidebar:
     st.caption("Interactive reference guide")
     st.divider()
 
-    if st.button("🏠  Home", use_container_width=True):
+    if st.button("🏠  Home", width='stretch'):
         go_to("home")
 
     st.markdown("**Math Foundations**")
     for key, name, icon, _ in ALPHA_MATH:
-        if st.button(name, key=f"sb_{key}", use_container_width=True):
+        if st.button(name, key=f"sb_{key}", width='stretch'):
             go_to(key)
     st.markdown("**Statistics & Data Science**")
     for key, name, icon, _ in ALPHA_STAT:
-        if st.button(name, key=f"sb_{key}", use_container_width=True):
+        if st.button(name, key=f"sb_{key}", width='stretch'):
             go_to(key)
     st.markdown("**Machine Learning**")
     for key, name, icon, _ in ALPHA_ML:
-        if st.button(name, key=f"sb_{key}", use_container_width=True):
+        if st.button(name, key=f"sb_{key}", width='stretch'):
             go_to(key)
     st.markdown("**Deep Learning**")
     for key, name, icon, _ in ALPHA_DL:
-        if st.button(name, key=f"sb_{key}", use_container_width=True):
+        if st.button(name, key=f"sb_{key}", width='stretch'):
             go_to(key)
     st.markdown("**Agentic AI**")
     for key, name, icon, _ in ALPHA_AGENT:
-        if st.button(name, key=f"sb_{key}", use_container_width=True):
+        if st.button(name, key=f"sb_{key}", width='stretch'):
             go_to(key)
 
     st.divider()
@@ -181,7 +182,7 @@ if section == "home":
                     <div style="font-size:0.85rem;color:#5F5E5A">{desc}</div>
                 </div>
                 """, unsafe_allow_html=True)
-                if st.button("Open →", key=f"card_{key}", use_container_width=True):
+                if st.button("Open →", key=f"card_{key}", width='stretch'):
                     go_to(key)
                     st.rerun()
 
@@ -240,7 +241,7 @@ elif section == "loss":
             fig.update_layout(title="Data, prediction and errors (orange)",
                 xaxis_title="x", yaxis_title="y", height=380,
                 legend=dict(orientation='h', y=1.1))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
     with tab2:
         st.markdown('<div class="formula-box">MAE = (1/n) · Σ |y_true − y_pred|</div>', unsafe_allow_html=True)
@@ -253,7 +254,7 @@ elif section == "loss":
             line=dict(color='#1D9E75', width=2.5)))
         fig.update_layout(xaxis_title="Error e", yaxis_title="Contribution to loss",
             height=360, legend=dict(orientation='h', y=1.1))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
         st.markdown("""
         - **MSE** grows quadratically → strongly penalises outliers
         - **MAE** grows linearly → more robust to outliers
@@ -287,7 +288,7 @@ elif section == "loss":
             fig.update_layout(xaxis_title="Predicted probability",
                 yaxis_title="Loss", yaxis_range=[0, 5], height=360,
                 legend=dict(orientation='h', y=1.1))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
 # ═══════════════════════════════════════════════════════════════════════════
 # GRADIENT DESCENT
@@ -353,7 +354,7 @@ elif section == "gradient":
                 name='End', showlegend=True)
             fig.update_layout(xaxis_title="x (parameter)", yaxis_title="Loss",
                 height=400, legend=dict(orientation='h', y=1.12))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         c1, c2, c3 = st.columns(3)
         c1.metric("Starting x", f"{xs_hist[0]:.3f}")
@@ -381,7 +382,7 @@ elif section == "gradient":
             xaxis_title='w₁', yaxis_title='w₂', zaxis_title='Loss',
             camera=dict(eye=dict(x=1.8, y=1.8, z=1.2))),
             height=480, margin=dict(l=0, r=0, b=0, t=20))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
         st.caption("Drag to rotate. The goal is to find the valley - the minimum loss.")
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -465,7 +466,7 @@ dL/dw1 = (output-y) · w2 · sigmoid'(h) · x
     fig.add_trace(go.Scatter(y=w2_hist, name='w₂', line=dict(color='#1D9E75', width=2)), row=1, col=2)
     fig.update_xaxes(title_text="Step")
     fig.update_layout(height=320, showlegend=True)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 # ═══════════════════════════════════════════════════════════════════════════
 # OVERFITTING / UNDERFITTING
@@ -511,7 +512,7 @@ elif section == "overfit":
             name=f'Polynomial (degree {degree})', line=dict(color='#E24B4A', width=2.5)))
         fig.update_layout(xaxis_title="x", yaxis_title="y",
             yaxis_range=[-3, 3], height=380, legend=dict(orientation='h', y=1.12))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     c1, c2, c3 = st.columns(3)
     c1.metric("Train MSE", f"{train_mse:.4f}")
@@ -548,7 +549,7 @@ elif section == "overfit":
     fig2.update_layout(xaxis_title="Polynomial degree",
         yaxis_title="MSE", yaxis_range=[0, 5], height=300,
         legend=dict(orientation='h', y=1.12))
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig2, width='stretch')
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SPLINES & GAMs
@@ -616,7 +617,7 @@ elif section == "splines_gam":
                 fig.add_vline(x=k, line=dict(color='#888780', dash='dot', width=1))
             fig.update_layout(xaxis_title="x", yaxis_title="y", yaxis_range=[-6, 6],
                 height=400, legend=dict(orientation='h', y=1.14))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         st.caption("Shaded bands are outside the training data (extrapolation). Dotted grey "
                    "lines mark the knots. Try raising both the knot count and 'noise', and "
@@ -654,7 +655,7 @@ elif section == "splines_gam":
             fig2.add_trace(go.Scatter(x=x_ssplot, y=spl(x_ssplot),
                 line=dict(color='#1D9E75', width=2.5), name='Smoothing spline'))
             fig2.update_layout(height=330, legend=dict(orientation='h', y=1.14))
-            st.plotly_chart(fig2, use_container_width=True)
+            st.plotly_chart(fig2, width='stretch')
         if smooth_s <= 0.1:
             st.warning("Very low smoothing - the curve is chasing individual noisy points.")
         elif smooth_s >= 20:
@@ -694,7 +695,7 @@ elif section == "splines_gam":
                 name='True f₁(x₁)', line=dict(color='#888780', width=1.5, dash='dot')))
             fig3.update_layout(xaxis_title="x₁", yaxis_title="Partial effect", height=300,
                 legend=dict(orientation='h', y=1.16))
-            st.plotly_chart(fig3, use_container_width=True)
+            st.plotly_chart(fig3, width='stretch')
         with col2:
             fig4 = go.Figure()
             fig4.add_trace(go.Scatter(x=x2_gam[order2], y=f2_hat[order2],
@@ -703,7 +704,7 @@ elif section == "splines_gam":
                 name='True f₂(x₂)', line=dict(color='#888780', width=1.5, dash='dot')))
             fig4.update_layout(xaxis_title="x₂", yaxis_title="Partial effect", height=300,
                 legend=dict(orientation='h', y=1.16))
-            st.plotly_chart(fig4, use_container_width=True)
+            st.plotly_chart(fig4, width='stretch')
         st.caption("Each panel shows the effect of one feature *holding the other fixed* - "
                    "exactly the interpretability a plain multiple linear regression gives you "
                    "(one coefficient per feature), except each effect here is allowed to bend.")
@@ -787,7 +788,7 @@ elif section == "subset_selection":
                 line=dict(color='#E24B4A', width=2, dash='dash')))
             fig.update_layout(xaxis_title="Number of predictors in model", yaxis_title="Training RSS",
                 height=380, legend=dict(orientation='h', y=1.14))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         st.caption(f"True predictors that matter: {sorted(true_cols)}. "
                    f"Best subset at that size picked: {sorted(best_subset_by_size.get(n_true,((),0))[0])}. "
@@ -828,7 +829,7 @@ elif section == "subset_selection":
         fig2.add_vline(x=best_bic_size, line=dict(color='#E24B4A', dash='dot'))
         fig2.update_layout(xaxis_title="Number of predictors", yaxis_title="Score (lower is better)",
             height=340, legend=dict(orientation='h', y=1.14))
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width='stretch')
 
         c1, c2 = st.columns(2)
         c1.metric("Best size by AIC", best_aic_size)
@@ -880,7 +881,7 @@ elif section == "activation":
     fig.update_xaxes(title_text="x")
     fig.update_yaxes(title_text="f(x)", row=1, col=1)
     fig.update_yaxes(title_text="f'(x)", row=1, col=2)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
     st.markdown("### Properties")
     props = {
@@ -894,7 +895,7 @@ elif section == "activation":
     if rows:
         import pandas as pd
         df_props = pd.DataFrame(rows, columns=["Function", "Advantage", "Disadvantage", "Use case"])
-        st.dataframe(df_props, use_container_width=True, hide_index=True)
+        st.dataframe(df_props, width='stretch', hide_index=True)
 
     st.markdown("### Interactive example - effect of the activation")
     x_demo = st.slider("Input x", -4.0, 4.0, 1.5, step=0.1)
@@ -950,7 +951,7 @@ elif section == "linear_reg":
                 line=dict(color='#1D9E75', width=1.5, dash='dash')))
             fig.update_layout(xaxis_title="x", yaxis_title="y",
                 height=360, legend=dict(orientation='h', y=1.12))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Fitted w", f"{w_hat:.3f}", f"{w_hat - true_w:+.3f}")
@@ -980,7 +981,7 @@ elif section == "linear_reg":
             name='Found minimum')
         fig3.update_layout(xaxis_title='w', yaxis_title='b',
             height=400, legend=dict(orientation='h', y=1.1))
-        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(fig3, width='stretch')
         st.caption("The green star is the MSE minimum - the optimal w and b.")
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1033,7 +1034,7 @@ elif section == "regularization":
                 annotation_text=f"optimal w = {opt_w:.2f}")
             fig.update_layout(xaxis_title="Weight w", yaxis_title="Loss",
                 height=380, legend=dict(orientation='h', y=1.12))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
     with tab2:
         st.markdown("Train a small linear model with different regularization - watch the weights:")
@@ -1075,7 +1076,7 @@ elif section == "regularization":
         fig2.update_layout(xaxis_type='log', xaxis_title="λ (log scale)",
             yaxis_title="Weight value", height=360,
             legend=dict(orientation='h', y=1.15, font=dict(size=11)))
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width='stretch')
         st.caption("As λ increases, weights shrink. L1 reaches exactly 0 (sparse); L2 approaches 0 smoothly.")
 
 
@@ -1145,7 +1146,7 @@ elif section == "knn":
 
         fig.update_layout(xaxis_title="X", yaxis_title="Y", height=420,
             legend=dict(orientation='h', y=1.12))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     c1, c2, c3 = st.columns(3)
     for i, (cname, col) in enumerate(zip(class_names, class_colors)):
@@ -1179,7 +1180,7 @@ elif section == "knn":
                 mode='markers', marker=dict(color=c, size=6),
                 showlegend=False), row=1, col=col_idx+1)
     fig2.update_layout(height=320)
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig2, width='stretch')
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1239,7 +1240,7 @@ elif section == "svm":
                 mode='markers', name='Support vectors',
                 marker=dict(color='rgba(0,0,0,0)', size=16, line=dict(color='black', width=2))))
             fig.update_layout(height=400, legend=dict(orientation='h', y=1.12))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         c1, c2s, c3 = st.columns(3)
         c1.metric("C", f"{C_val:.2g}")
@@ -1300,7 +1301,7 @@ elif section == "svm":
                 fig2.add_trace(go.Scatter(x=X_k[m, 0], y=X_k[m, 1], mode='markers',
                     name=f'Class {cls}', marker=dict(color=c, size=7)))
             fig2.update_layout(height=380, legend=dict(orientation='h', y=1.1))
-            st.plotly_chart(fig2, use_container_width=True)
+            st.plotly_chart(fig2, width='stretch')
 
         st.metric(f"Training accuracy ({kernel_svm} kernel)", f"{acc_k:.1%}")
 
@@ -1312,7 +1313,7 @@ elif section == "svm":
         fig3 = go.Figure(go.Bar(x=[r[0] for r in rows], y=[r[1] for r in rows],
             marker_color=['#888780', '#EF9F27', '#534AB7']))
         fig3.update_layout(yaxis_title="Training accuracy", yaxis_range=[0, 1], height=260)
-        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(fig3, width='stretch')
         st.caption("On circular or crescent-shaped data, the linear kernel is stuck near "
                    "chance - no straight line helps. RBF (and often poly) recovers a clean "
                    "boundary by working in a space where the classes really are separable.")
@@ -1369,7 +1370,7 @@ elif section == "confusion":
             text=text, texttemplate="%{text}", textfont=dict(size=18),
             showscale=False))
         fig.update_layout(height=320, xaxis_title="Predicted", yaxis_title="Actual")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Precision", f"{precision:.3f}", help="TP / (TP+FP) - of all positive predictions, how many were correct?")
@@ -1413,7 +1414,7 @@ elif section == "confusion":
     fig2.update_yaxes(title_text="Score", row=1, col=1)
     fig2.update_yaxes(title_text="Precision", row=1, col=2)
     fig2.update_layout(height=340, legend=dict(orientation='h', y=1.12))
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig2, width='stretch')
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1477,7 +1478,7 @@ elif section == "bias_var":
         fig.update_layout(xaxis_title="x", yaxis_title="y",
             yaxis_range=[-4, 4], height=360,
             legend=dict(orientation='h', y=1.12))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Bias²", f"{avg_bias_sq:.3f}")
@@ -1524,7 +1525,7 @@ elif section == "bias_var":
     fig2.update_layout(xaxis_title="Model complexity", yaxis_title="Error",
         yaxis_range=[0, min(max(bias_vals + var_vals + [2]), 8)],
         height=320, legend=dict(orientation='h', y=1.12))
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig2, width='stretch')
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1596,7 +1597,7 @@ elif section == "lr_schedule":
                 annotation_text="warmup end")
         fig.update_layout(xaxis_title="Epoch", yaxis_title="Learning rate",
             height=380, legend=dict(orientation='h', y=1.12))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     st.markdown("### Simulated training loss with each schedule")
     np.random.seed(42)
@@ -1615,7 +1616,7 @@ elif section == "lr_schedule":
             line=dict(color=sched_colors[name], width=2)))
     fig2.update_layout(xaxis_title="Epoch", yaxis_title="Simulated loss",
         height=300, legend=dict(orientation='h', y=1.12))
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig2, width='stretch')
     st.caption("Simulated - illustrates the qualitative effect of each schedule, not a real training run.")
 
 
@@ -1700,7 +1701,7 @@ elif section == "normalization":
                 name='End'))
             fig.update_layout(xaxis_title='w₁', yaxis_title='w₂',
                 height=380, legend=dict(orientation='h', y=1.12))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         st.markdown("**Without normalization:** elongated elliptical contours → slow, zigzagging descent.  \n"
                     "**With normalization:** rounder contours → faster, straighter path to minimum.")
@@ -1739,7 +1740,7 @@ elif section == "normalization":
                         showlegend=False, marker_color='#534AB7',
                         opacity=0.7), row=1, col=r+1)
             fig_bn.update_layout(height=340)
-            st.plotly_chart(fig_bn, use_container_width=True)
+            st.plotly_chart(fig_bn, width='stretch')
             st.caption("Each box = one feature column. Batch Norm centres each feature; Layer Norm centres each sample.")
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1783,7 +1784,7 @@ elif section == "logistic_reg":
             fig.update_layout(xaxis_title="x", yaxis_title="Predicted probability p",
                 yaxis_range=[-0.05, 1.05], height=360,
                 legend=dict(orientation='h', y=1.1))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
     with tab2:
         col1, col2 = st.columns([1, 2])
@@ -1834,7 +1835,7 @@ elif section == "logistic_reg":
             fig.update_yaxes(title_text="Loss", row=1, col=1)
             fig.update_yaxes(title_text="p(x)", row=1, col=2)
             fig.update_layout(height=360, legend=dict(orientation='h', y=1.12))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         c1, c2, c3 = st.columns(3)
         c1.metric("Final w", f"{w_t:.3f}")
@@ -1888,7 +1889,7 @@ elif section == "logistic_reg":
             fig.update_layout(xaxis_title="Feature 1", yaxis_title="Feature 2",
                 xaxis_range=[-4,4], yaxis_range=[-4,4],
                 height=400, legend=dict(orientation='h', y=1.12))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1959,14 +1960,14 @@ elif section == "lda_qda":
                     name=f'Class {cls}', marker=dict(color=c, size=7)))
             fig.update_layout(height=400, legend=dict(orientation='h', y=1.12),
                 title=f"{method_lq} decision boundary")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         st.markdown("### All three methods, same data")
         rows = [(name, m.score(X_lq, y_lq)) for name, m in models.items()]
         fig_bar = go.Figure(go.Bar(x=[r[0] for r in rows], y=[r[1] for r in rows],
             marker_color=['#534AB7','#E24B4A','#1D9E75']))
         fig_bar.update_layout(yaxis_title="Training accuracy", yaxis_range=[0,1], height=260)
-        st.plotly_chart(fig_bar, use_container_width=True)
+        st.plotly_chart(fig_bar, width='stretch')
         st.caption("Push the covariance-difference slider up and QDA's curved boundary "
                    "should pull ahead - that gap is exactly what QDA's extra flexibility "
                    "buys you when the classes really do have different shapes.")
@@ -2012,7 +2013,7 @@ elif section == "lda_qda":
             line=dict(color='#E24B4A', width=2.5)))
         fig2.update_layout(xaxis_title="Training points per class", yaxis_title="Test accuracy",
             xaxis_type='log', height=320, legend=dict(orientation='h', y=1.14))
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width='stretch')
         st.caption("With only a handful of points per class, LDA's single shared covariance "
                    "(fewer parameters, lower variance) can beat QDA even though the true "
                    "class shapes really are different - QDA only pulls ahead once there's "
@@ -2095,7 +2096,7 @@ elif section == "neural_net":
                 yaxis=dict(visible=False, range=[-0.05,1.1]),
                 height=400, plot_bgcolor='white',
                 margin=dict(l=10, r=10, t=40, b=10))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         st.markdown("### Parameter count breakdown")
         param_data = []
@@ -2112,7 +2113,7 @@ elif section == "neural_net":
             })
         import pandas as pd
         df_params = pd.DataFrame(param_data)
-        st.dataframe(df_params, use_container_width=True, hide_index=True)
+        st.dataframe(df_params, width='stretch', hide_index=True)
         st.metric("Total trainable parameters", f"{total_params:,}")
 
     with tab2:
@@ -2159,7 +2160,7 @@ elif section == "neural_net":
             fig.update_layout(barmode='group', height=380,
                 xaxis_title="Neuron", yaxis_title="Activation value",
                 legend=dict(orientation='h', y=1.12))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         st.caption("Weights are random (seed=99). Change inputs to see activations shift.")
 
 
@@ -2271,7 +2272,7 @@ elif section == "optimizers":
         fig.update_xaxes(title_text="Step", row=1, col=2)
         fig.update_yaxes(title_text="Loss", row=1, col=2)
         fig.update_layout(height=420, legend=dict(orientation='h', y=1.12))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     st.markdown("**Tip:** try the *Ravine* surface - SGD zigzags badly while Adam cuts straight through.")
 
@@ -2321,7 +2322,7 @@ elif section == "dropout":
             fig.update_layout(barmode='overlay', xaxis_title="Neuron index",
                 yaxis_title="Activation value", height=360,
                 legend=dict(orientation='h', y=1.1))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             active = int(mask.sum())
             st.markdown(f"🔴 **{n_neurons_do - active} neurons dropped** &nbsp;|&nbsp; 🟣 **{active} neurons active**")
 
@@ -2363,7 +2364,7 @@ elif section == "dropout":
                 line=dict(color='#1D9E75', width=2.5)))
             fig.update_layout(xaxis_title="Epoch", yaxis_title="Loss",
                 height=380, legend=dict(orientation='h', y=1.12))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         st.caption("Dashed = no dropout. Solid = with dropout. The gap between train and test loss is the overfit signal.")
 
 
@@ -2448,7 +2449,7 @@ elif section == "batch_size":
         fig.update_yaxes(title_text="MSE", row=1, col=1)
         fig.update_yaxes(title_text="MSE", row=1, col=2)
         fig.update_layout(height=380, legend=dict(orientation='h', y=1.12))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     c1, c2, c3 = st.columns(3)
     c1.metric("Steps per epoch", int(np.ceil(n_total / batch_size_sim)))
@@ -2516,7 +2517,7 @@ elif section == "vanishing_grad":
             fig.update_layout(xaxis_title="Layer (from output → input)",
                 yaxis_title="Gradient magnitude",
                 yaxis_type='log', height=380)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         # Also show on linear scale for small networks
         st.markdown("### Gradient magnitude table (first 10 layers)")
@@ -2527,7 +2528,7 @@ elif section == "vanishing_grad":
             "Status": ["🔴 Vanished" if g < 1e-3 else "🟡 Exploding" if g > 100 else "🟢 OK"
                        for g in layer_grad_mags[:10]]
         })
-        st.dataframe(df_vg, use_container_width=True, hide_index=True)
+        st.dataframe(df_vg, width='stretch', hide_index=True)
 
     with tab2:
         st.markdown("### How to fix vanishing/exploding gradients")
@@ -2560,7 +2561,7 @@ elif section == "vanishing_grad":
                     marker_color=col_c, nbinsx=40))
             fig2.update_layout(barmode='overlay', xaxis_title="Weight value",
                 yaxis_title="Count", height=300, legend=dict(orientation='h', y=1.12))
-            st.plotly_chart(fig2, use_container_width=True)
+            st.plotly_chart(fig2, width='stretch')
 
         with col2:
             st.markdown("**2. Residual connections (skip connections)**")
@@ -2595,7 +2596,7 @@ elif section == "vanishing_grad":
             fig3.update_layout(xaxis_title="Layer (from output)",
                 yaxis_title="Gradient magnitude",
                 height=280, legend=dict(orientation='h', y=1.12))
-            st.plotly_chart(fig3, use_container_width=True)
+            st.plotly_chart(fig3, width='stretch')
 
         st.markdown("""
         **3. Other fixes:**
@@ -2728,7 +2729,7 @@ elif section == "neuron":
             fig.add_annotation(x=x_out, y=4.6,
                 text=f"{output_n:.4f}", showarrow=False, font=dict(size=10, color="#a32d2d"))
 
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         # live equation below the diagram
         st.markdown("**Equation for this neuron right now:**")
@@ -2762,7 +2763,7 @@ elif section == "neuron":
             fig.update_layout(xaxis_title="Input x", yaxis_title="Output (tanh)",
                 title="Changing weight - same bias (b=0)",
                 height=300, legend=dict(orientation='h', y=1.15))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         with col2:
             st.markdown("**Effect of bias - shifts the activation threshold**")
@@ -2778,7 +2779,7 @@ elif section == "neuron":
             fig.update_layout(xaxis_title="Input x", yaxis_title="Output (sigmoid)",
                 title="Changing bias - same weight (w=1.5)",
                 height=300, legend=dict(orientation='h', y=1.15))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         st.markdown("""
         - A **large positive weight** makes the neuron very sensitive to that input - it fires strongly when x is high.  
@@ -2934,7 +2935,7 @@ elif section == "vectors":
                     scaleanchor='x', scaleratio=1),
                 height=420, plot_bgcolor='white',
                 showlegend=False, margin=dict(l=10,r=10,t=10,b=10))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         c1,c2,c3,c4 = st.columns(4)
         c1.metric("|a|  magnitude", f"{mag_a:.3f}")
@@ -2973,7 +2974,7 @@ elif section == "vectors":
                 yaxis=dict(range=[-0.5,mag_demo+0.5],scaleanchor='x',scaleratio=1,zeroline=True),
                 height=320, plot_bgcolor='white', showlegend=False,
                 margin=dict(l=10,r=10,t=10,b=10))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         st.metric("Dot product a·b", f"{dp:.3f}")
         if angle_deg < 90:   st.success(f"Angle < 90° → positive dot product → vectors point in similar direction")
         elif angle_deg == 90: st.info("Angle = 90° → dot product = 0 → vectors are orthogonal (perpendicular)")
@@ -3154,7 +3155,7 @@ elif section == "matrix_ops":
                 height=420, plot_bgcolor='white',
                 legend=dict(orientation='h',y=1.1),
                 margin=dict(l=10,r=10,t=10,b=10))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
     with tab3:
         st.markdown("### Transpose and key properties")
@@ -3229,7 +3230,7 @@ elif section == "matrix_ops":
                 height=380, plot_bgcolor='white',
                 legend=dict(orientation='h', y=1.1),
                 margin=dict(l=10,r=10,t=30,b=10))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             st.caption("The determinant is exactly the ratio of transformed area to original area "
                       "(unsigned). Sign tells you if the square also got flipped.")
 
@@ -3340,7 +3341,7 @@ elif section == "derivative":
                     marker=dict(color='#EF9F27', size=10), showlegend=False)
             fig.update_layout(xaxis_title="x", yaxis_title="y",
                 yaxis_range=[-8, 8], height=400, legend=dict(orientation='h', y=1.12))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         if ln_invalid:
             st.warning(f"ln(x) is only defined for x > 0, so there is no derivative at x₀ = {x0:.2f}. "
@@ -3371,7 +3372,7 @@ elif section == "derivative":
                 "Value": [f"{forward:.6f}", f"{central:.6f}", f"{analytical:.6f}"],
                 "Error": [f"{abs(forward-analytical):.2e}", f"{abs(central-analytical):.2e}", "0"],
             })
-            st.dataframe(df_num, use_container_width=True, hide_index=True)
+            st.dataframe(df_num, width='stretch', hide_index=True)
         st.caption("Central difference is more accurate for the same h - error is O(h²) vs O(h) for forward.")
 
     with tab3:
@@ -3387,7 +3388,7 @@ elif section == "derivative":
         ]
         import pandas as pd
         st.dataframe(pd.DataFrame(rules, columns=["Rule","f(x)","f'(x)","Example"]),
-            use_container_width=True, hide_index=True)
+            width='stretch', hide_index=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -3444,7 +3445,7 @@ elif section == "partial_deriv":
         fig.update_layout(scene=dict(xaxis_title='x', yaxis_title='y', zaxis_title='f(x,y)',
             camera=dict(eye=dict(x=1.5, y=1.5, z=1.2))),
             height=430, margin=dict(l=0,r=0,b=0,t=0))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     st.markdown(f'<div class="formula-box">'
         f'∂f/∂x = {dfdx_str} = {dfdx_val:.4f} &nbsp;&nbsp; ∂f/∂y = {dfdy_str} = {dfdy_val:.4f}'
@@ -3520,7 +3521,7 @@ elif section == "integral":
             fig.add_vline(x=b_i, line_dash='dot', line_color='gray')
             fig.update_layout(xaxis_title="x", yaxis_title="f(x)",
                 height=400, showlegend=False)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         c1,c2,c3 = st.columns(3)
         c1.metric("Riemann sum", f"{riemann_sum:.5f}")
@@ -3539,7 +3540,7 @@ elif section == "integral":
             ("1/(1+x²)",      "arctan(x) + C",     "Probability distributions"),
         ]
         st.dataframe(pd.DataFrame(integrals, columns=["f(x)","∫f(x)dx","Where it appears"]),
-            use_container_width=True, hide_index=True)
+            width='stretch', hide_index=True)
         st.markdown("**Fundamental Theorem of Calculus** connects derivatives and integrals:")
         st.markdown('<div class="formula-box">d/dx ∫ₐˣ f(t)dt = f(x)</div>', unsafe_allow_html=True)
 
@@ -3636,7 +3637,7 @@ Step 5 - Chain rule:
         fig.update_xaxes(title_text="x"); fig.update_yaxes(title_text="y")
         fig.update_yaxes(title_text="dy/dx", row=1, col=2)
         fig.update_layout(height=360, legend=dict(orientation='h',y=1.12))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     with tab2:
         st.markdown("### Why the chain rule *is* backpropagation")
@@ -3752,7 +3753,7 @@ elif section == "dot_product":
         fig.update_layout(xaxis_title="Component", yaxis_title="aᵢ·bᵢ",
             title=f"Element contributions to dot product (sum = {dp_val:.3f})",
             height=280, showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     with tab2:
         st.markdown("""
@@ -3873,7 +3874,7 @@ elif section == "eigenvalues":
                 height=420, plot_bgcolor='white', showlegend=False,
                 margin=dict(l=10,r=10,t=30,b=10),
                 title="Blue=original vectors, Red=transformed. Gold/Green=eigenvectors (solid→dashed after A)")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         if real_eigs:
             c1,c2 = st.columns(2)
@@ -3928,7 +3929,7 @@ elif section == "eigenvalues":
                 xaxis=dict(range=[-4,4]), yaxis=dict(range=[-4,4],scaleanchor='x',scaleratio=1),
                 height=400, plot_bgcolor='white',
                 margin=dict(l=10,r=10,t=10,b=10), showlegend=False)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         c1,c2 = st.columns(2)
         c1.metric("PC1 explains", f"{var_explained[0]:.1%} of variance")
@@ -4016,7 +4017,7 @@ elif section == "pca":
                 height=430, plot_bgcolor='white',
                 legend=dict(orientation='h', y=1.1),
                 margin=dict(l=10,r=10,t=10,b=10))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         c1, c2, c3 = st.columns(3)
         c1.metric("PC1 variance explained", f"{var_exp[0]:.1%}")
@@ -4056,7 +4057,7 @@ elif section == "pca":
             fig.update_layout(xaxis_title=f"PC1 ({var_ratio[0]:.1%})",
                 yaxis_title=f"PC2 ({var_ratio[1]:.1%})",
                 height=390, legend=dict(orientation='h', y=1.1))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         st.markdown(f"Original: **{n_feats}D** → PCA projection: **2D** "
                     f"(retaining {var_ratio[0]+var_ratio[1]:.1%} of variance)")
@@ -4099,7 +4100,7 @@ elif section == "pca":
             fig.update_xaxes(title_text="Component")
             fig.update_yaxes(title_text="Variance explained")
             fig.update_layout(height=350, showlegend=False)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         st.metric(f"Components needed for {threshold:.0%} variance",
                   f"{n_keep} out of {n_feat_s}",
@@ -4151,7 +4152,7 @@ elif section == "clustering":
             fig.add_trace(go.Scatter(x=centers_km[:, 0], y=centers_km[:, 1], mode='markers',
                 name='Centroids', marker=dict(color='black', size=14, symbol='x')))
             fig.update_layout(height=400, legend=dict(orientation='h', y=1.12))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         c1, c2m, c3 = st.columns(3)
         c1.metric("Inertia (within-cluster SS)", f"{kmeans.inertia_:.1f}")
@@ -4167,7 +4168,7 @@ elif section == "clustering":
         fig2.add_vline(x=chosen_k, line=dict(color='#EF9F27', dash='dash'),
             annotation_text=f"Selected k={chosen_k}")
         fig2.update_layout(xaxis_title="k", yaxis_title="Inertia", height=280)
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width='stretch')
         st.caption("The 'elbow' - where adding another cluster stops giving a big drop in "
                    "inertia - is a common heuristic for picking k. There's no ground truth to "
                    "check against in real unsupervised problems, so this is a judgment call, "
@@ -4204,7 +4205,7 @@ elif section == "clustering":
                 annotation_text=f"Cut → {n_found} clusters")
             fig_dendro.update_layout(xaxis=dict(showticklabels=False, title="Points"),
                 yaxis_title="Linkage distance", height=380)
-            st.plotly_chart(fig_dendro, use_container_width=True)
+            st.plotly_chart(fig_dendro, width='stretch')
 
         st.markdown("### Resulting clusters at this cut height")
         fig_scatter = go.Figure()
@@ -4213,7 +4214,7 @@ elif section == "clustering":
             fig_scatter.add_trace(go.Scatter(x=X_h[m, 0], y=X_h[m, 1], mode='markers',
                 name=f'Cluster {lab}', marker=dict(color=palette[i % len(palette)], size=9)))
         fig_scatter.update_layout(height=340, legend=dict(orientation='h', y=1.14))
-        st.plotly_chart(fig_scatter, use_container_width=True)
+        st.plotly_chart(fig_scatter, width='stretch')
 
         c1, c2m = st.columns(2)
         c1.metric("Clusters at this cut", n_found)
@@ -4289,7 +4290,7 @@ elif section == "decision_tree":
                         line=dict(color='white', width=0.5))))
             fig.update_layout(xaxis=dict(range=[-5,5]), yaxis=dict(range=[-5,5]),
                 height=420, legend=dict(orientation='h', y=1.1))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         c1,c2,c3 = st.columns(3)
         c1.metric("Max depth", max_depth)
@@ -4334,7 +4335,7 @@ elif section == "decision_tree":
             fig.update_layout(xaxis_title="Fraction of class A",
                 yaxis_title="Impurity", height=320,
                 legend=dict(orientation='h', y=1.12))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         st.markdown("### Information gain - how a split is chosen")
         st.markdown("""
@@ -4435,7 +4436,7 @@ elif section == "ensemble_trees":
             fig.add_trace(go.Scatter(x=Xte[:,0], y=Xte[:,1], mode='markers',
                 name='Test points', marker=dict(color='#1D9E75', size=8, symbol='x')))
             fig.update_layout(height=400, legend=dict(orientation='h', y=1.12))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         c1, c2, c3 = st.columns(3)
         c1.metric("Train accuracy", f"{train_acc_et:.1%}")
@@ -4455,7 +4456,7 @@ elif section == "ensemble_trees":
             name='Test accuracy', marker_color='#534AB7'))
         fig_bar.update_layout(barmode='group', yaxis_title="Accuracy", yaxis_range=[0, 1],
             height=320, legend=dict(orientation='h', y=1.14))
-        st.plotly_chart(fig_bar, use_container_width=True)
+        st.plotly_chart(fig_bar, width='stretch')
         st.caption("The single tree usually shows the widest train/test gap - that gap is "
                    "exactly the variance the ensembles are cancelling out.")
 
@@ -4521,7 +4522,7 @@ elif section == "ensemble_trees":
             mode='lines+markers', line=dict(color='#E24B4A', width=2.5)))
         fig2.update_layout(xaxis_title="Number of trees", yaxis_title="Test error rate",
             height=340, legend=dict(orientation='h', y=1.14))
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width='stretch')
         st.caption("Bagging and Random Forest error drops fast then flattens - adding more "
                    "trees can't hurt, it just stops helping. Boosting keeps improving for "
                    "longer since each round targets the remaining errors directly, which is "
@@ -4578,7 +4579,7 @@ elif section == "naive_bayes":
                 textposition='outside'))
             fig.update_layout(yaxis=dict(range=[0, min(1, max(posterior, prior)*1.5)]),
                 height=320, showlegend=False, yaxis_title="Probability")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         c1,c2,c3 = st.columns(3)
         c1.metric("Prior", f"{prior:.4f}")
@@ -4650,7 +4651,7 @@ elif section == "naive_bayes":
                     symbol='star', line=dict(color='black',width=1.5))))
             fig.update_layout(xaxis=dict(range=[-5,5]), yaxis=dict(range=[-5,5]),
                 height=400, legend=dict(orientation='h', y=1.1))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         c1, c2 = st.columns(2)
         c1.metric("P(Class 0 | x)", f"{test_proba[0]:.4f}")
@@ -4730,7 +4731,7 @@ elif section == "cnn":
                 showscale=False, xgap=1, ygap=1), row=1, col=3)
             fig.update_yaxes(autorange='reversed')
             fig.update_layout(height=380)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         c1,c2,c3 = st.columns(3)
         c1.metric("Input size", f"{G}×{G}")
@@ -4772,7 +4773,7 @@ elif section == "cnn":
                 showscale=False, xgap=1, ygap=1), row=1, col=idx+1)
         fig.update_yaxes(autorange='reversed')
         fig.update_layout(height=200)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
         st.caption("Same input image, 5 different 3×3 kernels. CNNs learn these kernels automatically from data.")
 
 
@@ -4844,7 +4845,7 @@ elif section == "attention":
             fig.update_xaxes(title_text="Key token", row=1, col=1)
             fig.update_yaxes(title_text="Attention weight", row=1, col=1)
             fig.update_layout(height=380)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         top_token = tokens[np.argmax(attn_weights)]
         st.markdown(f'**"{tokens[query_idx]}"** attends most strongly to **"{top_token}"** '
@@ -4875,7 +4876,7 @@ elif section == "attention":
                 y=sm, name='After softmax', marker_color='#534AB7'))
             fig.update_layout(barmode='group', height=320,
                 legend=dict(orientation='h', y=1.12))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         st.markdown(f"**Temperature τ={temp_sm}:** {'sharp focus on top key' if temp_sm < 0.5 else 'uniform attention across all keys' if temp_sm > 2 else 'balanced attention'}")
         st.caption("In transformers τ = 1/√dₖ. Low temperature → the model is more decisive; high → more exploratory.")
 
@@ -4931,7 +4932,7 @@ elif section == "probability":
                 annotation_text=f"x={x_query:.1f}")
             fig.update_layout(xaxis_title="x", yaxis_title="Probability density",
                 height=380, legend=dict(orientation='h', y=1.12))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         c1,c2,c3 = st.columns(3)
         c1.metric("PDF f(x)", f"{pdf_at_x:.4f}")
@@ -4965,7 +4966,7 @@ elif section == "probability":
                 annotation_text=f"mean={mean_d:.2f}")
             fig.update_layout(xaxis_title="k", yaxis_title="P(X=k)",
                 title=title, height=350, showlegend=False)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         c1,c2 = st.columns(2)
         c1.metric("Mean", f"{mean_d:.3f}")
         c2.metric("Variance", f"{var_d:.3f}")
@@ -4997,7 +4998,7 @@ elif section == "probability":
                 line=dict(color=col_c, width=2.5)))
         fig.update_layout(xaxis_title="x", yaxis_title="PDF", height=320,
             legend=dict(orientation='h', y=1.15))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
         st.markdown("""
         **In ML:**
@@ -5070,7 +5071,7 @@ elif section == "svd":
                 showlegend=False), row=1, col=3)
             fig.add_vline(x=k_capped+0.5, line_dash='dash', line_color='#E24B4A', row=1, col=3)
             fig.update_layout(height=350)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         c1,c2,c3,c4 = st.columns(4)
         c1.metric("Rank k", k_capped)
@@ -5109,7 +5110,7 @@ elif section == "svd":
             fig.add_trace(go.Heatmap(z=Vt_s, colorscale='RdBu', showscale=False,
                 zmid=0), row=1, col=4)
             fig.update_layout(height=320)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         st.markdown("**U** - how original rows relate to latent dimensions  \n"
                     "**Σ** - importance of each latent dimension (singular values)  \n"
@@ -5119,7 +5120,7 @@ elif section == "svd":
             "Singular value": [f"σ{i+1} = {S_s[i]:.3f}" for i in range(len(S_s))],
             "Variance share": [f"{S_s[i]**2/(S_s**2).sum():.1%}" for i in range(len(S_s))],
             "Cumulative": [f"{(S_s[:i+1]**2).sum()/(S_s**2).sum():.1%}" for i in range(len(S_s))],
-        }), use_container_width=True, hide_index=True)
+        }), width='stretch', hide_index=True)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # REACT LOOP
@@ -5287,7 +5288,7 @@ elif section == "react_loop":
                     font=dict(size=9,color="#555"),
                     bgcolor="rgba(255,255,255,0.7)",borderpad=1)
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
         st.markdown("""
         The agent loops through **Reason → Act → Observe** until it decides it has enough
         information to produce a final answer. Each iteration gives it new grounding from
@@ -5405,7 +5406,7 @@ elif section == "tool_use":
             textposition='outside'))
         fig.update_layout(yaxis_title="Relevance score", height=300, showlegend=False,
             yaxis_range=[0, 1.2])
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
         st.markdown(f"**Best tool for this query:** `{best_tool}`")
         st.caption("Real agents use the LLM itself to select tools based on natural language descriptions - "
@@ -5540,7 +5541,7 @@ elif section == "planning":
                     fig.add_shape(type="line", x0=x0+0.38, y0=y0, x1=x1-0.38, y1=y1,
                         line=dict(color="#aaa", width=1.2))
 
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             st.caption("🟡 Yellow = can run in parallel. Purple = sequential dependency.")
 
         # stats
@@ -5569,7 +5570,7 @@ elif section == "planning":
         ]
         st.dataframe(pd.DataFrame(strategies,
             columns=["Strategy","How it works","Advantage","Disadvantage","Best for"]),
-            use_container_width=True, hide_index=True)
+            width='stretch', hide_index=True)
 
         st.markdown("### When does planning fail?")
         failure_modes = {
@@ -5587,7 +5588,7 @@ elif section == "planning":
             textposition='outside'))
         fig2.update_layout(xaxis_title="Relative frequency", height=280,
             xaxis_range=[0, 0.45], showlegend=False)
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width='stretch')
         st.caption("Illustrative distribution - real failure rates depend heavily on model capability and task complexity.")
 
 
@@ -5631,7 +5632,7 @@ elif section == "agent_memory":
         ]
         st.dataframe(pd.DataFrame(memory_types,
             columns=["Type","What it is","Advantage","Limitation","Used for","Speed"]),
-            use_container_width=True, hide_index=True)
+            width='stretch', hide_index=True)
 
         st.markdown("### Memory access pattern during a single agent turn")
         fig = go.Figure()
@@ -5658,7 +5659,7 @@ elif section == "agent_memory":
                               (2,4.3,4,3.7),(8,4.3,6,3.7),(5,2.3,5,1.5)]:
             fig.add_shape(type="line",x0=x0,y0=y0,x1=x1,y1=y1,
                 line=dict(color="#aaa",width=1.5))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     with tab2:
         st.markdown("### RAG - Retrieval Augmented Generation")
@@ -5712,7 +5713,7 @@ elif section == "agent_memory":
                 textposition='outside'))
             fig.update_layout(yaxis_title="Similarity score", height=300,
                 yaxis_range=[0,1.3], showlegend=False)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
             st.markdown(f"**Top {top_k} retrieved documents:**")
             for rank, idx in enumerate(top_idx[:top_k]):
@@ -5849,7 +5850,7 @@ elif section == "multi_agent":
             fig.add_annotation(x=len(workers)/2+0.8, y=2.6, text="result",
                 showarrow=False, font=dict(size=9, color="#1D9E75"))
 
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             st.caption("⚡ = parallel workers. Drag the slider to watch the pipeline execute.")
 
     with tab2:
@@ -5867,7 +5868,7 @@ elif section == "multi_agent":
         ]
         st.dataframe(pd.DataFrame(comm_patterns,
             columns=["Pattern","Description","Pro","Con"]),
-            use_container_width=True, hide_index=True)
+            width='stretch', hide_index=True)
 
         st.markdown("### Key design decisions")
         decisions = {
@@ -5991,7 +5992,7 @@ elif section == "reflection":
                 xaxis=dict(title="Step", tickmode="array", tickvals=list(xs)),
                 yaxis=dict(title="Quality score", range=[0, 100]),
                 height=280, margin=dict(l=40, r=20, t=40, b=40))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
     with tab2:
         st.markdown("### The generate → critique → revise cycle")
@@ -6030,7 +6031,7 @@ elif section == "reflection":
                     font=dict(size=9, color="#555"),
                     bgcolor="rgba(255,255,255,0.7)", borderpad=1)
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
         st.markdown("### Why reflection improves output")
         cols = st.columns(3)
@@ -6055,7 +6056,7 @@ elif section == "reflection":
             ("RAG-grounded critique", "Critique step checks the draft against retrieved sources to catch factual errors."),
         ]
         st.dataframe(pd.DataFrame(variants, columns=["Variant", "Description"]),
-            use_container_width=True, hide_index=True)
+            width='stretch', hide_index=True)
 
         st.markdown("""
         <div class="concept-card">
@@ -6147,7 +6148,7 @@ elif section == "vector_norms":
                 legend=dict(x=0.01, y=0.99),
                 margin=dict(l=40, r=20, t=20, b=40),
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         st.markdown("""
         **Key geometric intuitions:**
@@ -6226,7 +6227,7 @@ elif section == "vector_norms":
                 legend=dict(x=0.01, y=0.99),
                 margin=dict(l=40, r=20, t=20, b=40),
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             st.caption("The L1 ball (dashed red diamond) just touches the vector tip. "
                        "The L2 ball (dotted green circle) also passes through the tip. "
                        "Dotted red lines show the Manhattan path (|v₁| + |v₂|).")
@@ -6309,7 +6310,7 @@ elif section == "vector_norms":
                 legend=dict(x=0.01, y=0.99, font=dict(size=11)),
                 margin=dict(l=40, r=20, t=20, b=40),
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
             if norm_type == "L1":
                 if abs(opt_w1) < 0.05 or abs(opt_w2) < 0.05:
@@ -6402,7 +6403,7 @@ elif section == "embeddings":
                 yaxis=dict(visible=False, range=[-0.6, 0.6]),
                 margin=dict(l=10, r=10, t=10, b=10)
             )
-            st.plotly_chart(fig_sg, use_container_width=True)
+            st.plotly_chart(fig_sg, width='stretch')
             st.caption(f"Window = ±{window}. Purple = target word; green = context words used for training.")
 
         with col_b:
@@ -6442,7 +6443,7 @@ elif section == "embeddings":
                 height=260, margin=dict(l=10, r=10, t=30, b=10),
                 title=dict(text="Toy co-occurrence matrix X_ij", font=dict(size=12)),
             )
-            st.plotly_chart(fig_co, use_container_width=True)
+            st.plotly_chart(fig_co, width='stretch')
             st.caption("GloVe optimises vectors so w_i · w_j ≈ log(X_ij). High counts → similar vectors.")
 
         st.markdown("---")
@@ -6460,7 +6461,7 @@ elif section == "embeddings":
             ("Both share",         "Static - one vector per word regardless of context", "Static - one vector per word regardless of context"),
         ]
         df_cmp = pd.DataFrame(comparison, columns=["Aspect", "Word2Vec", "GloVe"])
-        st.dataframe(df_cmp, use_container_width=True, hide_index=True)
+        st.dataframe(df_cmp, width='stretch', hide_index=True)
 
     # ── TAB 2: Cosine similarity explorer ────────────────────────────────
     with tab2:
@@ -6575,7 +6576,7 @@ elif section == "embeddings":
                 legend=dict(x=0.01, y=0.01),
                 margin=dict(l=40, r=20, t=20, b=40),
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             st.caption("Toy 2-D embeddings - clusters show semantic grouping. "
                        "Arrows show the two selected words; the dotted arc is the angle between them.")
 
@@ -6654,7 +6655,7 @@ elif section == "embeddings":
                 fig_tl.add_shape(type="line", x0=i+0.35, y0=1.0,
                     x1=i+0.65, y1=1.0, line=dict(color="#aaa", width=2))
 
-        st.plotly_chart(fig_tl, use_container_width=True)
+        st.plotly_chart(fig_tl, width='stretch')
 
         st.markdown("""
         **When to use which:**
@@ -6758,7 +6759,7 @@ elif section == "vector_spaces":
                 plot_bgcolor="white", legend=dict(x=0.01, y=0.99),
                 margin=dict(l=40,r=20,t=20,b=40),
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             st.caption("Purple = original vector v. Green = unit vector v̂ (always touches unit circle). Orange = standard basis vectors.")
 
         st.markdown("""
@@ -6851,7 +6852,7 @@ elif section == "vector_spaces":
                 plot_bgcolor="white", showlegend=False,
                 margin=dict(l=40,r=20,t=20,b=40),
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             st.caption("Grid lines show the coordinate system defined by b₁ and b₂. "
                        "The green vector v is reached by stepping α times along b₁ and β times along b₂.")
 
@@ -6959,7 +6960,7 @@ elif section == "vector_spaces":
                 legend=dict(x=0.01, y=0.99),
                 margin=dict(l=40,r=20,t=20,b=40),
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             st.caption("Green = projection of a onto b (the shadow). "
                        "Orange dashed = perpendicular component a⊥. Right-angle marker confirms they are perpendicular.")
 
@@ -7060,7 +7061,7 @@ elif section == "vector_spaces":
                 plot_bgcolor="white", showlegend=False,
                 margin=dict(l=40,r=20,t=20,b=40),
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             st.caption("Solid arrows = original vectors. Dashed = unit versions (touching unit circle). "
                        "Right-angle marker at origin confirms orthogonality.")
 
@@ -7206,7 +7207,7 @@ elif section == "rnn":
             plot_bgcolor="white",
             margin=dict(l=10, r=10, t=20, b=10),
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
         st.caption(f"Highlighted timestep {highlight}. The same weight matrices Wₕ, Wₓ, Wᵧ are reused at every step - "
                    "this is what 'recurrent' means. h₀ is typically initialised to zeros.")
 
@@ -7321,7 +7322,7 @@ elif section == "rnn":
             ("On-device / edge deployment",   "✅ Small footprint",                      "⚠️ Heavier models harder to deploy"),
         ]
         df = pd.DataFrame(rows, columns=["Property", "RNN / LSTM / GRU", "Transformer"])
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width='stretch', hide_index=True)
 
         st.markdown("---")
         st.markdown("### Architecture family tree")
@@ -7355,7 +7356,7 @@ elif section == "rnn":
                 fig_tl.add_shape(type="line", x0=i+0.35, y0=1.0, x1=i+0.65, y1=1.0,
                     line=dict(color="#aaa", width=2))
 
-        st.plotly_chart(fig_tl, use_container_width=True)
+        st.plotly_chart(fig_tl, width='stretch')
         st.caption("Red = Transformer displaced RNNs for most NLP. Orange = modern state-space models "
                    "(Mamba, RWKV) are revisiting recurrence with linear-time attention alternatives.")
 
@@ -7435,7 +7436,7 @@ elif section == "central_tendency":
                 xaxis_title="Value", yaxis_title="Count",
                 legend=dict(orientation="h", y=1.1),
                 margin=dict(l=20, r=20, t=50, b=40))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         st.markdown("### Formulas")
         col1, col2, col3 = st.columns(3)
@@ -7489,7 +7490,7 @@ elif section == "central_tendency":
             fig.update_layout(height=260, plot_bgcolor="white",
                 xaxis_title="Value", yaxis=dict(visible=False),
                 margin=dict(l=20, r=20, t=60, b=40))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
             st.markdown("""
             **Real-world examples of outlier distortion:**
@@ -7513,7 +7514,7 @@ elif section == "central_tendency":
             ("ML: loss function centre",             "✅ MSE minimised at mean",            "✅ MAE minimised at median", "-"),
         ]
         df = pd.DataFrame(rows, columns=["Situation", "Mean", "Median", "Mode"])
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width='stretch', hide_index=True)
 
         st.markdown("---")
         st.markdown("### Skewness and the mean-median relationship")
@@ -7608,7 +7609,7 @@ elif section == "dispersion":
             fig.update_layout(height=320, plot_bgcolor="white",
                 xaxis_title="Index", yaxis_title="Value",
                 margin=dict(l=20, r=100, t=20, b=40))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             st.caption("Red points are above the mean, green below. "
                        "Vertical lines show each deviation (xᵢ − x̄). "
                        "Orange dashed lines mark ±1 standard deviation.")
@@ -7620,7 +7621,7 @@ elif section == "dispersion":
             "xᵢ − x̄": np.round(deviations, 3),
             "(xᵢ − x̄)²": np.round(deviations**2, 3),
         })
-        st.dataframe(dev_table, use_container_width=True, hide_index=True, height=200)
+        st.dataframe(dev_table, width='stretch', hide_index=True, height=200)
         st.markdown(f"Sum of (xᵢ − x̄)² = **{np.sum(deviations**2):.3f}**  "
                     f"÷ {denom} → variance = **{var_show:.3f}** → std dev = **{std_show:.3f}**")
 
@@ -7680,7 +7681,7 @@ elif section == "dispersion":
             fig.update_layout(height=380, plot_bgcolor="white",
                 yaxis_title="Value", showlegend=False,
                 margin=dict(l=20, r=120, t=20, b=40))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         st.markdown("""
         **Reading the box plot:**
@@ -7755,7 +7756,7 @@ elif section == "dispersion":
             xaxis_title="Value", yaxis_title="Count",
             legend=dict(orientation="h", y=1.1),
             margin=dict(l=20, r=20, t=40, b=40))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
         st.caption("Both distributions have mean = 10. A model predicting only the mean "
                    "would be equally wrong about both - yet B's errors are far more severe.")
 
@@ -7765,7 +7766,7 @@ elif section == "dispersion":
             "Dataset A": [f"{np.mean(da):.2f}", f"{np.std(da):.2f}", f"{np.var(da):.2f}", f"{da.max()-da.min():.2f}"],
             "Dataset B": [f"{np.mean(db):.2f}", f"{np.std(db):.2f}", f"{np.var(db):.2f}", f"{db.max()-db.min():.2f}"],
         })
-        st.dataframe(summary_df, use_container_width=True, hide_index=True)
+        st.dataframe(summary_df, width='stretch', hide_index=True)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # BAYES' THEOREM & CONDITIONAL PROBABILITY
@@ -7857,7 +7858,7 @@ elif section == "bayes_theorem":
                 yaxis=dict(title="Posterior P(A|B)", range=[0,1]),
                 legend=dict(x=0.01, y=0.99),
                 margin=dict(l=40, r=20, t=20, b=40))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             st.caption("The purple curve shows how the posterior changes across all possible priors "
                        "given the same evidence. Grey diagonal = no update (uninformative evidence).")
 
@@ -7899,7 +7900,7 @@ elif section == "bayes_theorem":
                 xaxis=dict(visible=False, range=[-2,2]),
                 yaxis=dict(visible=False, range=[-1.4,1.4], scaleanchor="x"),
                 margin=dict(l=10,r=10,t=10,b=10))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             st.caption("P(A|B) = area of overlap / area of B. Conditioning shrinks the sample space to B.")
 
     with tab3:
@@ -7954,7 +7955,7 @@ elif section == "bayes_theorem":
                 title=dict(text=f"Out of {N:,} people tested", font=dict(size=13)),
                 yaxis_title="Count", legend=dict(orientation="h", y=1.18),
                 margin=dict(l=20,r=20,t=60,b=40))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             st.caption(f"Test + column: {tp:,} true positives vs {fp:,} false positives. "
                        f"PPV = {tp}/{tp+fp} = {ppv:.1%}")
 
@@ -8033,7 +8034,7 @@ elif section == "correlation":
                 xaxis_title="X", yaxis_title="Y",
                 legend=dict(x=0.01, y=0.99),
                 margin=dict(l=40,r=20,t=20,b=40))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
     with tab2:
         st.markdown("### Correlation matrix - all pairwise relationships at once")
@@ -8061,7 +8062,7 @@ elif section == "correlation":
         ))
         fig.update_layout(height=360, margin=dict(l=10,r=10,t=30,b=10),
             title=dict(text="Correlation matrix (simulated data)", font=dict(size=13)))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
         st.markdown("""
         **Reading the matrix:**
@@ -8176,7 +8177,7 @@ elif section == "cross_validation":
                 annotation_text=f"CV picks degree {best_cv_deg}")
             fig.update_layout(xaxis_title="Polynomial degree", yaxis_title="MSE",
                 yaxis_range=[0, 2], height=330, legend=dict(orientation='h', y=1.14))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         c1, c2 = st.columns(2)
         c1.metric("Best degree by CV", best_cv_deg)
@@ -8195,7 +8196,7 @@ elif section == "cross_validation":
             name=f'Fit on train folds (degree {best_cv_deg})', line=dict(color='#1D9E75', width=2)))
         fig2.update_layout(xaxis_title="x", yaxis_title="y", yaxis_range=[-3, 3],
             height=320, legend=dict(orientation='h', y=1.14))
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width='stretch')
         st.caption("This fold's held-out points never influence the line shown here - that's "
                    "what makes the resulting error an honest estimate. Cycle through every "
                    "fold and average, and you get the CV curve above.")
@@ -8261,7 +8262,7 @@ elif section == "cross_validation":
             y=variances, marker_color=['#E24B4A', '#EF9F27', '#1D9E75', '#534AB7']))
         fig3.update_layout(xaxis_title="Fold count", yaxis_title="Std. dev. of CV score across random fold splits",
             height=280)
-        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(fig3, width='stretch')
         st.caption("Fewer, larger folds (small k) give a CV score that swings more depending "
                    "on how the data happened to be split - that's the variance cost of small k, "
                    "on top of the bias cost from training on less data each round.")
@@ -8338,7 +8339,7 @@ elif section == "cooks_distance":
                 line=dict(color='#E24B4A', width=2, dash='dash')))
             fig.update_layout(xaxis_title="x", yaxis_title="y",
                 height=360, legend=dict(orientation='h', y=1.16))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         thresh = 4 / n_cd
         c1, c2, c3, c4 = st.columns(4)
@@ -8354,7 +8355,7 @@ elif section == "cooks_distance":
         fig_bar.add_hline(y=thresh, line=dict(color="#EF9F27", dash="dot"),
             annotation_text="4/n cutoff", annotation_position="top left")
         fig_bar.update_layout(xaxis_title="Point", yaxis_title="Cook's distance", height=280)
-        st.plotly_chart(fig_bar, use_container_width=True)
+        st.plotly_chart(fig_bar, width='stretch')
         st.caption("Bars above the orange line are flagged as unusually influential - "
                    "the model's fit depends meaningfully on that single point.")
 
@@ -8388,7 +8389,7 @@ elif section == "cooks_distance":
             annotation_text="leverage cutoff (2p/n)", annotation_position="top")
         fig_q.update_layout(xaxis_title="Leverage hᵢᵢ", yaxis_title="|Residual|",
             height=380)
-        st.plotly_chart(fig_q, use_container_width=True)
+        st.plotly_chart(fig_q, width='stretch')
         st.caption("Bubble size and color both track Cook's distance. The dangerous "
                    "quadrant is far right and high up - high leverage **and** a bad fit. "
                    "Try widening the x-shift or y-shift sliders in the first tab and watch "
@@ -8457,7 +8458,7 @@ elif section == "aic_bic":
                 name=f'BIC minimum (degree {best_bic_deg})'))
             fig.update_layout(xaxis_title="Polynomial degree", yaxis_title="Score (lower is better)",
                 height=360, legend=dict(orientation='h', y=1.16))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         k_sel = sel_degree + 1
         c_sel = np.polyfit(x_tr, y_tr, sel_degree)
@@ -8506,7 +8507,7 @@ elif section == "aic_bic":
             annotation_text="n ≈ 7.4: BIC overtakes AIC")
         fig2.update_layout(xaxis_title="n (training size)", yaxis_title="Penalty per extra parameter",
             height=300, legend=dict(orientation='h', y=1.14))
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width='stretch')
         st.caption("Once a dataset has more than about 8 points, BIC's ln(n) penalty exceeds "
                    "AIC's flat penalty of 2 - and keeps growing. That's why BIC tends to favour "
                    "sparser models than AIC as the sample gets larger, especially useful when "
@@ -8622,7 +8623,7 @@ elif section == "hypothesis_testing":
                 xaxis_title="z statistic", yaxis_title="Density",
                 legend=dict(x=0.01, y=0.99),
                 margin=dict(l=40,r=20,t=20,b=40))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             st.caption("Red shaded = rejection region (probability = α). "
                        "If your test statistic falls in the red zone, p < α.")
 
@@ -8685,7 +8686,7 @@ elif section == "hypothesis_testing":
                 xaxis_title="t statistic", yaxis_title="Density",
                 legend=dict(x=0.01, y=0.99),
                 margin=dict(l=40,r=20,t=20,b=40))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
     with tab3:
         st.markdown("### Type I and Type II errors - the two ways to be wrong")
@@ -8828,7 +8829,7 @@ elif section == "sampling_estimation":
                 xaxis_title="Sample size n", yaxis_title="Standard Error",
                 legend=dict(x=0.6, y=0.99),
                 margin=dict(l=40, r=60, t=20, b=40))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             st.caption("The diminishing returns of larger samples - SE follows a 1/√n curve. "
                        "Early gains (n: 1→10) are huge; gains from n=400→500 are tiny.")
 
@@ -8931,7 +8932,7 @@ elif section == "sampling_estimation":
                 xaxis_title="Value", yaxis_title="Density",
                 legend=dict(x=0.01, y=0.99),
                 margin=dict(l=40, r=20, t=20, b=40))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             st.caption(f"Grey = population ({dist_type}). Blue = {n_sims} sample means of size n={n_clt}. "
                        f"Red curve = theoretical N(μ, σ²/n). Increase n to watch the blue bars become more bell-shaped.")
 
@@ -9022,7 +9023,7 @@ elif section == "sampling_estimation":
                 title=dict(
                     text=f"{n_trials} simulated {conf_level:.0%} CIs - {covers.sum()} contain true μ ({coverage:.0%})",
                     font=dict(size=12)))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             st.caption("Green = interval contains true μ. Red = it misses. "
                        f"With {conf_level:.0%} confidence level, expect ~{conf_level:.0%} to be green.")
 
@@ -9123,7 +9124,7 @@ elif section == "rag":
         fig.add_shape(type="rect", x0=0.9, y0=0.9, x1=5.5, y1=2.55,
             fillcolor="rgba(136,136,136,0.05)", line=dict(color="#ccc", width=1, dash="dot"))
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
         # Stage-by-stage detail
         selected_stage = st.selectbox("Zoom into a stage", [
@@ -9297,7 +9298,7 @@ elif section == "rag":
                 plot_bgcolor="white", showlegend=False,
                 margin=dict(l=40, r=20, t=20, b=40),
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             st.caption("Stars = retrieved documents. Black arrow = query vector. "
                        "Cosine similarity = angle between query and each document vector.")
 
@@ -9358,7 +9359,7 @@ elif section == "rag":
             ("Domain reasoning",      "⚠️ Depends on base model capability",   "✅ Model learns domain-specific logic"),
         ]
         df = pd.DataFrame(rows, columns=["Dimension", "RAG", "Fine-tuning"])
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width='stretch', hide_index=True)
 
         st.markdown("---")
         col1, col2 = st.columns(2)
