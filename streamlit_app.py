@@ -3562,12 +3562,12 @@ elif section == "chain_rule":
         outer_map = {
             "u²":   (lambda u: u**2,                          lambda u: 2*u,                    "2u"),
             "sin(u)":(lambda u: np.sin(u),                    lambda u: np.cos(u),              "cos(u)"),
-            "eᵘ":   (lambda u: np.exp(np.clip(u,-10,5)),     lambda u: np.exp(np.clip(u,-10,5)),"eᵘ"),
+            "eᵘ":   (lambda u: np.exp(np.clip(u,-10,20)),    lambda u: np.exp(np.clip(u,-10,20)),"eᵘ"),
             "ln(u)":(lambda u: np.log(np.abs(u)+1e-9),       lambda u: 1/(u+1e-9),             "1/u"),
-            "√u":   (lambda u: np.sqrt(np.abs(u)),           lambda u: 0.5/np.sqrt(np.abs(u)+1e-9),"1/(2√u)"),
+            "√u":   (lambda u: np.sqrt(np.abs(u)),           lambda u: np.sign(u)*0.5/np.sqrt(np.abs(u)+1e-9),"1/(2√u)"),
         }
         inner_map = {
-            "2x+1":   (lambda x: 2*x+1,   lambda x: np.full_like(np.array([x],dtype=float),2.0)[0],  "2"),
+            "2x+1":   (lambda x: 2*x+1,   lambda x: 2.0,  "2"),
             "x²":     (lambda x: x**2,    lambda x: 2*x,           "2x"),
             "cos(x)": (lambda x: np.cos(x), lambda x: -np.sin(x), "−sin(x)"),
             "x³−x":   (lambda x: x**3-x,  lambda x: 3*x**2-1,     "3x²−1"),
@@ -3580,6 +3580,10 @@ elif section == "chain_rule":
         du_dx   = dg_in(x_cr)
         dy_du   = df_out(u_val)
         dy_dx   = dy_du * du_dx
+
+        if outer in ("ln(u)", "√u") and u_val <= 0:
+            st.warning(f"{outer} is undefined for u ≤ 0 (here u = {u_val:.3f}). "
+                       "The plot uses |u| so it can still draw.")
 
         with col2:
             st.markdown("**Decomposition at x₀ = {:.2f}**".format(x_cr))
@@ -3621,13 +3625,14 @@ Step 5 - Chain rule:
         fig.add_scatter(x=[x_cr], y=[dy_dx], mode='markers',
             marker=dict(color='#1D9E75',size=10), showlegend=False, row=1, col=2)
         fig.update_xaxes(title_text="x"); fig.update_yaxes(title_text="y")
+        fig.update_yaxes(title_text="dy/dx", row=1, col=2)
         fig.update_layout(height=360, legend=dict(orientation='h',y=1.12))
         st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
         st.markdown("### Why the chain rule *is* backpropagation")
         st.markdown("""
-        Consider a 3-layer network: input x → layer 1 → layer 2 → loss L.
+        Consider a 3-layer network: input x → layer 1 → layer 2 → layer 3 → loss L.
 
         To update w₁ we need dL/dw₁. We never have a direct formula, but the chain rule gives:
         """)
