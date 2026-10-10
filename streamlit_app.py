@@ -40,13 +40,13 @@ st.markdown("""
 CATALOGUE = [
     # ── Machine Learning ──
     ("bias_var",      "Bias-Variance Tradeoff",         "↔️", "Decomposing prediction error into bias and variance"),
-    ("clustering",     "Clustering (K-Means & Hierarchical)", "🧩", "Grouping unlabeled data by similarity — centroids and dendrograms"),
+    ("clustering",     "Clustering (K-Means & Hierarchical)", "🧩", "Grouping unlabeled data by similarity - centroids and dendrograms"),
     ("confusion",     "Confusion Matrix & Metrics",     "🔢", "Precision, recall, F1 and the threshold effect"),
     ("decision_tree", "Decision Tree",                  "🌳", "Recursive feature splits that form a tree of rules"),
     ("ensemble_trees","Ensemble Trees (Bagging, RF, Boosting)", "🌲", "Combining many trees to beat any single one of them"),
     ("gradient",      "Gradient & Descent",             "🏔️", "Direction and step size of learning"),
     ("knn",           "K-Nearest Neighbors",            "🔵", "Classify by majority vote of closest points"),
-    ("lda_qda",       "LDA & QDA",                       "🔮", "Classifying via class-conditional Gaussians — shared vs. per-class covariance"),
+    ("lda_qda",       "LDA & QDA",                       "🔮", "Classifying via class-conditional Gaussians - shared vs. per-class covariance"),
     ("linear_reg",    "Linear Regression",              "📊", "Finding the best-fit line through data"),
     ("logistic_reg",  "Logistic Regression",            "🔀", "Binary classification with sigmoid output"),
     ("loss",          "Loss Function",                  "📉", "How we measure model error"),
@@ -63,16 +63,16 @@ CATALOGUE = [
     ("backprop",      "Backpropagation",                "🔄", "How the error propagates backwards"),
     ("batch_size",    "Batch Size & Gradient Noise",    "🎲", "How batch size affects gradient quality"),
     ("bayes_theorem",     "Bayes' Theorem",              "🧪", "Conditional probability, priors and posteriors"),
-    ("central_tendency",  "Central Tendency",           "📊", "Mean, median and mode — summarising where data is centred"),
+    ("central_tendency",  "Central Tendency",           "📊", "Mean, median and mode - summarising where data is centred"),
     ("cnn",           "Convolutional Layer (CNN)",      "🖼️", "Kernel sliding over input to detect local patterns"),
-    ("correlation",       "Correlation & Covariance",    "📈", "How variables move together — Pearson r and the covariance matrix"),
+    ("correlation",       "Correlation & Covariance",    "📈", "How variables move together - Pearson r and the covariance matrix"),
     ("cross_validation",  "Cross-Validation",            "🗂️", "Splitting data into folds to estimate performance on unseen data"),
     ("cooks_distance",    "Cook's Distance",            "🎯", "How much one data point alone can drag a regression line around"),
     ("aic_bic",           "AIC / BIC",                   "🧮", "Scoring models on fit vs. complexity to pick the right one"),
-    ("dispersion",        "Dispersion",                  "📏", "Variance, std dev, IQR — how spread out data is"),
+    ("dispersion",        "Dispersion",                  "📏", "Variance, std dev, IQR - how spread out data is"),
     ("hypothesis_testing","Hypothesis Testing",          "🧪", "p-values, t-tests and statistical significance"),
     ("sampling_estimation","Sampling & Estimation",     "🎯", "Standard error, confidence intervals and the Central Limit Theorem"),
-    ("rnn",           "Recurrent Networks",             "🔁", "RNNs, LSTMs and GRUs — memory across time"),
+    ("rnn",           "Recurrent Networks",             "🔁", "RNNs, LSTMs and GRUs - memory across time"),
     ("dropout",       "Dropout",                        "💧", "Randomly zeroing neurons to prevent overfitting"),
     ("lr_schedule",   "Learning Rate Schedulers",       "📅", "Step decay, cosine annealing and warmup"),
     ("neural_net",    "Neural Network Architecture",    "🧬", "Layers, parameters and forward pass"),
@@ -84,24 +84,24 @@ CATALOGUE = [
     ("agent_memory", "Agent Memory Types",        "🧠", "In-context, external (RAG) and parametric memory"),
     ("multi_agent",  "Multi-Agent Systems",        "🤝", "Orchestrators, workers and message passing"),
     ("planning",     "Planning & Task Decomposition","🗺️","Breaking goals into subtasks and dependency graphs"),
-    ("rag",          "RAG Pipeline",               "📚", "Retrieval-Augmented Generation — grounding LLMs in external knowledge"),
-    ("reflection",   "Reflection & Self-Critique",  "🪞", "Generate, critique and revise — how agents improve their own output"),
+    ("rag",          "RAG Pipeline",               "📚", "Retrieval-Augmented Generation - grounding LLMs in external knowledge"),
+    ("reflection",   "Reflection & Self-Critique",  "🪞", "Generate, critique and revise - how agents improve their own output"),
     ("react_loop",   "ReAct Loop",                 "🔄", "Reason → Act → Observe cycle for tool-using agents"),
     ("tool_use",     "Tool Use",                   "🔧", "How agents call functions and parse results"),
     # ── Math Foundations ──
-    ("chain_rule",    "Chain Rule",                     "🔗", "Derivative of composite functions — the engine of backprop"),
+    ("chain_rule",    "Chain Rule",                     "🔗", "Derivative of composite functions - the engine of backprop"),
     ("derivative",    "Derivative",                     "📐", "Instantaneous rate of change and the tangent line"),
-    ("dot_product",   "Dot Product",                    "·",  "Multiply two vectors into a scalar — similarity and projection"),
-    ("embeddings",    "Embeddings",                     "🗺️", "Word2Vec, GloVe and contextual vectors — meaning as geometry"),
+    ("dot_product",   "Dot Product",                    "·",  "Multiply two vectors into a scalar - similarity and projection"),
+    ("embeddings",    "Embeddings",                     "🗺️", "Word2Vec, GloVe and contextual vectors - meaning as geometry"),
     ("eigenvalues",   "Eigenvalues & Eigenvectors",     "λ",  "Directions a matrix stretches without rotating"),
     ("integral",      "Integral",                       "∫",  "Area under a curve and accumulation"),
     ("matrix_ops",    "Matrix Operations",              "🔲", "Addition, multiplication, determinant, transpose and norms"),
     ("partial_deriv", "Partial Derivatives",            "∂",  "Rate of change along one dimension of a multivariable function"),
     ("probability",   "Probability Distributions",      "🎲", "Normal, Binomial, Poisson and their shapes"),
-    ("svd",           "SVD — Matrix Decomposition",     "✂️", "Singular values, low-rank approximation and compression"),
-    ("vectors",       "Vectors",                        "➡️", "Direction and magnitude — the language of ML data"),
+    ("svd",           "SVD - Matrix Decomposition",     "✂️", "Singular values, low-rank approximation and compression"),
+    ("vectors",       "Vectors",                        "➡️", "Direction and magnitude - the language of ML data"),
     ("vector_spaces",  "Vector Spaces",                  "🧭", "Basis, span, projection and orthogonality"),
-    ("vector_norms",  "Vector Norms",                   "‖·‖", "L1, L2 and Lp norms — measuring size and distance"),
+    ("vector_norms",  "Vector Norms",                   "‖·‖", "L1, L2 and Lp norms - measuring size and distance"),
 ]
 
 ML_KEYS     = {"bias_var","confusion","clustering","decision_tree","ensemble_trees","gradient","knn","lda_qda","linear_reg","logistic_reg",
@@ -126,7 +126,7 @@ if "section" not in st.session_state:
 def go_to(key):
     st.session_state["section"] = key
 
-# ── Sidebar — alphabetical index ─────────────────────────────────────────────
+# ── Sidebar - alphabetical index ─────────────────────────────────────────────
 with st.sidebar:
     st.title("🧠 ML Concepts")
     st.caption("Interactive reference guide")
@@ -157,12 +157,12 @@ with st.sidebar:
             go_to(key)
 
     st.divider()
-    st.caption("Runs fully offline — no internet needed")
+    st.caption("Runs fully offline - no internet needed")
 
 section = st.session_state["section"]
 
 # ═══════════════════════════════════════════════════════════════════════════
-# HOME — clickable cards
+# HOME - clickable cards
 # ═══════════════════════════════════════════════════════════════════════════
 if section == "home":
     st.title("Interactive Machine Learning Reference")
@@ -204,12 +204,12 @@ elif section == "loss":
     st.markdown("""
     <div class="concept-card">
     A <b>loss function</b> measures how wrong the model is. It takes the prediction and
-    the true value and returns a single number — <em>how badly we are doing</em>.
+    the true value and returns a single number - <em>how badly we are doing</em>.
     The goal of training is to minimise this value.
     </div>
     """, unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs(["MSE — Mean Squared Error", "MAE — Mean Absolute Error", "Binary Cross-Entropy"])
+    tab1, tab2, tab3 = st.tabs(["MSE - Mean Squared Error", "MAE - Mean Absolute Error", "Binary Cross-Entropy"])
 
     with tab1:
         st.markdown('<div class="formula-box">MSE = (1/n) · Σ (y_true − y_pred)²</div>', unsafe_allow_html=True)
@@ -297,7 +297,7 @@ elif section == "gradient":
     st.markdown("""
     <div class="concept-card">
     The <b>gradient</b> is a vector that points in the direction of steepest increase of the function.
-    To minimise the loss we walk in the <em>opposite</em> direction — that is <b>gradient descent</b>.
+    To minimise the loss we walk in the <em>opposite</em> direction - that is <b>gradient descent</b>.
     </div>
     """, unsafe_allow_html=True)
 
@@ -361,11 +361,11 @@ elif section == "gradient":
         c3.metric("Steps to converge", len(xs_hist) - 1)
 
         if lr >= 1.0:
-            st.warning("Large learning rate — the model may overshoot the minimum and diverge.")
+            st.warning("Large learning rate - the model may overshoot the minimum and diverge.")
         elif lr <= 0.05:
-            st.info("Small learning rate — convergence is stable but slow.")
+            st.info("Small learning rate - convergence is stable but slow.")
         else:
-            st.success("Good learning rate — fast and stable descent.")
+            st.success("Good learning rate - fast and stable descent.")
 
     with tab2:
         st.markdown("Loss surface with two parameters (w₁, w₂):")
@@ -382,7 +382,7 @@ elif section == "gradient":
             camera=dict(eye=dict(x=1.8, y=1.8, z=1.2))),
             height=480, margin=dict(l=0, r=0, b=0, t=20))
         st.plotly_chart(fig, use_container_width=True)
-        st.caption("Drag to rotate. The goal is to find the valley — the minimum loss.")
+        st.caption("Drag to rotate. The goal is to find the valley - the minimum loss.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # BACKPROPAGATION
@@ -397,7 +397,7 @@ elif section == "backprop":
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("### Manual example — simple network")
+    st.markdown("### Manual example - simple network")
     col1, col2 = st.columns([1, 1])
 
     with col1:
@@ -474,8 +474,8 @@ elif section == "overfit":
     st.title("⚖️ Overfitting and Underfitting")
     st.markdown("""
     <div class="concept-card">
-    <b>Underfitting</b> — the model is too simple and fails to capture the structure in the data.<br>
-    <b>Overfitting</b> — the model has memorised the training data and performs poorly on new examples.
+    <b>Underfitting</b> - the model is too simple and fails to capture the structure in the data.<br>
+    <b>Overfitting</b> - the model has memorised the training data and performs poorly on new examples.
     </div>
     """, unsafe_allow_html=True)
 
@@ -520,11 +520,11 @@ elif section == "overfit":
     c3.metric("Test / Train ratio", f"{ratio:.2f}")
 
     if degree <= 2:
-        st.warning("**Underfitting** — the model is too simple to capture the sine curve.")
+        st.warning("**Underfitting** - the model is too simple to capture the sine curve.")
     elif degree >= 9:
-        st.error('**Overfitting** — the model bends too much and memorises the noise.')
+        st.error('**Overfitting** - the model bends too much and memorises the noise.')
     else:
-        st.success("**Good balance** — the model captures the structure without memorising noise.")
+        st.success("**Good balance** - the model captures the structure without memorising noise.")
 
     st.markdown("### How MSE depends on model complexity")
     degrees = list(range(1, 14))
@@ -621,18 +621,18 @@ elif section == "splines_gam":
         st.caption("Shaded bands are outside the training data (extrapolation). Dotted grey "
                    "lines mark the knots. Try raising both the knot count and 'noise', and "
                    "watch the polynomial swing wildly in the shaded bands while the spline "
-                   "stays comparatively tame — each spline piece only has local influence.")
+                   "stays comparatively tame - each spline piece only has local influence.")
 
     with tab2:
         st.markdown("### Smoothing splines: a knot at every point, controlled by a penalty")
         st.markdown("""
-        A **smoothing spline** sidesteps choosing knot locations entirely — it places a
+        A **smoothing spline** sidesteps choosing knot locations entirely - it places a
         knot at every data point, then adds a roughness penalty to keep the curve from
         interpolating the noise:
         """)
         st.markdown('<div class="formula-box">minimize  Σᵢ(yᵢ − f(xᵢ))² + λ∫f″(t)² dt</div>',
             unsafe_allow_html=True)
-        st.markdown("λ controls the tradeoff — λ = 0 interpolates every point exactly; "
+        st.markdown("λ controls the tradeoff - λ = 0 interpolates every point exactly; "
                     "λ → ∞ forces f toward a straight line.")
 
         col1, col2 = st.columns([1, 2])
@@ -656,13 +656,13 @@ elif section == "splines_gam":
             fig2.update_layout(height=330, legend=dict(orientation='h', y=1.14))
             st.plotly_chart(fig2, use_container_width=True)
         if smooth_s <= 0.1:
-            st.warning("Very low smoothing — the curve is chasing individual noisy points.")
+            st.warning("Very low smoothing - the curve is chasing individual noisy points.")
         elif smooth_s >= 20:
-            st.info("Very high smoothing — pushed nearly to a straight line.")
+            st.info("Very high smoothing - pushed nearly to a straight line.")
 
         st.markdown("### A 2-feature GAM, fit by backfitting")
         st.markdown("""
-        A GAM models **y ≈ f₁(x₁) + f₂(x₂)** — a separate smooth curve per feature, added
+        A GAM models **y ≈ f₁(x₁) + f₂(x₂)** - a separate smooth curve per feature, added
         together. It's fit by **backfitting**: repeatedly fit a spline of one feature to
         whatever the other feature's curve hasn't already explained, and alternate.
         """)
@@ -704,7 +704,7 @@ elif section == "splines_gam":
             fig4.update_layout(xaxis_title="x₂", yaxis_title="Partial effect", height=300,
                 legend=dict(orientation='h', y=1.16))
             st.plotly_chart(fig4, use_container_width=True)
-        st.caption("Each panel shows the effect of one feature *holding the other fixed* — "
+        st.caption("Each panel shows the effect of one feature *holding the other fixed* - "
                    "exactly the interpretability a plain multiple linear regression gives you "
                    "(one coefficient per feature), except each effect here is allowed to bend.")
 
@@ -792,20 +792,20 @@ elif section == "subset_selection":
         st.caption(f"True predictors that matter: {sorted(true_cols)}. "
                    f"Best subset at that size picked: {sorted(best_subset_by_size.get(n_true,((),0))[0])}. "
                    f"Forward stepwise at that size picked: {sorted(fwd_by_size.get(n_true,((),0))[0])}.")
-        st.info("Both curves always go down as you add predictors — training RSS can never "
+        st.info("Both curves always go down as you add predictors - training RSS can never "
                 "get worse with more variables. That's exactly why picking model size needs "
                 "something other than training error (see the next tab). Forward stepwise "
                 "can only match best subset when it happens to add the right variables "
-                "early — it never revisits a choice once made.")
+                "early - it never revisits a choice once made.")
 
     with tab2:
         st.markdown("""
         Training RSS always improves with more predictors, so it can't tell you when to
         stop. The usual fixes:
-        - **AIC / BIC / adjusted R²** — score each size with a complexity penalty (see
+        - **AIC / BIC / adjusted R²** - score each size with a complexity penalty (see
           **AIC / BIC**) and pick the best-scoring size
-        - **Cross-validation** — hold out data and pick the size with the best validation
-          error (see **Cross-Validation**) — the most reliable option, since it needs no
+        - **Cross-validation** - hold out data and pick the size with the best validation
+          error (see **Cross-Validation**) - the most reliable option, since it needs no
           assumption about the error distribution
         """)
 
@@ -836,7 +836,7 @@ elif section == "subset_selection":
         st.caption(f"Applied to the best-subset models from the previous tab (true number "
                    f"of useful predictors was {n_true}). BIC's "
                    f"heavier complexity penalty typically selects a model at least as small "
-                   f"as AIC's — the same tradeoff explored in **AIC / BIC**.")
+                   f"as AIC's - the same tradeoff explored in **AIC / BIC**.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # ACTIVATION FUNCTIONS
@@ -896,7 +896,7 @@ elif section == "activation":
         df_props = pd.DataFrame(rows, columns=["Function", "Advantage", "Disadvantage", "Use case"])
         st.dataframe(df_props, use_container_width=True, hide_index=True)
 
-    st.markdown("### Interactive example — effect of the activation")
+    st.markdown("### Interactive example - effect of the activation")
     x_demo = st.slider("Input x", -4.0, 4.0, 1.5, step=0.1)
     chosen_fn = st.selectbox("Select function", list(funcs.keys()))
     f_demo, df_demo = funcs[chosen_fn]
@@ -981,7 +981,7 @@ elif section == "linear_reg":
         fig3.update_layout(xaxis_title='w', yaxis_title='b',
             height=400, legend=dict(orientation='h', y=1.1))
         st.plotly_chart(fig3, use_container_width=True)
-        st.caption("The green star is the MSE minimum — the optimal w and b.")
+        st.caption("The green star is the MSE minimum - the optimal w and b.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # REGULARIZATION
@@ -1036,7 +1036,7 @@ elif section == "regularization":
             st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
-        st.markdown("Train a small linear model with different regularization — watch the weights:")
+        st.markdown("Train a small linear model with different regularization - watch the weights:")
         np.random.seed(42)
         n_reg = 30
         X_reg = np.random.randn(n_reg, 8)
@@ -1087,7 +1087,7 @@ elif section == "knn":
     st.markdown("""
     <div class="concept-card">
     KNN classifies a new point by looking at the <b>K closest training examples</b>
-    and taking a majority vote. No training is needed — all the work happens at prediction time.
+    and taking a majority vote. No training is needed - all the work happens at prediction time.
     </div>
     """, unsafe_allow_html=True)
 
@@ -1155,7 +1155,7 @@ elif section == "knn":
     pred_col = class_colors[prediction]
     st.markdown(f"**Prediction: {class_names[prediction]}** ({votes[prediction]}/{k} votes)")
 
-    st.markdown("### Decision boundaries — how K changes the border")
+    st.markdown("### Decision boundaries - how K changes the border")
     st.markdown("Low K → jagged boundaries (high variance). High K → smooth boundaries (high bias).")
 
     from sklearn.neighbors import KNeighborsClassifier
@@ -1191,7 +1191,7 @@ elif section == "svm":
     <div class="concept-card">
     Instead of just finding <em>a</em> line that separates two classes, an SVM finds the
     one that leaves the <b>widest possible margin</b> on both sides. Only the points
-    closest to that boundary — the <b>support vectors</b> — actually determine where it
+    closest to that boundary - the <b>support vectors</b> - actually determine where it
     goes. When a straight line can't separate the classes at all, the <b>kernel trick</b>
     lets the same idea work in a much higher-dimensional space, without ever computing
     that space directly.
@@ -1247,28 +1247,28 @@ elif section == "svm":
         c3.metric("Margin width", f"{margin_width:.2f}")
 
         if C_svm <= -1:
-            st.info("**Low C — soft margin.** The model tolerates points inside or across "
+            st.info("**Low C - soft margin.** The model tolerates points inside or across "
                     "the margin in exchange for a wider, more stable boundary.")
         elif C_svm >= 2:
-            st.warning("**High C — hard margin.** The boundary hugs the training data "
-                       "closely, using few support vectors — watch for overfitting.")
+            st.warning("**High C - hard margin.** The boundary hugs the training data "
+                       "closely, using few support vectors - watch for overfitting.")
         else:
-            st.success("**Balanced C** — a reasonable tradeoff between margin width and "
+            st.success("**Balanced C** - a reasonable tradeoff between margin width and "
                        "training accuracy.")
-        st.caption("Circled points are the support vectors — the only points that would "
+        st.caption("Circled points are the support vectors - the only points that would "
                    "change the boundary if moved. Every other point could be deleted "
                    "without affecting the fit at all.")
 
     with tab2:
         st.markdown("""
         When classes aren't linearly separable, a straight-line boundary simply can't work
-        — no choice of C fixes that. The **kernel trick** solves this by implicitly mapping
+        - no choice of C fixes that. The **kernel trick** solves this by implicitly mapping
         points into a higher-dimensional space where they *are* separable, computing only
         the similarity between pairs of points rather than the mapping itself:
         """)
         st.markdown('<div class="formula-box">K(x, x′) = φ(x) · φ(x′)&nbsp;&nbsp;&nbsp;'
                     'RBF: K(x, x′) = exp(−γ‖x − x′‖²)</div>', unsafe_allow_html=True)
-        st.markdown("φ is the (possibly infinite-dimensional) mapping — the kernel lets "
+        st.markdown("φ is the (possibly infinite-dimensional) mapping - the kernel lets "
                     "the SVM use it without ever computing φ(x) explicitly.")
 
         col1, col2 = st.columns([1, 2])
@@ -1314,7 +1314,7 @@ elif section == "svm":
         fig3.update_layout(yaxis_title="Training accuracy", yaxis_range=[0, 1], height=260)
         st.plotly_chart(fig3, use_container_width=True)
         st.caption("On circular or crescent-shaped data, the linear kernel is stuck near "
-                   "chance — no straight line helps. RBF (and often poly) recovers a clean "
+                   "chance - no straight line helps. RBF (and often poly) recovers a clean "
                    "boundary by working in a space where the classes really are separable.")
 
 
@@ -1326,7 +1326,7 @@ elif section == "confusion":
     st.markdown("""
     <div class="concept-card">
     A confusion matrix breaks down predictions into <b>TP, FP, FN, TN</b>.
-    From these we derive precision, recall, F1 and accuracy — each tells a different story
+    From these we derive precision, recall, F1 and accuracy - each tells a different story
     about where the model succeeds and fails.
     </div>
     """, unsafe_allow_html=True)
@@ -1372,8 +1372,8 @@ elif section == "confusion":
         st.plotly_chart(fig, use_container_width=True)
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Precision", f"{precision:.3f}", help="TP / (TP+FP) — of all positive predictions, how many were correct?")
-    c2.metric("Recall", f"{recall:.3f}", help="TP / (TP+FN) — of all actual positives, how many did we catch?")
+    c1.metric("Precision", f"{precision:.3f}", help="TP / (TP+FP) - of all positive predictions, how many were correct?")
+    c2.metric("Recall", f"{recall:.3f}", help="TP / (TP+FN) - of all actual positives, how many did we catch?")
     c3.metric("F1 Score", f"{f1:.3f}", help="Harmonic mean of precision and recall")
     c4.metric("Accuracy", f"{accuracy:.3f}", help="(TP+TN) / total")
 
@@ -1545,8 +1545,8 @@ elif section == "lr_schedule":
         lr0 = st.slider("Initial learning rate", 0.01, 1.0, 0.1, step=0.01)
         total_epochs = st.slider("Total epochs", 20, 200, 100)
         warmup_epochs = st.slider("Warmup epochs", 0, 20, 5)
-        step_size = st.slider("Step decay — drop every N epochs", 5, 40, 20)
-        step_gamma = st.slider("Step decay — drop factor", 0.1, 0.9, 0.5, step=0.05)
+        step_size = st.slider("Step decay - drop every N epochs", 5, 40, 20)
+        step_gamma = st.slider("Step decay - drop factor", 0.1, 0.9, 0.5, step=0.05)
 
         schedules_sel = st.multiselect("Show schedules",
             ["Constant", "Step Decay", "Exponential Decay", "Cosine Annealing", "Warmup + Cosine"],
@@ -1616,7 +1616,7 @@ elif section == "lr_schedule":
     fig2.update_layout(xaxis_title="Epoch", yaxis_title="Simulated loss",
         height=300, legend=dict(orientation='h', y=1.12))
     st.plotly_chart(fig2, use_container_width=True)
-    st.caption("Simulated — illustrates the qualitative effect of each schedule, not a real training run.")
+    st.caption("Simulated - illustrates the qualitative effect of each schedule, not a real training run.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1706,13 +1706,13 @@ elif section == "normalization":
                     "**With normalization:** rounder contours → faster, straighter path to minimum.")
 
     with tab2:
-        st.markdown("### Batch Norm vs Layer Norm — where they normalise")
+        st.markdown("### Batch Norm vs Layer Norm - where they normalise")
         st.markdown("""
         | | Batch Norm | Layer Norm |
         |---|---|---|
         | Normalises over | the **batch** dimension | the **feature** dimension |
         | Typical use | CNNs, MLPs | Transformers, RNNs |
-        | Problem with small batches | Yes — statistics are noisy | No |
+        | Problem with small batches | Yes - statistics are noisy | No |
         | Works at inference without batch | Needs running stats | Yes |
         """)
 
@@ -1843,7 +1843,7 @@ elif section == "logistic_reg":
         c3.metric("Accuracy", f"{final_acc:.1%}")
 
     with tab3:
-        st.markdown("Decision boundary with **two features** — a line in 2D space.")
+        st.markdown("Decision boundary with **two features** - a line in 2D space.")
         col1, col2 = st.columns([1, 2])
         with col1:
             sep2 = st.slider("Class separation (2D)", 0.5, 3.0, 1.5, step=0.1, key="lg2_sep")
@@ -1901,7 +1901,7 @@ elif section == "lda_qda":
     Both methods model each class as a <b>Gaussian blob</b> and classify a new point by
     which blob it's most likely to have come from. The only difference is what they
     assume about the blobs' shapes: <b>LDA</b> forces every class to share the same
-    covariance — the exact assumption that makes its boundary a straight line. <b>QDA</b>
+    covariance - the exact assumption that makes its boundary a straight line. <b>QDA</b>
     lets each class have its own covariance, which is what curves the boundary.
     </div>
     """, unsafe_allow_html=True)
@@ -1968,27 +1968,27 @@ elif section == "lda_qda":
         fig_bar.update_layout(yaxis_title="Training accuracy", yaxis_range=[0,1], height=260)
         st.plotly_chart(fig_bar, use_container_width=True)
         st.caption("Push the covariance-difference slider up and QDA's curved boundary "
-                   "should pull ahead — that gap is exactly what QDA's extra flexibility "
+                   "should pull ahead - that gap is exactly what QDA's extra flexibility "
                    "buys you when the classes really do have different shapes.")
 
     with tab2:
         st.markdown("Both methods classify using Bayes' rule on Gaussian class densities, "
                      "but the assumption about **Σ** (the covariance matrix) changes everything:")
-        st.markdown('<div class="formula-box">LDA: δₖ(x) = xᵀΣ⁻¹μₖ − ½μₖᵀΣ⁻¹μₖ + log πₖ&nbsp;&nbsp;(linear in x — one shared Σ)</div>',
+        st.markdown('<div class="formula-box">LDA: δₖ(x) = xᵀΣ⁻¹μₖ − ½μₖᵀΣ⁻¹μₖ + log πₖ&nbsp;&nbsp;(linear in x - one shared Σ)</div>',
             unsafe_allow_html=True)
-        st.markdown('<div class="formula-box">QDA: δₖ(x) = −½log|Σₖ| − ½(x−μₖ)ᵀΣₖ⁻¹(x−μₖ) + log πₖ&nbsp;&nbsp;(quadratic in x — one Σₖ per class)</div>',
+        st.markdown('<div class="formula-box">QDA: δₖ(x) = −½log|Σₖ| − ½(x−μₖ)ᵀΣₖ⁻¹(x−μₖ) + log πₖ&nbsp;&nbsp;(quadratic in x - one Σₖ per class)</div>',
             unsafe_allow_html=True)
         st.markdown("""
         Because LDA shares one Σ, the quadratic terms **cancel** when you compare two
         classes' discriminant scores, leaving a straight line. QDA keeps a separate Σₖ per
-        class, so those quadratic terms survive — giving a curved (elliptical or
+        class, so those quadratic terms survive - giving a curved (elliptical or
         hyperbolic) boundary. This is the same generative-classifier idea as **Naive
         Bayes**, minus the assumption that features are independent.
         """)
 
         st.markdown("### The cost of flexibility: QDA needs more data")
         st.markdown("""
-        QDA estimates a full covariance matrix **per class** — far more parameters than
+        QDA estimates a full covariance matrix **per class** - far more parameters than
         LDA's single shared one. With few training points, those extra parameters are
         estimated poorly, and QDA's flexibility works against it.
         """)
@@ -2015,7 +2015,7 @@ elif section == "lda_qda":
         st.plotly_chart(fig2, use_container_width=True)
         st.caption("With only a handful of points per class, LDA's single shared covariance "
                    "(fewer parameters, lower variance) can beat QDA even though the true "
-                   "class shapes really are different — QDA only pulls ahead once there's "
+                   "class shapes really are different - QDA only pulls ahead once there's "
                    "enough data to estimate its extra parameters reliably. The same bias-"
                    "variance logic as **Regularization** and **Cross-Validation**, just "
                    "applied to model *assumptions* instead of model *complexity*.")
@@ -2030,7 +2030,7 @@ elif section == "neural_net":
     <div class="concept-card">
     A neural network is a stack of <b>layers</b>, each performing a linear transformation
     followed by an activation function. The number of layers and neurons determines
-    the model's capacity — and its parameter count.
+    the model's capacity - and its parameter count.
     </div>
     """, unsafe_allow_html=True)
 
@@ -2273,7 +2273,7 @@ elif section == "optimizers":
         fig.update_layout(height=420, legend=dict(orientation='h', y=1.12))
         st.plotly_chart(fig, use_container_width=True)
 
-    st.markdown("**Tip:** try the *Ravine* surface — SGD zigzags badly while Adam cuts straight through.")
+    st.markdown("**Tip:** try the *Ravine* surface - SGD zigzags badly while Adam cuts straight through.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -2453,9 +2453,9 @@ elif section == "batch_size":
     c1, c2, c3 = st.columns(3)
     c1.metric("Steps per epoch", int(np.ceil(n_total / batch_size_sim)))
     c2.metric("Total gradient steps", len(losses_b))
-    c3.metric("Final MSE", f"{losses_b[-1]:.4f}" if losses_b else "—")
+    c3.metric("Final MSE", f"{losses_b[-1]:.4f}" if losses_b else "-")
 
-    st.markdown("**Noise in small batches can actually help** — it acts like implicit regularization, "
+    st.markdown("**Noise in small batches can actually help** - it acts like implicit regularization, "
                 "helping the optimizer escape sharp minima that generalise poorly.")
 
 
@@ -2482,11 +2482,11 @@ elif section == "vanishing_grad":
             act_vg = st.selectbox("Activation", ["Sigmoid", "Tanh", "ReLU"], key="vg_act")
             st.markdown("---")
             if weight_scale < 0.9:
-                st.error("🔴 **Vanishing gradient** — signal dies before reaching early layers")
+                st.error("🔴 **Vanishing gradient** - signal dies before reaching early layers")
             elif weight_scale > 1.1:
-                st.warning("🟡 **Exploding gradient** — signal grows exponentially")
+                st.warning("🟡 **Exploding gradient** - signal grows exponentially")
             else:
-                st.success("🟢 **Stable** — gradient magnitude stays reasonable")
+                st.success("🟢 **Stable** - gradient magnitude stays reasonable")
 
         # Simulate gradient magnitude through layers
         np.random.seed(42)
@@ -2572,7 +2572,7 @@ elif section == "vanishing_grad":
             ```
 
             The gradient can now flow directly through the skip connection,
-            bypassing the non-linearity entirely — solving vanishing gradients
+            bypassing the non-linearity entirely - solving vanishing gradients
             in very deep networks (100+ layers).
             """)
 
@@ -2599,9 +2599,9 @@ elif section == "vanishing_grad":
 
         st.markdown("""
         **3. Other fixes:**
-        - **Gradient clipping** — cap gradient norm at a threshold (common in RNNs)
-        - **Batch Normalisation** — keeps activations well-scaled at each layer
-        - **ReLU** instead of Sigmoid/Tanh — derivative is 1 for x>0, not squashed
+        - **Gradient clipping** - cap gradient norm at a threshold (common in RNNs)
+        - **Batch Normalisation** - keeps activations well-scaled at each layer
+        - **ReLU** instead of Sigmoid/Tanh - derivative is 1 for x>0, not squashed
         """)
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -2626,7 +2626,7 @@ elif section == "neuron":
 
     # ── TAB 1: live computation diagram ──────────────────────────────────
     with tab1:
-        st.markdown("Adjust the inputs, weights and bias — watch every value in the equation update live.")
+        st.markdown("Adjust the inputs, weights and bias - watch every value in the equation update live.")
 
         col_ctrl, col_diag = st.columns([1, 2])
         with col_ctrl:
@@ -2712,7 +2712,7 @@ elif section == "neuron":
                 text=f"z={z:.2f}", showarrow=False, font=dict(size=9, color="#b8860b"))
 
             # activation node
-            short = {"ReLU":"ReLU","Sigmoid":"σ","Tanh":"tanh","None (linear)":"—"}
+            short = {"ReLU":"ReLU","Sigmoid":"σ","Tanh":"tanh","None (linear)":"-"}
             fig.add_shape(type="rect", x0=x_act-r*1.3, y0=5.0-r, x1=x_act+r*1.3, y1=5.0+r, **act_style)
             fig.add_annotation(x=x_act, y=5.0,
                 text=f"<b>{short[act_n]}</b>", showarrow=False, font=dict(size=14, color="#0f6e56"))
@@ -2760,12 +2760,12 @@ elif section == "neuron":
                 fig.add_trace(go.Scatter(x=x_range, y=out_line,
                     name=f"w={wv}", line=dict(color=cv, width=2)))
             fig.update_layout(xaxis_title="Input x", yaxis_title="Output (tanh)",
-                title="Changing weight — same bias (b=0)",
+                title="Changing weight - same bias (b=0)",
                 height=300, legend=dict(orientation='h', y=1.15))
             st.plotly_chart(fig, use_container_width=True)
 
         with col2:
-            st.markdown("**Effect of bias — shifts the activation threshold**")
+            st.markdown("**Effect of bias - shifts the activation threshold**")
             biases_demo = [-2.0, -1.0, 0.0, 1.0, 2.0]
             fig = go.Figure()
             for bv, cv in zip(biases_demo, colors_w):
@@ -2776,13 +2776,13 @@ elif section == "neuron":
             fig.add_hline(y=0.5, line_dash="dash", line_color="gray",
                 annotation_text="threshold p=0.5")
             fig.update_layout(xaxis_title="Input x", yaxis_title="Output (sigmoid)",
-                title="Changing bias — same weight (w=1.5)",
+                title="Changing bias - same weight (w=1.5)",
                 height=300, legend=dict(orientation='h', y=1.15))
             st.plotly_chart(fig, use_container_width=True)
 
         st.markdown("""
-        - A **large positive weight** makes the neuron very sensitive to that input — it fires strongly when x is high.  
-        - A **negative weight** makes the neuron *inhibited* by that input — like an "off switch."  
+        - A **large positive weight** makes the neuron very sensitive to that input - it fires strongly when x is high.  
+        - A **negative weight** makes the neuron *inhibited* by that input - like an "off switch."  
         - The **bias** shifts the curve left or right, controlling the threshold at which the neuron activates, independently of any input.
         """)
 
@@ -2792,12 +2792,12 @@ elif section == "neuron":
         st.markdown("""
         A single neuron already contains all the ingredients of training:
 
-        1. **Forward pass** — compute z = w·x + b, then ŷ = activation(z)
-        2. **Loss** — measure how wrong ŷ is: e.g. L = ½(ŷ − y)²
-        3. **Backward pass** — use the chain rule to find dL/dw and dL/db
-        4. **Update** — nudge each weight opposite to its gradient: w ← w − η·dL/dw
+        1. **Forward pass** - compute z = w·x + b, then ŷ = activation(z)
+        2. **Loss** - measure how wrong ŷ is: e.g. L = ½(ŷ − y)²
+        3. **Backward pass** - use the chain rule to find dL/dw and dL/db
+        4. **Update** - nudge each weight opposite to its gradient: w ← w − η·dL/dw
 
-        When you stack many neurons into layers, step 3 becomes **backpropagation** —
+        When you stack many neurons into layers, step 3 becomes **backpropagation** -
         the chain rule applied recursively from the output layer back to the input layer.
         """)
 
@@ -2810,9 +2810,9 @@ elif section == "neuron":
                 '</div>', unsafe_allow_html=True)
             st.markdown("""
             Each factor has a clear role:
-            - **(ŷ−y)** — how wrong is the output?
-            - **f'(z)** — how sensitive is the activation to z?
-            - **x** — how much did this input contribute to z?
+            - **(ŷ−y)** - how wrong is the output?
+            - **f'(z)** - how sensitive is the activation to z?
+            - **x** - how much did this input contribute to z?
             """)
         with col2:
             st.markdown("**The learning loop:**")
@@ -2838,16 +2838,16 @@ for each batch:
         st.markdown("---")
         st.markdown("### Why activation functions must be differentiable")
         st.markdown("""
-        The backward pass requires computing f'(z) — the derivative of the activation.
+        The backward pass requires computing f'(z) - the derivative of the activation.
         This is why step functions (which have zero gradient almost everywhere) can't be
         used in deep networks: the gradient signal vanishes completely.
 
         | Activation | f'(z) | Vanishing gradient risk |
         |---|---|---|
         | ReLU | 1 if z>0 else 0 | Low (but "dead ReLU" for z<0) |
-        | Sigmoid | σ(z)·(1−σ(z)) | High — max 0.25, shrinks fast |
-        | Tanh | 1 − tanh²(z) | Moderate — max 1.0 at z=0 |
-        | Linear | 1 | None — but no non-linearity |
+        | Sigmoid | σ(z)·(1−σ(z)) | High - max 0.25, shrinks fast |
+        | Tanh | 1 − tanh²(z) | Moderate - max 1.0 at z=0 |
+        | Linear | 1 | None - but no non-linearity |
 
         > 📖 See **Vanishing Gradients** in Deep Learning for the full treatment.
         """)
@@ -2869,10 +2869,10 @@ elif section == "vectors":
     with tab1:
         col1, col2 = st.columns([1, 2])
         with col1:
-            ax = st.slider("a — x", -4.0, 4.0,  2.0, step=0.1, key="v_ax")
-            ay = st.slider("a — y", -4.0, 4.0,  1.0, step=0.1, key="v_ay")
-            bx = st.slider("b — x", -4.0, 4.0, -1.0, step=0.1, key="v_bx")
-            by = st.slider("b — y", -4.0, 4.0,  3.0, step=0.1, key="v_by")
+            ax = st.slider("a - x", -4.0, 4.0,  2.0, step=0.1, key="v_ax")
+            ay = st.slider("a - y", -4.0, 4.0,  1.0, step=0.1, key="v_ay")
+            bx = st.slider("b - x", -4.0, 4.0, -1.0, step=0.1, key="v_bx")
+            by = st.slider("b - y", -4.0, 4.0,  3.0, step=0.1, key="v_by")
             show_sum = st.checkbox("Show a + b", value=True)
             show_diff= st.checkbox("Show a − b", value=False)
 
@@ -2978,7 +2978,7 @@ elif section == "vectors":
         if angle_deg < 90:   st.success(f"Angle < 90° → positive dot product → vectors point in similar direction")
         elif angle_deg == 90: st.info("Angle = 90° → dot product = 0 → vectors are orthogonal (perpendicular)")
         else:                 st.warning(f"Angle > 90° → negative dot product → vectors point in opposite directions")
-        st.markdown("> **In ML:** cosine similarity between two embedding vectors uses exactly this — dot product divided by magnitudes.")
+        st.markdown("> **In ML:** cosine similarity between two embedding vectors uses exactly this - dot product divided by magnitudes.")
 
     with tab3:
         st.markdown("### Common vector operations")
@@ -3022,7 +3022,7 @@ elif section == "matrix_ops":
     with tab0:
         st.markdown("### Matrix addition and subtraction")
         st.markdown("""
-        Matrices add and subtract **element-by-element** — both matrices must have the
+        Matrices add and subtract **element-by-element** - both matrices must have the
         same shape. This is the simplest matrix operation, but it's everywhere: combining
         gradients, accumulating updates, residual connections.
         """)
@@ -3055,7 +3055,7 @@ elif section == "matrix_ops":
                                 f"{Aas[i,j]:.1f} {symbol} {Bas[i,j]:.1f} = **{result[i,j]:.2f}**")
 
             st.markdown("---")
-            st.markdown("**Note:** addition/subtraction require identical shapes — "
+            st.markdown("**Note:** addition/subtraction require identical shapes - "
                         "unlike multiplication, there's no inner-dimension rule to satisfy.")
             st.caption("In ML: gradient accumulation (summing gradients across a batch), "
                       "residual/skip connections (x + F(x)), and weight updates "
@@ -3080,7 +3080,7 @@ elif section == "matrix_ops":
                 f'[ {C[0,0]:.1f} , {C[0,1]:.1f} ]<br>'
                 f'[ {C[1,0]:.1f} , {C[1,1]:.1f} ]'
                 f'</div>', unsafe_allow_html=True)
-            st.markdown("**How C[i,j] is computed — dot product of row i of A with column j of B:**")
+            st.markdown("**How C[i,j] is computed - dot product of row i of A with column j of B:**")
             for i in range(2):
                 for j in range(2):
                     terms = " + ".join([f"{A[i,k]:.1f}·{B[k,j]:.1f}" for k in range(3)])
@@ -3098,7 +3098,7 @@ elif section == "matrix_ops":
 
     with tab2:
         st.markdown("### What a 2×2 matrix does to space")
-        st.markdown("Every 2×2 matrix is a geometric transformation — rotation, scaling, shearing or reflection.")
+        st.markdown("Every 2×2 matrix is a geometric transformation - rotation, scaling, shearing or reflection.")
         col1, col2 = st.columns([1, 2])
         with col1:
             preset = st.selectbox("Preset transformation", [
@@ -3178,10 +3178,10 @@ elif section == "matrix_ops":
                 st.markdown(f'<div class="formula-box">M⁻¹ = [[{inv[0,0]:.2f},{inv[0,1]:.2f}],<br>[{inv[1,0]:.2f},{inv[1,1]:.2f}]]</div>',
                     unsafe_allow_html=True)
             else:
-                st.error("This matrix is singular (det=0) — no inverse exists.")
+                st.error("This matrix is singular (det=0) - no inverse exists.")
 
         st.markdown("---")
-        st.markdown("### Determinant — how much a matrix scales area/volume")
+        st.markdown("### Determinant - how much a matrix scales area/volume")
         st.markdown("""
         The **determinant** measures how a matrix scales area (2D) or volume (3D), with
         sign indicating whether orientation flips. It's the single number that tells you
@@ -3235,15 +3235,15 @@ elif section == "matrix_ops":
 
         st.markdown("""
         **In ML:** determinant = 0 means a weight matrix has collapsed information into a
-        lower-dimensional subspace (rank deficiency) — a sign of redundant features or a
+        lower-dimensional subspace (rank deficiency) - a sign of redundant features or a
         degenerate transformation. Normalizing flows use the determinant of the Jacobian
         to track how probability density changes under a transformation.
         """)
 
         st.markdown("---")
-        st.markdown("### Frobenius norm — the magnitude of a whole matrix")
+        st.markdown("### Frobenius norm - the magnitude of a whole matrix")
         st.markdown("""
-        The **Frobenius norm** generalises the Euclidean (L2) vector norm to matrices —
+        The **Frobenius norm** generalises the Euclidean (L2) vector norm to matrices -
         treat every entry as if it were one long vector and take its L2 norm.
         """)
         st.markdown('<div class="formula-box">‖A‖_F = √(Σᵢ Σⱼ Aᵢⱼ²)  =  √(trace(AᵀA))</div>', unsafe_allow_html=True)
@@ -3265,10 +3265,10 @@ elif section == "matrix_ops":
             st.markdown("**Used for:**")
             st.markdown("""
             - **Weight decay / L2 regularization** on whole weight matrices: λ‖W‖_F²
-            - **Matrix approximation error** — how close is à to A? Use ‖A − Ã‖_F
-            - **Low-rank approximation (SVD)** — the Eckart-Young theorem says the best
+            - **Matrix approximation error** - how close is à to A? Use ‖A − Ã‖_F
+            - **Low-rank approximation (SVD)** - the Eckart-Young theorem says the best
               rank-k approximation under Frobenius norm comes from truncating the SVD
-            - **Gradient clipping** — clip the Frobenius norm of a weight gradient matrix
+            - **Gradient clipping** - clip the Frobenius norm of a weight gradient matrix
               to prevent exploding gradients
             """)
             st.markdown('<div class="formula-box">Loss + λ‖W‖_F²<br><small>matrix analogue of L2 weight regularization</small></div>',
@@ -3282,7 +3282,7 @@ elif section == "derivative":
     st.title("📐 Derivative")
     st.markdown("""
     <div class="concept-card">
-    The <b>derivative</b> f'(x) is the instantaneous rate of change of f at x —
+    The <b>derivative</b> f'(x) is the instantaneous rate of change of f at x -
     the slope of the tangent line at that point. It answers: <em>"if x increases by a tiny
     amount, how much does f change?"</em>. This is the engine behind every gradient update in ML.
     </div>
@@ -3364,7 +3364,7 @@ elif section == "derivative":
                 "Error": [f"{abs(forward-analytical):.2e}", f"{abs(central-analytical):.2e}", "0"],
             })
             st.dataframe(df_num, use_container_width=True, hide_index=True)
-        st.caption("Central difference is more accurate for the same h — error is O(h²) vs O(h) for forward.")
+        st.caption("Central difference is more accurate for the same h - error is O(h²) vs O(h) for forward.")
 
     with tab3:
         st.markdown("### Key differentiation rules")
@@ -3389,7 +3389,7 @@ elif section == "partial_deriv":
     st.markdown("""
     <div class="concept-card">
     A <b>partial derivative</b> ∂f/∂x measures how f changes when only one variable moves,
-    holding all others fixed. The vector of all partial derivatives is the <b>gradient</b> ∇f —
+    holding all others fixed. The vector of all partial derivatives is the <b>gradient</b> ∇f -
     the direction of steepest ascent used in every ML optimiser.
     </div>
     """, unsafe_allow_html=True)
@@ -3444,7 +3444,7 @@ elif section == "partial_deriv":
     c1.metric("f(x₀,y₀)", f"{f_val:.4f}")
     c2.metric("∂f/∂x at point", f"{dfdx_val:.4f}")
     c3.metric("∂f/∂y at point", f"{dfdy_val:.4f}")
-    st.markdown(f"**Gradient vector:** ∇f = [{dfdx_val:.4f}, {dfdy_val:.4f}] — points in direction of steepest ascent. "
+    st.markdown(f"**Gradient vector:** ∇f = [{dfdx_val:.4f}, {dfdy_val:.4f}] - points in direction of steepest ascent. "
         f"Gradient descent moves in the **opposite** direction: −∇f.")
 
 
@@ -3522,9 +3522,9 @@ elif section == "integral":
     with tab2:
         import pandas as pd
         integrals = [
-            ("xⁿ  (n≠−1)",   "xⁿ⁺¹/(n+1) + C",  "Power rule — every polynomial term"),
+            ("xⁿ  (n≠−1)",   "xⁿ⁺¹/(n+1) + C",  "Power rule - every polynomial term"),
             ("1/x",           "ln|x| + C",         "Appears in log-loss, entropy"),
-            ("eˣ",            "eˣ + C",            "Its own antiderivative — unique property"),
+            ("eˣ",            "eˣ + C",            "Its own antiderivative - unique property"),
             ("sin(x)",        "−cos(x) + C",       "Oscillating functions, Fourier"),
             ("cos(x)",        "sin(x) + C",        "Oscillating functions"),
             ("1/(1+x²)",      "arctan(x) + C",     "Probability distributions"),
@@ -3544,7 +3544,7 @@ elif section == "chain_rule":
     <div class="concept-card">
     The <b>chain rule</b> tells us how to differentiate a <em>composition</em> of functions:
     if y = f(g(x)), then dy/dx = f'(g(x)) · g'(x). This is the mathematical heart of
-    backpropagation — every gradient in a neural network is computed via repeated chain rule.
+    backpropagation - every gradient in a neural network is computed via repeated chain rule.
     </div>
     """, unsafe_allow_html=True)
     st.markdown('<div class="formula-box">dy/dx = (dy/du) · (du/dx)&nbsp;&nbsp; where u = g(x)</div>',
@@ -3584,19 +3584,19 @@ elif section == "chain_rule":
         with col2:
             st.markdown("**Decomposition at x₀ = {:.2f}**".format(x_cr))
             st.code(f"""
-Step 1 — Evaluate inner function g(x):
+Step 1 - Evaluate inner function g(x):
    u = g({x_cr:.2f}) = {inner} = {u_val:.4f}
 
-Step 2 — Evaluate outer function f(u):
+Step 2 - Evaluate outer function f(u):
    y = f(u) = f({u_val:.4f}) = {outer} = {y_val:.4f}
 
-Step 3 — Derivative of inner:
+Step 3 - Derivative of inner:
    du/dx = g'(x) = {dg_in_str} = {du_dx:.4f}
 
-Step 4 — Derivative of outer (at u):
+Step 4 - Derivative of outer (at u):
    dy/du = f'(u) = {df_out_str} = {dy_du:.4f}
 
-Step 5 — Chain rule:
+Step 5 - Chain rule:
    dy/dx = (dy/du)·(du/dx)
          = {dy_du:.4f} × {du_dx:.4f}
          = {dy_dx:.4f}
@@ -3640,7 +3640,7 @@ Step 5 — Chain rule:
         """)
 
         # simulate a tiny network chain rule numerically
-        st.markdown("**Numerical demonstration — 3-layer chain:**")
+        st.markdown("**Numerical demonstration - 3-layer chain:**")
         col1, col2 = st.columns([1, 2])
         with col1:
             x_nn = st.slider("Input x", -2.0, 2.0, 1.0, step=0.1, key="cr_nn_x")
@@ -3756,7 +3756,7 @@ elif section == "dot_product":
         """)
         st.markdown('<div class="formula-box">score(Q,K) = Q·Kᵀ / √dₖ</div>', unsafe_allow_html=True)
         st.markdown("""
-        **4. Projection** — how much of b lies along a (scalar: a·b̂; vector: (a·b/|b|²)·b).
+        **4. Projection** - how much of b lies along a (scalar: a·b̂; vector: (a·b/|b|²)·b).
         For the full interactive treatment including perpendicular components and the
         connection to PCA and attention, see **Vector Spaces** in Math Foundations.
         """)
@@ -3789,7 +3789,7 @@ elif section == "eigenvalues":
     st.title("λ Eigenvalues & Eigenvectors")
     st.markdown("""
     <div class="concept-card">
-    An <b>eigenvector</b> of a matrix A is a special direction that doesn't rotate under A —
+    An <b>eigenvector</b> of a matrix A is a special direction that doesn't rotate under A -
     it only stretches or shrinks. The <b>eigenvalue</b> λ tells you by how much.
     They appear in PCA (dimensionality reduction), understanding covariance, and stability analysis.
     </div>
@@ -3874,7 +3874,7 @@ elif section == "eigenvalues":
 
     with tab2:
         st.markdown("""
-        ### PCA — Principal Component Analysis
+        ### PCA - Principal Component Analysis
 
         PCA finds the directions of maximum variance in data.
         These directions are exactly the **eigenvectors of the covariance matrix**,
@@ -3925,7 +3925,7 @@ elif section == "eigenvalues":
 # PCA
 # ═══════════════════════════════════════════════════════════════════════════
 elif section == "pca":
-    st.title("🔍 PCA — Principal Component Analysis")
+    st.title("🔍 PCA - Principal Component Analysis")
     st.markdown("""
     <div class="concept-card">
     PCA finds the directions of <b>maximum variance</b> in high-dimensional data and projects
@@ -4008,7 +4008,7 @@ elif section == "pca":
         c1.metric("PC1 variance explained", f"{var_exp[0]:.1%}")
         c2.metric("PC2 variance explained", f"{var_exp[1]:.1%}")
         c3.metric("PC1 direction", f"[{pc1[0]:.3f}, {pc1[1]:.3f}]")
-        st.info("Orange lines show the reconstruction error — information lost by projecting onto PC1 only.")
+        st.info("Orange lines show the reconstruction error - information lost by projecting onto PC1 only.")
 
     with tab2:
         st.markdown("PCA on a higher-dimensional dataset, projected to 2D for visualisation.")
@@ -4048,7 +4048,7 @@ elif section == "pca":
                     f"(retaining {var_ratio[0]+var_ratio[1]:.1%} of variance)")
 
     with tab3:
-        st.markdown("### Scree plot — how many components to keep?")
+        st.markdown("### Scree plot - how many components to keep?")
         col1, col2 = st.columns([1, 2])
         with col1:
             n_feat_s = st.slider("Number of features", 3, 15, 8, key="pca_sc_f")
@@ -4099,7 +4099,7 @@ elif section == "clustering":
     st.title("🧩 Clustering (K-Means & Hierarchical)")
     st.markdown("""
     <div class="concept-card">
-    Clustering finds structure in data with <b>no labels at all</b> — it groups points by
+    Clustering finds structure in data with <b>no labels at all</b> - it groups points by
     similarity alone. <b>K-Means</b> commits to a fixed number of groups upfront and moves
     centroids until each point is closest to its own; <b>Hierarchical clustering</b> builds
     a full tree of nested groupings and lets you choose how many clusters you want
@@ -4144,7 +4144,7 @@ elif section == "clustering":
         c2m.metric("k chosen", chosen_k)
         c3.metric("True groups in data", true_k_km)
 
-        st.markdown("### Elbow method — choosing k")
+        st.markdown("### Elbow method - choosing k")
         ks = list(range(1, 9))
         inertias = [KMeans(n_clusters=kk, n_init=10, random_state=42).fit(X_km).inertia_ for kk in ks]
         fig2 = go.Figure()
@@ -4154,8 +4154,8 @@ elif section == "clustering":
             annotation_text=f"Selected k={chosen_k}")
         fig2.update_layout(xaxis_title="k", yaxis_title="Inertia", height=280)
         st.plotly_chart(fig2, use_container_width=True)
-        st.caption("The 'elbow' — where adding another cluster stops giving a big drop in "
-                   "inertia — is a common heuristic for picking k. There's no ground truth to "
+        st.caption("The 'elbow' - where adding another cluster stops giving a big drop in "
+                   "inertia - is a common heuristic for picking k. There's no ground truth to "
                    "check against in real unsupervised problems, so this is a judgment call, "
                    "not something **Cross-Validation** can pick for you the way it does for "
                    "supervised models.")
@@ -4208,7 +4208,7 @@ elif section == "clustering":
                    "least (usually the most balanced-looking clusters); **single** linkage "
                    "merges on the nearest pair of points, which can chain together "
                    "elongated clusters; **complete** and **average** sit in between. Cut "
-                   "higher for fewer, broader clusters — unlike K-Means, you don't have to "
+                   "higher for fewer, broader clusters - unlike K-Means, you don't have to "
                    "commit to a cluster count before seeing the whole tree.")
 
 
@@ -4283,14 +4283,14 @@ elif section == "decision_tree":
         c3.metric("Leaf nodes", clf_dt.get_n_leaves())
 
         if max_depth >= 5:
-            st.warning("Deep tree — likely overfitting. The jagged boundaries memorise training noise.")
+            st.warning("Deep tree - likely overfitting. The jagged boundaries memorise training noise.")
         elif max_depth <= 2:
-            st.info("Shallow tree — may underfit complex patterns, but generalises well.")
+            st.info("Shallow tree - may underfit complex patterns, but generalises well.")
         else:
-            st.success("Moderate depth — good balance of expressiveness and generalisability.")
+            st.success("Moderate depth - good balance of expressiveness and generalisability.")
 
     with tab2:
-        st.markdown("### Gini impurity — the split criterion")
+        st.markdown("### Gini impurity - the split criterion")
         st.markdown('<div class="formula-box">Gini = 1 − Σ pᵢ²</div>', unsafe_allow_html=True)
         st.markdown("Gini = 0 means a pure node (all one class). Gini = 0.5 means perfectly mixed (2 classes).")
 
@@ -4302,9 +4302,9 @@ elif section == "decision_tree":
             entropy = -(p_cls1*np.log2(p_cls1+1e-9) + p_cls2*np.log2(p_cls2+1e-9))
             st.metric("Gini impurity", f"{gini:.4f}")
             st.metric("Entropy", f"{entropy:.4f}")
-            if gini < 0.1:   st.success("Very pure node — good split!")
+            if gini < 0.1:   st.success("Very pure node - good split!")
             elif gini < 0.3: st.info("Moderately pure")
-            else:             st.warning("Impure node — tree will try to split further")
+            else:             st.warning("Impure node - tree will try to split further")
 
         with col2:
             p_range = np.linspace(0.001, 0.999, 300)
@@ -4322,7 +4322,7 @@ elif section == "decision_tree":
                 legend=dict(orientation='h', y=1.12))
             st.plotly_chart(fig, use_container_width=True)
 
-        st.markdown("### Information gain — how a split is chosen")
+        st.markdown("### Information gain - how a split is chosen")
         st.markdown("""
         At each node the tree tries every feature and every threshold.
         It picks the one that maximises:
@@ -4332,9 +4332,9 @@ elif section == "decision_tree":
         col1, col2 = st.columns([1, 2])
         with col1:
             n_left  = st.slider("Left child samples", 5, 50, 20)
-            p_left  = st.slider("Fraction class A — left",  0.0, 1.0, 0.9, step=0.01)
+            p_left  = st.slider("Fraction class A - left",  0.0, 1.0, 0.9, step=0.01)
             n_right = st.slider("Right child samples", 5, 50, 30)
-            p_right = st.slider("Fraction class A — right", 0.0, 1.0, 0.1, step=0.01)
+            p_right = st.slider("Fraction class A - right", 0.0, 1.0, 0.1, step=0.01)
         n_total = n_left + n_right
         p_parent = (n_left*p_left + n_right*p_right) / n_total
         gini_parent = 1-(p_parent**2+(1-p_parent)**2)
@@ -4350,9 +4350,9 @@ Right gini   = {gini_right:.4f}  (p_A = {p_right:.2f}, n={n_right})
 Information gain = {gini_parent:.4f} − ({n_left}/{n_total}·{gini_left:.4f} + {n_right}/{n_total}·{gini_right:.4f})
                  = {ig:.4f}
 """, language="text")
-            if ig > 0.15: st.success("Excellent split — large reduction in impurity")
+            if ig > 0.15: st.success("Excellent split - large reduction in impurity")
             elif ig > 0.05: st.info("Decent split")
-            else: st.warning("Poor split — little gain")
+            else: st.warning("Poor split - little gain")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -4362,7 +4362,7 @@ elif section == "ensemble_trees":
     st.title("🌲 Ensemble Trees")
     st.markdown("""
     <div class="concept-card">
-    A single <b>Decision Tree</b> is a high-variance model — small changes in the training
+    A single <b>Decision Tree</b> is a high-variance model - small changes in the training
     data can produce a very different tree. Ensembles fix this by combining many trees
     instead of trusting one: <b>Bagging</b> and <b>Random Forests</b> average many trees
     trained on resampled data to cancel out that variance, while <b>Boosting</b> builds
@@ -4442,7 +4442,7 @@ elif section == "ensemble_trees":
         fig_bar.update_layout(barmode='group', yaxis_title="Accuracy", yaxis_range=[0, 1],
             height=320, legend=dict(orientation='h', y=1.14))
         st.plotly_chart(fig_bar, use_container_width=True)
-        st.caption("The single tree usually shows the widest train/test gap — that gap is "
+        st.caption("The single tree usually shows the widest train/test gap - that gap is "
                    "exactly the variance the ensembles are cancelling out.")
 
     with tab2:
@@ -4455,20 +4455,20 @@ elif section == "ensemble_trees":
         **Bagging** (Bootstrap AGGregatING)
         - Draws *n* bootstrap samples (random samples with replacement) from the training data
         - Fits one full tree per sample, then **averages** the predictions (or majority-votes)
-        - Reduces variance — but trees trained on similar data with all features available
+        - Reduces variance - but trees trained on similar data with all features available
           tend to look alike, so the variance reduction has a ceiling
 
         **Random Forest**
         - Bagging, plus one more twist: each split only considers a **random subset of
           features** (typically √p of them)
-        - This decorrelates the trees — a strong predictor can't dominate every tree — so
+        - This decorrelates the trees - a strong predictor can't dominate every tree - so
           averaging cancels out more variance than plain bagging can
 
         **Boosting**
         - Trees are built **sequentially**, not independently
         - Each new tree focuses on the training examples the previous trees got wrong (or,
           for regression, fits the residual errors left over)
-        - Reduces **bias** rather than variance — but with too many rounds or too high a
+        - Reduces **bias** rather than variance - but with too many rounds or too high a
           learning rate, it can start fitting noise
         """)
 
@@ -4508,11 +4508,11 @@ elif section == "ensemble_trees":
         fig2.update_layout(xaxis_title="Number of trees", yaxis_title="Test error rate",
             height=340, legend=dict(orientation='h', y=1.14))
         st.plotly_chart(fig2, use_container_width=True)
-        st.caption("Bagging and Random Forest error drops fast then flattens — adding more "
+        st.caption("Bagging and Random Forest error drops fast then flattens - adding more "
                    "trees can't hurt, it just stops helping. Boosting keeps improving for "
                    "longer since each round targets the remaining errors directly, which is "
                    "also why it needs its **learning rate** and tree count tuned together to "
-                   "avoid eventually overfitting — see **Regularization** and "
+                   "avoid eventually overfitting - see **Regularization** and "
                    "**Cross-Validation** for how that tuning is usually done.")
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -4576,17 +4576,17 @@ elif section == "naive_bayes":
         - P(disease | positive) = P(+|disease)·P(disease) / P(+) = {sensitivity:.2f}·{prior:.3f} / {p_pos:.4f} = **{posterior:.4f}**
         """)
         if prior < 0.01 and posterior < 0.3:
-            st.info("Even with a positive test, the posterior is low because the disease is rare — this is the **base rate fallacy**.")
+            st.info("Even with a positive test, the posterior is low because the disease is rare - this is the **base rate fallacy**.")
 
     with tab2:
-        st.markdown("### Gaussian Naive Bayes — 2D feature classifier")
+        st.markdown("### Gaussian Naive Bayes - 2D feature classifier")
         col1, col2 = st.columns([1, 2])
         with col1:
             n_nb = st.slider("Samples per class", 20, 80, 40, key="nb_n")
             sep_nb = st.slider("Class separation", 0.5, 3.0, 1.5, step=0.1, key="nb_sep")
             seed_nb = st.slider("Seed", 0, 10, 1, key="nb_seed")
-            test_x1 = st.slider("Test point — feature 1", -4.0, 4.0, 0.5, step=0.1)
-            test_x2 = st.slider("Test point — feature 2", -4.0, 4.0, 0.5, step=0.1)
+            test_x1 = st.slider("Test point - feature 1", -4.0, 4.0, 0.5, step=0.1)
+            test_x2 = st.slider("Test point - feature 2", -4.0, 4.0, 0.5, step=0.1)
 
         np.random.seed(seed_nb)
         X_nb0 = np.random.randn(n_nb, 2) + np.array([-sep_nb/2, 0])
@@ -4644,15 +4644,15 @@ elif section == "naive_bayes":
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# CNN — CONVOLUTIONAL LAYER
+# CNN - CONVOLUTIONAL LAYER
 # ═══════════════════════════════════════════════════════════════════════════
 elif section == "cnn":
     st.title("🖼️ Convolutional Layer (CNN)")
     st.markdown("""
     <div class="concept-card">
     A convolutional layer slides a small <b>kernel</b> (filter) across an input,
-    computing a dot product at every position. This detects local patterns —
-    edges, textures, shapes — regardless of where they appear in the image.
+    computing a dot product at every position. This detects local patterns -
+    edges, textures, shapes - regardless of where they appear in the image.
     </div>
     """, unsafe_allow_html=True)
 
@@ -4722,7 +4722,7 @@ elif section == "cnn":
         c1.metric("Input size", f"{G}×{G}")
         c2.metric("Output size", f"{out_size}×{out_size}")
         c3.metric("Parameters in kernel", "9 weights + 1 bias")
-        st.markdown(f"**Key insight:** the same 9 weights are reused at every position — "
+        st.markdown(f"**Key insight:** the same 9 weights are reused at every position - "
                     f"this *weight sharing* gives CNNs translation invariance and makes them vastly more "
                     f"efficient than a fully-connected layer ({G*G*out_size*out_size:,} weights vs 9).")
 
@@ -4957,10 +4957,10 @@ elif section == "probability":
         c2.metric("Variance", f"{var_d:.3f}")
 
     with tab3:
-        st.markdown("### Entropy & uncertainty — what the shape of a distribution tells you")
+        st.markdown("### Entropy & uncertainty - what the shape of a distribution tells you")
         st.markdown("""
         Two distributions with the same mean can look completely different in spread.
-        **Entropy** quantifies this uncertainty — a wide, flat distribution has high entropy
+        **Entropy** quantifies this uncertainty - a wide, flat distribution has high entropy
         (many outcomes are nearly equally likely); a sharp, narrow one has low entropy.
         """)
         st.markdown('<div class="formula-box">'
@@ -4987,11 +4987,11 @@ elif section == "probability":
 
         st.markdown("""
         **In ML:**
-        - **VAEs** learn both μ and σ for each latent dimension — a narrow σ means the encoder
+        - **VAEs** learn both μ and σ for each latent dimension - a narrow σ means the encoder
           is confident about where a point belongs; wide σ means uncertainty
-        - **KL divergence** measures how far one distribution is from another — used as the
+        - **KL divergence** measures how far one distribution is from another - used as the
           regularisation term in VAE training: KL(q ∥ p)
-        - **Softmax output** forms a categorical distribution — high-entropy outputs signal
+        - **Softmax output** forms a categorical distribution - high-entropy outputs signal
           the model is uncertain between classes
         - **Cross-entropy loss** = negative log-likelihood under the true distribution
 
@@ -5001,10 +5001,10 @@ elif section == "probability":
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# SVD — MATRIX DECOMPOSITION
+# SVD - MATRIX DECOMPOSITION
 # ═══════════════════════════════════════════════════════════════════════════
 elif section == "svd":
-    st.title("✂️ SVD — Singular Value Decomposition")
+    st.title("✂️ SVD - Singular Value Decomposition")
     st.markdown("""
     <div class="concept-card">
     SVD decomposes any matrix into three simpler matrices: <b>A = U Σ Vᵀ</b>.
@@ -5018,7 +5018,7 @@ elif section == "svd":
     tab1, tab2 = st.tabs(["Image compression", "Low-rank approximation explorer"])
 
     with tab1:
-        st.markdown("### SVD as lossy compression — keep only the top k singular values")
+        st.markdown("### SVD as lossy compression - keep only the top k singular values")
         col1, col2 = st.columns([1, 2])
         with col1:
             img_type = st.selectbox("Test image", ["Gradient", "Stripes", "Checkerboard", "Random noise", "Smooth blob"])
@@ -5097,9 +5097,9 @@ elif section == "svd":
             fig.update_layout(height=320)
             st.plotly_chart(fig, use_container_width=True)
 
-        st.markdown("**U** — how original rows relate to latent dimensions  \n"
-                    "**Σ** — importance of each latent dimension (singular values)  \n"
-                    "**Vᵀ** — how original columns relate to latent dimensions")
+        st.markdown("**U** - how original rows relate to latent dimensions  \n"
+                    "**Σ** - importance of each latent dimension (singular values)  \n"
+                    "**Vᵀ** - how original columns relate to latent dimensions")
         import pandas as pd
         st.dataframe(pd.DataFrame({
             "Singular value": [f"σ{i+1} = {S_s[i]:.3f}" for i in range(len(S_s))],
@@ -5116,7 +5116,7 @@ elif section == "react_loop":
     <div class="concept-card">
     <b>ReAct</b> (Reason + Act) is the core loop of a tool-using agent.
     At each step the model: <b>Reasons</b> about what to do next,
-    <b>Acts</b> by calling a tool, then <b>Observes</b> the result —
+    <b>Acts</b> by calling a tool, then <b>Observes</b> the result -
     repeating until the task is complete.
     </div>
     """, unsafe_allow_html=True)
@@ -5208,7 +5208,7 @@ elif section == "react_loop":
                             margin-bottom:8px">
                     <div style="font-size:0.75rem;font-weight:600;color:{color};
                                 text-transform:uppercase;letter-spacing:0.05em">
-                        {icon} {stype} — step {i+1}</div>
+                        {icon} {stype} - step {i+1}</div>
                     <div style="font-family:monospace;font-size:0.9rem;margin-top:4px">
                         {content_s}</div>
                 </div>
@@ -5216,7 +5216,7 @@ elif section == "react_loop":
 
             if step_idx < n_steps:
                 remaining = n_steps - step_idx
-                st.caption(f"▶ {remaining} more step{'s' if remaining>1 else ''} to go — drag the slider")
+                st.caption(f"▶ {remaining} more step{'s' if remaining>1 else ''} to go - drag the slider")
             else:
                 st.success("✅ Agent completed the task!")
 
@@ -5231,7 +5231,7 @@ elif section == "react_loop":
         c3.metric("👁️ Observations", obs)
 
     with tab2:
-        st.markdown("### The ReAct loop — anatomy")
+        st.markdown("### The ReAct loop - anatomy")
         # draw the loop as a flow diagram using plotly
         fig = go.Figure()
         fig.update_layout(xaxis=dict(visible=False, range=[0,10]),
@@ -5288,7 +5288,7 @@ elif section == "tool_use":
     st.title("🔧 Tool Use")
     st.markdown("""
     <div class="concept-card">
-    Tool use lets an LLM extend beyond its training data by calling <b>external functions</b> —
+    Tool use lets an LLM extend beyond its training data by calling <b>external functions</b> -
     web search, calculators, databases, APIs, code interpreters. The model outputs a structured
     <b>tool call</b>, the result is injected back as an observation, and the model continues.
     </div>
@@ -5302,28 +5302,28 @@ elif section == "tool_use":
         TOOLS_DEMO = {
             "get_weather": {
                 "description": "Get current weather for a location",
-                "parameters": {"location": "string — city name or coordinates",
-                               "units": "string — 'celsius' or 'fahrenheit'"},
+                "parameters": {"location": "string - city name or coordinates",
+                               "units": "string - 'celsius' or 'fahrenheit'"},
                 "example_call": '{"location": "Sofia, Bulgaria", "units": "celsius"}',
                 "example_result": '{"temp": 12, "condition": "partly cloudy", "humidity": 65, "wind_kph": 20}',
             },
             "web_search": {
                 "description": "Search the web and return top results",
-                "parameters": {"query": "string — search query",
-                               "max_results": "integer — number of results (1-10)"},
+                "parameters": {"query": "string - search query",
+                               "max_results": "integer - number of results (1-10)"},
                 "example_call": '{"query": "latest transformer architecture research", "max_results": 3}',
                 "example_result": '["FlashAttention-3 reduces memory...", "Mamba SSMs challenge...", "Mixture-of-experts scaling..."]',
             },
             "code_interpreter": {
                 "description": "Execute Python code and return output",
-                "parameters": {"code": "string — valid Python code to execute"},
+                "parameters": {"code": "string - valid Python code to execute"},
                 "example_call": '{"code": "import numpy as np\\nprint(np.linalg.norm([3, 4]))"}',
                 "example_result": '{"stdout": "5.0\\n", "stderr": "", "exit_code": 0}',
             },
             "database_query": {
                 "description": "Run a SQL query on the company database",
-                "parameters": {"sql": "string — SQL SELECT statement",
-                               "database": "string — database name"},
+                "parameters": {"sql": "string - SQL SELECT statement",
+                               "database": "string - database name"},
                 "example_call": '{"sql": "SELECT AVG(score) FROM users WHERE active=1", "database": "prod"}',
                 "example_result": '{"rows": [{"AVG(score)": 87.3}], "row_count": 1, "elapsed_ms": 42}',
             },
@@ -5394,7 +5394,7 @@ elif section == "tool_use":
         st.plotly_chart(fig, use_container_width=True)
 
         st.markdown(f"**Best tool for this query:** `{best_tool}`")
-        st.caption("Real agents use the LLM itself to select tools based on natural language descriptions — "
+        st.caption("Real agents use the LLM itself to select tools based on natural language descriptions - "
                    "not keyword matching. This demo uses simple keyword heuristics for illustration.")
 
 
@@ -5543,7 +5543,7 @@ elif section == "planning":
         import pandas as pd
         strategies = [
             ("Sequential",       "Execute subtasks one by one in order",
-             "Simple, predictable", "Slow — no parallelism", "Simple linear tasks"),
+             "Simple, predictable", "Slow - no parallelism", "Simple linear tasks"),
             ("Hierarchical",     "Break goal → sub-goals → actions recursively",
              "Handles complexity", "Risk of over-planning", "Multi-step research, coding"),
             ("ReAct (reactive)", "Plan one step at a time based on observations",
@@ -5574,7 +5574,7 @@ elif section == "planning":
         fig2.update_layout(xaxis_title="Relative frequency", height=280,
             xaxis_range=[0, 0.45], showlegend=False)
         st.plotly_chart(fig2, use_container_width=True)
-        st.caption("Illustrative distribution — real failure rates depend heavily on model capability and task complexity.")
+        st.caption("Illustrative distribution - real failure rates depend heavily on model capability and task complexity.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -5585,7 +5585,7 @@ elif section == "agent_memory":
     st.markdown("""
     <div class="concept-card">
     Agents need different kinds of memory to operate effectively.
-    No single memory type covers all needs — real systems combine several.
+    No single memory type covers all needs - real systems combine several.
     The right mix depends on the task horizon, latency requirements and cost.
     </div>
     """, unsafe_allow_html=True)
@@ -5647,7 +5647,7 @@ elif section == "agent_memory":
         st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
-        st.markdown("### RAG — Retrieval Augmented Generation")
+        st.markdown("### RAG - Retrieval Augmented Generation")
         st.markdown("""
         RAG retrieves relevant documents from an external store at query time,
         injects them into the context, and lets the LLM answer with up-to-date grounded information.
@@ -5874,7 +5874,7 @@ elif section == "reflection":
     st.title("🪞 Reflection & Self-Critique")
     st.markdown("""
     <div class="concept-card">
-    <b>Reflection</b> is an agentic pattern where the model doesn't just produce an answer —
+    <b>Reflection</b> is an agentic pattern where the model doesn't just produce an answer -
     it <b>critiques its own output</b> against the goal, then <b>revises</b>. Instead of a single
     forward pass, the agent loops through <b>Generate → Critique → Revise</b> until the result is
     good enough or a step budget runs out. This is the core idea behind methods like
@@ -5892,21 +5892,21 @@ elif section == "reflection":
             "Write a cold outreach email": [
                 ("Draft", "Hi, I saw your company and think we should talk. Let me know if interested.",
                  "✍️", "#534AB7", 35),
-                ("Critique", "Too generic — no specific value proposition, no clear ask, could be sent to anyone.",
+                ("Critique", "Too generic - no specific value proposition, no clear ask, could be sent to anyone.",
                  "🔍", "#E24B4A", None),
-                ("Revise", "Hi Maria, I noticed your team shipped the new billing API — nice work. We built a tool "
+                ("Revise", "Hi Maria, I noticed your team shipped the new billing API - nice work. We built a tool "
                  "that cuts integration time in half; open to a 15-min call this week?",
                  "✏️", "#1D9E75", 78),
                 ("Critique", "Better and specific, but the opening compliment feels slightly generic. Tighten the CTA.",
                  "🔍", "#E24B4A", None),
-                ("Revise", "Hi Maria, saw the new billing API your team shipped last week — the webhook retry logic "
+                ("Revise", "Hi Maria, saw the new billing API your team shipped last week - the webhook retry logic "
                  "was clever. We built a tool that cuts integration time like that in half. Worth a 15-min call Thursday?",
                  "✏️", "#1D9E75", 93),
             ],
             "Summarise a technical incident report": [
                 ("Draft", "The system had an error and it was fixed after some investigation.",
                  "✍️", "#534AB7", 25),
-                ("Critique", "Missing root cause, impact, and timeline — reads as filler, not a summary.",
+                ("Critique", "Missing root cause, impact, and timeline - reads as filler, not a summary.",
                  "🔍", "#E24B4A", None),
                 ("Revise", "A misconfigured cache TTL caused a 12-minute outage affecting 8% of API requests; "
                  "fixed by rolling back the config and adding a canary check.",
@@ -5924,7 +5924,7 @@ elif section == "reflection":
                  "🔍", "#E24B4A", None),
                 ("Revise", "60 miles ÷ 1.5 hours = 40 mph.",
                  "✏️", "#1D9E75", 90),
-                ("Critique", "Correct now, but doesn't show the check step — verify by multiplying back.",
+                ("Critique", "Correct now, but doesn't show the check step - verify by multiplying back.",
                  "🔍", "#E24B4A", None),
                 ("Revise", "60 ÷ 1.5 = 40 mph. Check: 40 mph × 1.5 h = 60 miles ✓. Answer: 40 mph.",
                  "✏️", "#1D9E75", 99),
@@ -5955,7 +5955,7 @@ elif section == "reflection":
                             margin-bottom:8px">
                     <div style="font-size:0.75rem;font-weight:600;color:{color};
                                 text-transform:uppercase;letter-spacing:0.05em">
-                        {icon} {stype} — step {i+1}{score_html}</div>
+                        {icon} {stype} - step {i+1}{score_html}</div>
                     <div style="font-size:0.9rem;margin-top:4px">{content_s}</div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -6023,7 +6023,7 @@ elif section == "reflection":
         with cols[0]:
             st.markdown("**🎯 Separates generation from evaluation**")
             st.caption("Critiquing is often an easier task than producing the right answer the "
-                       "first time — the model just has to spot what's wrong.")
+                       "first time - the model just has to spot what's wrong.")
         with cols[1]:
             st.markdown("**🔁 More inference-time compute**")
             st.caption("Extra reasoning steps at inference time trade latency/cost for quality, "
@@ -6045,7 +6045,7 @@ elif section == "reflection":
 
         st.markdown("""
         <div class="concept-card">
-        <b>Trade-off:</b> reflection costs extra tokens and latency for every round — it's most
+        <b>Trade-off:</b> reflection costs extra tokens and latency for every round - it's most
         valuable for tasks where correctness matters more than speed (code, math, high-stakes
         writing), and least valuable for simple, low-risk generations. It also composes with the
         <b>ReAct Loop</b> (reflection can trigger a new tool call) and <b>Multi-Agent Systems</b>
@@ -6062,12 +6062,12 @@ elif section == "vector_norms":
     st.markdown("""
     <div class="concept-card">
     A <b>norm</b> is a function that assigns a non-negative <em>length</em> or <em>size</em> to a vector.
-    Different norms measure size differently — and choosing the right one shapes how ML models learn,
+    Different norms measure size differently - and choosing the right one shapes how ML models learn,
     regularize, and measure distance.
     </div>
     """, unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs(["Unit balls — geometry of norms", "Live norm calculator", "Connection to regularization"])
+    tab1, tab2, tab3 = st.tabs(["Unit balls - geometry of norms", "Live norm calculator", "Connection to regularization"])
 
     # ── TAB 1: Unit balls ─────────────────────────────────────────────────
     with tab1:
@@ -6092,7 +6092,7 @@ elif section == "vector_norms":
             elif p_val >= 6.0:
                 st.info("p → ∞ → L∞ norm. Approaches a square: max(|v₁|, |v₂|).")
             else:
-                st.info(f"p = {p_val:.1f} — intermediate shape between diamond and circle.")
+                st.info(f"p = {p_val:.1f} - intermediate shape between diamond and circle.")
 
         with col2:
             # Generate unit-ball contour for current p
@@ -6137,15 +6137,15 @@ elif section == "vector_norms":
 
         st.markdown("""
         **Key geometric intuitions:**
-        - **L1 (diamond)** — corners touch the axes; this means a solution *on* the L1 unit ball is likely to sit at a corner, which has zero in all but one coordinate → **sparsity**.
-        - **L2 (circle)** — perfectly symmetric; no preferred direction, so solutions shrink smoothly towards zero without going exactly to zero.
-        - **L∞ (square)** — measures the *largest* single coordinate: ‖v‖∞ = max(|v₁|, |v₂|).
-        - **p < 1** — the shape caves inward (non-convex); even sparser solutions but harder to optimise.
+        - **L1 (diamond)** - corners touch the axes; this means a solution *on* the L1 unit ball is likely to sit at a corner, which has zero in all but one coordinate → **sparsity**.
+        - **L2 (circle)** - perfectly symmetric; no preferred direction, so solutions shrink smoothly towards zero without going exactly to zero.
+        - **L∞ (square)** - measures the *largest* single coordinate: ‖v‖∞ = max(|v₁|, |v₂|).
+        - **p < 1** - the shape caves inward (non-convex); even sparser solutions but harder to optimise.
         """)
 
     # ── TAB 2: Live norm calculator ───────────────────────────────────────
     with tab2:
-        st.markdown("### Move the vector — watch the norms update")
+        st.markdown("### Move the vector - watch the norms update")
 
         col1, col2 = st.columns([1, 2])
         with col1:
@@ -6302,7 +6302,7 @@ elif section == "vector_norms":
                     st.success(f"★ L1 solution sits at a **corner** of the diamond → one weight is ~0 (sparse!)  "
                                f"w = ({opt_w1:.2f}, {opt_w2:.2f})")
                 else:
-                    st.info(f"Solution: w = ({opt_w1:.2f}, {opt_w2:.2f}) — try moving the loss minimum further from the axes to see a corner solution.")
+                    st.info(f"Solution: w = ({opt_w1:.2f}, {opt_w2:.2f}) - try moving the loss minimum further from the axes to see a corner solution.")
             else:
                 st.info(f"★ L2 solution is on the **smooth circle** → both weights shrink but neither reaches exactly 0.  "
                         f"w = ({opt_w1:.2f}, {opt_w2:.2f})")
@@ -6325,7 +6325,7 @@ elif section == "embeddings":
     st.title("🗺️ Embeddings")
     st.markdown("""
     <div class="concept-card">
-    An <b>embedding</b> maps a discrete object — a word, sentence, image, user — into a
+    An <b>embedding</b> maps a discrete object - a word, sentence, image, user - into a
     dense vector of real numbers so that <em>similar things end up close together</em> in
     that space. The geometry of the space encodes meaning: direction, distance and angle
     all carry information the model can learn from.
@@ -6347,11 +6347,11 @@ elif section == "embeddings":
             The hidden-layer weights become the embedding vectors.
 
             Two flavours:
-            - **Skip-gram** — given centre word, predict surrounding context words
-            - **CBOW** — given context words, predict the centre word
+            - **Skip-gram** - given centre word, predict surrounding context words
+            - **CBOW** - given context words, predict the centre word
 
             **Learning signal:** local context windows (e.g. ±2 words).
-            The model never sees global corpus statistics — only one window at a time.
+            The model never sees global corpus statistics - only one window at a time.
             """)
             st.markdown('<div class="formula-box">P(context | word) ≈ softmax(E_word · E_context^T)</div>', unsafe_allow_html=True)
 
@@ -6399,7 +6399,7 @@ elif section == "embeddings":
             across the *entire* corpus, then find vectors whose dot product matches
             the log of that count.
 
-            **Learning signal:** corpus-wide statistics — every sentence contributes
+            **Learning signal:** corpus-wide statistics - every sentence contributes
             to the same table before any vectors are learned.
             """)
             st.markdown('<div class="formula-box">w_i · w_j + b_i + b_j ≈ log X_ij</div>', unsafe_allow_html=True)
@@ -6438,21 +6438,21 @@ elif section == "embeddings":
             ("Learning signal",    "Local context windows",                   "Global co-occurrence matrix"),
             ("Training objective", "Predict neighbour words (classification)", "Fit log co-occurrence counts (regression)"),
             ("Model type",         "Shallow neural network",                  "Weighted least-squares factorization"),
-            ("Memory during train","Low — streams one window at a time",       "High — builds full N×N matrix first"),
+            ("Memory during train","Low - streams one window at a time",       "High - builds full N×N matrix first"),
             ("Strengths",          "Syntactic patterns; fast to train",        "Semantic analogies; leverages full corpus"),
             ("Weaknesses",         "Misses long-range corpus statistics",      "Memory-intensive for large vocabularies"),
             ("Both share",         "Dense fixed-size vectors per word",        "Dense fixed-size vectors per word"),
             ("Both share",         "Semantic arithmetic (king−man+woman≈queen)", "Semantic arithmetic (king−man+woman≈queen)"),
-            ("Both share",         "Static — one vector per word regardless of context", "Static — one vector per word regardless of context"),
+            ("Both share",         "Static - one vector per word regardless of context", "Static - one vector per word regardless of context"),
         ]
         df_cmp = pd.DataFrame(comparison, columns=["Aspect", "Word2Vec", "GloVe"])
         st.dataframe(df_cmp, use_container_width=True, hide_index=True)
 
     # ── TAB 2: Cosine similarity explorer ────────────────────────────────
     with tab2:
-        st.markdown("### Cosine similarity — meaning as angle")
+        st.markdown("### Cosine similarity - meaning as angle")
         st.markdown("""
-        The standard way to compare two embeddings is **cosine similarity** — the cosine
+        The standard way to compare two embeddings is **cosine similarity** - the cosine
         of the angle between them. It ignores magnitude (a long and a short vector pointing
         the same way are equally similar).
         """)
@@ -6489,15 +6489,15 @@ elif section == "embeddings":
             st.metric("Angle between vectors", f"{angle:.1f}°")
 
             if cos_sim > 0.95:
-                st.success("Nearly identical direction — very similar meaning.")
+                st.success("Nearly identical direction - very similar meaning.")
             elif cos_sim > 0.7:
-                st.success("High similarity — related concepts.")
+                st.success("High similarity - related concepts.")
             elif cos_sim > 0.3:
-                st.info("Moderate similarity — loosely related.")
+                st.info("Moderate similarity - loosely related.")
             elif cos_sim > 0:
-                st.warning("Weak similarity — different topics.")
+                st.warning("Weak similarity - different topics.")
             else:
-                st.error("Negative similarity — opposite directions.")
+                st.error("Negative similarity - opposite directions.")
 
             st.markdown("---")
             st.markdown("**All similarities to Word A:**")
@@ -6562,7 +6562,7 @@ elif section == "embeddings":
                 margin=dict(l=40, r=20, t=20, b=40),
             )
             st.plotly_chart(fig, use_container_width=True)
-            st.caption("Toy 2-D embeddings — clusters show semantic grouping. "
+            st.caption("Toy 2-D embeddings - clusters show semantic grouping. "
                        "Arrows show the two selected words; the dotted arc is the angle between them.")
 
         st.markdown("### The famous analogy: king − man + woman ≈ queen")
@@ -6579,7 +6579,7 @@ elif section == "embeddings":
     with tab3:
         st.markdown("### The fundamental limitation of Word2Vec and GloVe")
         st.markdown("""
-        Both Word2Vec and GloVe produce **one fixed vector per word** — regardless of context.
+        Both Word2Vec and GloVe produce **one fixed vector per word** - regardless of context.
         The word *"bank"* gets the same vector whether you mean a river bank or a financial bank.
         """)
 
@@ -6662,7 +6662,7 @@ elif section == "vector_spaces":
     <div class="concept-card">
     A <b>vector space</b> is the mathematical stage on which ML happens.
     Understanding <em>basis</em>, <em>span</em>, <em>projection</em> and <em>orthogonality</em>
-    gives you the intuition behind PCA, attention heads, embeddings and least-squares — 
+    gives you the intuition behind PCA, attention heads, embeddings and least-squares - 
     all of which are fundamentally about finding the right directions in a space.
     </div>
     """, unsafe_allow_html=True)
@@ -6676,7 +6676,7 @@ elif section == "vector_spaces":
 
     # ── TAB 1: Unit vectors ───────────────────────────────────────────────
     with tab1:
-        st.markdown("### Unit vectors — stripping away magnitude, keeping direction")
+        st.markdown("### Unit vectors - stripping away magnitude, keeping direction")
         st.markdown("""
         A **unit vector** has magnitude exactly 1. It encodes pure direction.
         Normalising a vector means dividing it by its own magnitude to produce its unit vector.
@@ -6749,8 +6749,8 @@ elif section == "vector_spaces":
 
         st.markdown("""
         **Why unit vectors matter in ML:**
-        - **Cosine similarity** compares embeddings as unit vectors — magnitude is normalised away so only direction counts
-        - **Attention** in transformers projects queries and keys, then computes dot products — the scale-dot-product
+        - **Cosine similarity** compares embeddings as unit vectors - magnitude is normalised away so only direction counts
+        - **Attention** in transformers projects queries and keys, then computes dot products - the scale-dot-product
           uses √d to keep unit-scale variance
         - **Weight initialisation** schemes (Xavier, He) ensure weight vectors start near unit scale
         """)
@@ -6785,9 +6785,9 @@ elif section == "vector_spaces":
             st.markdown(f'<div class="formula-box">v = {alpha}·b₁ + {beta}·b₂<br>= [{vx_t:.2f}, {vy_t:.2f}]</div>', unsafe_allow_html=True)
 
             if abs(det) < 0.05:
-                st.error("⚠️ det ≈ 0 — these vectors are linearly dependent! They only span a line, not the full 2D plane.")
+                st.error("⚠️ det ≈ 0 - these vectors are linearly dependent! They only span a line, not the full 2D plane.")
             else:
-                st.success(f"✓ Linearly independent (det = {det:.2f}) — they span all of ℝ².")
+                st.success(f"✓ Linearly independent (det = {det:.2f}) - they span all of ℝ².")
 
         with col2:
             fig = go.Figure()
@@ -6844,8 +6844,8 @@ elif section == "vector_spaces":
         st.markdown("""
         **In ML:**
         - **PCA** finds a new basis aligned with the directions of maximum variance
-        - **Embeddings** live in a high-dimensional vector space — the basis is learned, not hand-crafted
-        - **Linear dependence** means redundant features — a sign of multicollinearity in regression
+        - **Embeddings** live in a high-dimensional vector space - the basis is learned, not hand-crafted
+        - **Linear dependence** means redundant features - a sign of multicollinearity in regression
         """)
 
     # ── TAB 3: Projection ─────────────────────────────────────────────────
@@ -6869,7 +6869,7 @@ elif section == "vector_spaces":
             b_norm2 = np.dot(b, b)
 
             if b_norm2 < 1e-9:
-                st.warning("b is the zero vector — projection undefined.")
+                st.warning("b is the zero vector - projection undefined.")
                 scalar_proj = 0.0
                 proj_vec = np.array([0.0, 0.0])
                 perp_vec = a.copy()
@@ -6962,9 +6962,9 @@ elif section == "vector_spaces":
 
     # ── TAB 4: Orthogonality & orthonormality ─────────────────────────────
     with tab4:
-        st.markdown("### Orthogonality — vectors at right angles")
+        st.markdown("### Orthogonality - vectors at right angles")
         st.markdown("""
-        Two vectors are **orthogonal** if their dot product is zero — they share no component
+        Two vectors are **orthogonal** if their dot product is zero - they share no component
         in common. A set of vectors is **orthonormal** if they are *all orthogonal to each other*
         and *each has magnitude 1*.
         """)
@@ -7057,24 +7057,24 @@ elif section == "vector_spaces":
         with cols[0]:
             st.markdown("#### PCA")
             st.markdown("""
-            Principal components are **orthogonal** by construction — each new axis is perpendicular
+            Principal components are **orthogonal** by construction - each new axis is perpendicular
             to all previous ones, so there is zero redundancy between components.
             """)
         with cols[1]:
             st.markdown("#### Attention heads")
             st.markdown("""
             Multiple attention heads learn **different** subspaces. Near-orthogonal heads
-            capture different aspects of meaning — syntax in one, semantics in another.
+            capture different aspects of meaning - syntax in one, semantics in another.
             """)
         with cols[2]:
             st.markdown("#### Weight matrices (QR)")
             st.markdown("""
-            Orthogonal weight initialisation preserves gradient norms during backprop —
+            Orthogonal weight initialisation preserves gradient norms during backprop -
             a key technique for training deep networks without vanishing gradients.
             """)
 
         st.markdown("""
-        **Gram-Schmidt process** — how to turn any set of linearly independent vectors into an orthonormal basis:
+        **Gram-Schmidt process** - how to turn any set of linearly independent vectors into an orthonormal basis:
         """)
         st.markdown('<div class="formula-box">u₁ = v₁ / ‖v₁‖<br>u₂ = (v₂ − (v₂·u₁)u₁) / ‖…‖<br>u₃ = (v₃ − (v₃·u₁)u₁ − (v₃·u₂)u₂) / ‖…‖  …</div>', unsafe_allow_html=True)
         st.caption("At each step: subtract the projections onto all previous basis vectors, then normalise. "
@@ -7088,13 +7088,13 @@ elif section == "rnn":
     st.markdown("""
     <div class="concept-card">
     A <b>recurrent network</b> processes sequences by maintaining a <em>hidden state</em>
-    — a memory that carries information forward through time. Unlike feedforward networks
+    - a memory that carries information forward through time. Unlike feedforward networks
     which treat each input independently, RNNs share the same weights at every timestep,
     allowing them to model patterns across variable-length sequences.
     </div>
     """, unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs(["RNN — recurrence through time", "LSTM & GRU — gated memory", "RNN vs Transformer"])
+    tab1, tab2, tab3 = st.tabs(["RNN - recurrence through time", "LSTM & GRU - gated memory", "RNN vs Transformer"])
 
     # ── TAB 1: RNN basics ─────────────────────────────────────────────────
     with tab1:
@@ -7110,7 +7110,7 @@ elif section == "rnn":
         with col_eq2:
             st.markdown('<div class="formula-box">yₜ = Wᵧ · hₜ + bᵧ<br><small>(optional output at each step)</small></div>', unsafe_allow_html=True)
 
-        st.markdown("### Unrolled RNN — shared weights at every step")
+        st.markdown("### Unrolled RNN - shared weights at every step")
 
         n_steps = st.slider("Sequence length (timesteps)", 3, 7, 5, key="rnn_steps")
         highlight = st.slider("Highlight timestep", 1, n_steps, 3, key="rnn_hl")
@@ -7193,22 +7193,22 @@ elif section == "rnn":
             margin=dict(l=10, r=10, t=20, b=10),
         )
         st.plotly_chart(fig, use_container_width=True)
-        st.caption(f"Highlighted timestep {highlight}. The same weight matrices Wₕ, Wₓ, Wᵧ are reused at every step — "
+        st.caption(f"Highlighted timestep {highlight}. The same weight matrices Wₕ, Wₓ, Wᵧ are reused at every step - "
                    "this is what 'recurrent' means. h₀ is typically initialised to zeros.")
 
         st.markdown("""
         **Key properties of vanilla RNNs:**
         - ✅ Handles variable-length sequences naturally
-        - ✅ Compact — same weights at every timestep (parameter efficient)
-        - ❌ **Vanishing gradient problem** — gradients shrink exponentially as they
+        - ✅ Compact - same weights at every timestep (parameter efficient)
+        - ❌ **Vanishing gradient problem** - gradients shrink exponentially as they
           flow back through many timesteps, making it hard to learn long-range dependencies
-        - ❌ Sequential computation — each step depends on the previous, so you can't
+        - ❌ Sequential computation - each step depends on the previous, so you can't
           parallelise across timesteps the way Transformers can
         """)
 
     # ── TAB 2: LSTM & GRU ─────────────────────────────────────────────────
     with tab2:
-        st.markdown("### Why vanilla RNNs struggle — and how LSTMs fix it")
+        st.markdown("### Why vanilla RNNs struggle - and how LSTMs fix it")
         st.markdown("""
         When you backpropagate through many timesteps, you multiply gradients together
         repeatedly. If the weights are small, gradients vanish; if large, they explode.
@@ -7217,10 +7217,10 @@ elif section == "rnn":
         st.markdown('<div class="formula-box">∂Loss/∂h₁ = ∂Loss/∂hₜ · (Wₕ)^(t−1)  →  0 as t grows</div>', unsafe_allow_html=True)
 
         st.markdown("---")
-        st.markdown("### LSTM — Long Short-Term Memory")
+        st.markdown("### LSTM - Long Short-Term Memory")
         st.markdown("""
-        The LSTM (Hochreiter & Schmidhuber, 1997) adds a **cell state** — a separate
-        memory highway — and three **gates** that control what to remember, what to forget,
+        The LSTM (Hochreiter & Schmidhuber, 1997) adds a **cell state** - a separate
+        memory highway - and three **gates** that control what to remember, what to forget,
         and what to output. Gates are sigmoid-activated (0 = fully closed, 1 = fully open).
         """)
 
@@ -7239,7 +7239,7 @@ elif section == "rnn":
                 '</div>', unsafe_allow_html=True)
 
         with col2:
-            st.markdown("**Interactive gate demo — what each gate does:**")
+            st.markdown("**Interactive gate demo - what each gate does:**")
             forget = st.slider("Forget gate fₜ", 0.0, 1.0, 0.8, step=0.05, key="lstm_f")
             inp    = st.slider("Input gate iₜ",  0.0, 1.0, 0.6, step=0.05, key="lstm_i")
             out    = st.slider("Output gate oₜ", 0.0, 1.0, 0.9, step=0.05, key="lstm_o")
@@ -7263,7 +7263,7 @@ elif section == "rnn":
                 st.info("Input gate ≈ 1 → new candidate written strongly.")
 
         st.markdown("---")
-        st.markdown("### GRU — Gated Recurrent Unit  *(Cho et al., 2014)*")
+        st.markdown("### GRU - Gated Recurrent Unit  *(Cho et al., 2014)*")
         st.markdown("""
         The GRU simplifies the LSTM by merging the cell state and hidden state into one,
         and collapsing the forget and input gates into a single **update gate**. Fewer
@@ -7279,9 +7279,9 @@ elif section == "rnn":
                 '</div>', unsafe_allow_html=True)
         with col2:
             st.markdown("""
-            - **Update gate zₜ** — blend of old and new (replaces forget + input)
-            - **Reset gate rₜ** — how much past hidden state to expose when computing candidate
-            - **No separate cell state** — simpler, 33% fewer parameters than LSTM
+            - **Update gate zₜ** - blend of old and new (replaces forget + input)
+            - **Reset gate rₜ** - how much past hidden state to expose when computing candidate
+            - **No separate cell state** - simpler, 33% fewer parameters than LSTM
             - **When to choose:** GRU for speed/simplicity; LSTM when you need finer
               control over what to remember long-term
             """)
@@ -7296,13 +7296,13 @@ elif section == "rnn":
 
         import pandas as pd
         rows = [
-            ("Parallelism during training",   "❌ Sequential — step t needs step t−1",   "✅ All tokens processed simultaneously"),
-            ("Parallelism during inference",  "✅ Streaming — one step at a time",        "❌ Needs full context window"),
+            ("Parallelism during training",   "❌ Sequential - step t needs step t−1",   "✅ All tokens processed simultaneously"),
+            ("Parallelism during inference",  "✅ Streaming - one step at a time",        "❌ Needs full context window"),
             ("Memory (context length)",       "❌ Degrades for sequences > ~100 steps",  "✅ Scales to thousands of tokens"),
             ("Parameter count",               "✅ Compact for small tasks",              "❌ Typically very large"),
-            ("Latency (real-time)",           "✅ Low — constant compute per step",      "❌ Higher — full attention per decode step"),
+            ("Latency (real-time)",           "✅ Low - constant compute per step",      "❌ Higher - full attention per decode step"),
             ("Long-range dependencies",       "⚠️ LSTMs help but still limited",        "✅ Attention reaches any position directly"),
-            ("Time-series (short context)",   "✅ Strong — natural sequential inductive bias", "⚠️ Possible but overkill"),
+            ("Time-series (short context)",   "✅ Strong - natural sequential inductive bias", "⚠️ Possible but overkill"),
             ("NLP at scale",                  "❌ Outperformed by Transformers",         "✅ State of the art"),
             ("On-device / edge deployment",   "✅ Small footprint",                      "⚠️ Heavier models harder to deploy"),
         ]
@@ -7347,9 +7347,9 @@ elif section == "rnn":
 
         st.markdown("""
         **Bottom line:** if you're building a streaming sensor pipeline, a character-level
-        model on a microcontroller, or a small time-series forecaster — RNNs (especially GRUs)
+        model on a microcontroller, or a small time-series forecaster - RNNs (especially GRUs)
         are still a solid choice. For language at scale, Transformers win. And watch the SSM
-        space (Mamba, RWKV) — they combine RNN-style streaming with Transformer-quality results.
+        space (Mamba, RWKV) - they combine RNN-style streaming with Transformer-quality results.
         """)
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -7361,7 +7361,7 @@ elif section == "central_tendency":
     <div class="concept-card">
     Measures of <b>central tendency</b> summarise a dataset with a single value that
     represents the centre or most typical value. The choice of measure matters enormously
-    — mean, median and mode each tell a different story, and picking the wrong one can
+    - mean, median and mode each tell a different story, and picking the wrong one can
     seriously mislead you.
     </div>
     """, unsafe_allow_html=True)
@@ -7370,7 +7370,7 @@ elif section == "central_tendency":
 
     # ── TAB 1: Definitions & live calculator ─────────────────────────────
     with tab1:
-        st.markdown("### The three measures — live on your own data")
+        st.markdown("### The three measures - live on your own data")
 
         col1, col2 = st.columns([1, 1])
         with col1:
@@ -7458,7 +7458,7 @@ elif section == "central_tendency":
             if include_outlier:
                 pull = abs(m_mean - m_median)
                 st.markdown(f"The outlier pulls the **mean** {pull:.1f} units away from the median.")
-                st.info("Median barely moves — it only cares about rank, not magnitude.")
+                st.info("Median barely moves - it only cares about rank, not magnitude.")
 
         with col2:
             fig = go.Figure()
@@ -7490,13 +7490,13 @@ elif section == "central_tendency":
 
         import pandas as pd
         rows = [
-            ("Symmetric, no outliers (e.g. height)", "✅ Mean — uses all data efficiently", "✅ Median — similar result", "⚠️ Mode — may not be unique"),
-            ("Skewed distribution (e.g. income)",    "❌ Distorted by tail",               "✅ Median — robust",         "⚠️ Mode — only shows peak"),
-            ("Outliers present",                     "❌ Pulled toward outliers",           "✅ Median — ignores magnitude", "⚠️ Unaffected but limited"),
-            ("Categorical data (e.g. colours)",      "❌ Not applicable",                   "❌ Not applicable",          "✅ Mode — only option"),
+            ("Symmetric, no outliers (e.g. height)", "✅ Mean - uses all data efficiently", "✅ Median - similar result", "⚠️ Mode - may not be unique"),
+            ("Skewed distribution (e.g. income)",    "❌ Distorted by tail",               "✅ Median - robust",         "⚠️ Mode - only shows peak"),
+            ("Outliers present",                     "❌ Pulled toward outliers",           "✅ Median - ignores magnitude", "⚠️ Unaffected but limited"),
+            ("Categorical data (e.g. colours)",      "❌ Not applicable",                   "❌ Not applicable",          "✅ Mode - only option"),
             ("Reporting 'typical' salary",           "❌ Misleading if skewed",             "✅ Standard practice",       "⚠️ Possible but unusual"),
-            ("ML: imputing missing values",          "✅ Common — preserves mean",          "✅ Robust to outliers",      "✅ For categorical features"),
-            ("ML: loss function centre",             "✅ MSE minimised at mean",            "✅ MAE minimised at median", "—"),
+            ("ML: imputing missing values",          "✅ Common - preserves mean",          "✅ Robust to outliers",      "✅ For categorical features"),
+            ("ML: loss function centre",             "✅ MSE minimised at mean",            "✅ MAE minimised at median", "-"),
         ]
         df = pd.DataFrame(rows, columns=["Situation", "Mean", "Median", "Mode"])
         st.dataframe(df, use_container_width=True, hide_index=True)
@@ -7506,8 +7506,8 @@ elif section == "central_tendency":
         col1, col2, col3 = st.columns(3)
         skew_cases = [
             ("Symmetric", "Mean ≈ Median ≈ Mode", "Normal distribution, balanced data", "#534AB7"),
-            ("Right-skewed\n(positive)", "Mode < Median < Mean", "Income, house prices, response times — long right tail pulls mean up", "#E24B4A"),
-            ("Left-skewed\n(negative)", "Mean < Median < Mode", "Age at retirement, exam scores with ceiling — long left tail pulls mean down", "#1D9E75"),
+            ("Right-skewed\n(positive)", "Mode < Median < Mean", "Income, house prices, response times - long right tail pulls mean up", "#E24B4A"),
+            ("Left-skewed\n(negative)", "Mean < Median < Mode", "Age at retirement, exam scores with ceiling - long left tail pulls mean down", "#1D9E75"),
         ]
         for col, (name, order, example, color) in zip([col1,col2,col3], skew_cases):
             with col:
@@ -7523,7 +7523,7 @@ elif section == "dispersion":
     st.markdown("""
     <div class="concept-card">
     Measures of <b>dispersion</b> describe how spread out data is around its centre.
-    Two datasets can have identical means yet look completely different — dispersion
+    Two datasets can have identical means yet look completely different - dispersion
     captures that difference. It underpins concepts like variance in the bias-variance
     tradeoff, standard deviation in normalisation, and IQR in outlier detection.
     </div>
@@ -7533,7 +7533,7 @@ elif section == "dispersion":
 
     # ── TAB 1: Variance & std dev ─────────────────────────────────────────
     with tab1:
-        st.markdown("### Variance and standard deviation — average squared deviation from the mean")
+        st.markdown("### Variance and standard deviation - average squared deviation from the mean")
 
         col1, col2 = st.columns([1, 1])
         with col1:
@@ -7566,7 +7566,7 @@ elif section == "dispersion":
                 f'</div>', unsafe_allow_html=True)
 
             st.caption("Population formula (÷n) for the full dataset. "
-                       "Sample formula (÷n−1, Bessel's correction) when estimating from a sample — "
+                       "Sample formula (÷n−1, Bessel's correction) when estimating from a sample - "
                        "this makes the estimate unbiased.")
 
         with col2:
@@ -7670,7 +7670,7 @@ elif section == "dispersion":
 
         st.markdown("""
         **Reading the box plot:**
-        - **Box** spans Q1 to Q3 — contains the middle 50% of data (the IQR)
+        - **Box** spans Q1 to Q3 - contains the middle 50% of data (the IQR)
         - **Line inside box** = median (Q2)
         - **Whiskers** extend to the last point within 1.5×IQR of the box
         - **Dots beyond whiskers** = outliers by Tukey's rule
@@ -7680,7 +7680,7 @@ elif section == "dispersion":
         | | Range | IQR |
         |---|---|---|
         | Formula | max − min | Q3 − Q1 |
-        | Sensitive to outliers | ❌ Yes — heavily | ✅ No — ignores top/bottom 25% |
+        | Sensitive to outliers | ❌ Yes - heavily | ✅ No - ignores top/bottom 25% |
         | Use when | Quick rough spread | Robust spread for skewed data |
         """)
 
@@ -7703,20 +7703,20 @@ elif section == "dispersion":
                 '<b>Robust scaling</b><br>'
                 'x′ = (x − Q2) / IQR'
                 '</div>', unsafe_allow_html=True)
-            st.caption("Robust scaling uses median and IQR — best when outliers are present.")
+            st.caption("Robust scaling uses median and IQR - best when outliers are present.")
 
         with col2:
             st.markdown("#### Bias-variance tradeoff")
             st.markdown("""
             The **variance** of a model's predictions across different training sets is
-            literally the statistical variance you saw in Tab 1 — it measures how much
+            literally the statistical variance you saw in Tab 1 - it measures how much
             the model's output fluctuates when trained on different data samples.
             """)
             st.markdown('<div class="formula-box">'
                 'Expected Error =<br>'
                 'Bias² + Variance + Irreducible Noise'
                 '</div>', unsafe_allow_html=True)
-            st.caption("High-variance models (deep trees, large nets) overfit — "
+            st.caption("High-variance models (deep trees, large nets) overfit - "
                        "their predictions have high spread across training sets.")
 
         st.markdown("---")
@@ -7743,7 +7743,7 @@ elif section == "dispersion":
             margin=dict(l=20, r=20, t=40, b=40))
         st.plotly_chart(fig, use_container_width=True)
         st.caption("Both distributions have mean = 10. A model predicting only the mean "
-                   "would be equally wrong about both — yet B's errors are far more severe.")
+                   "would be equally wrong about both - yet B's errors are far more severe.")
 
         import pandas as pd
         summary_df = pd.DataFrame({
@@ -7767,7 +7767,7 @@ elif section == "bayes_theorem":
     </div>
     """, unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs(["The theorem", "Conditional probability", "Medical test — classic worked example"])
+    tab1, tab2, tab3 = st.tabs(["The theorem", "Conditional probability", "Medical test - classic worked example"])
 
     with tab1:
         st.markdown("### Bayes' theorem")
@@ -7791,9 +7791,9 @@ elif section == "bayes_theorem":
             st.markdown("#### Intuition: updating beliefs")
             st.markdown("""
             Think of it as a two-step process:
-            1. Start with a **prior** — what do you believe before any evidence?
-            2. Observe **evidence** — how likely is that evidence under each hypothesis?
-            3. Multiply and normalise → **posterior** — your new, updated belief.
+            1. Start with a **prior** - what do you believe before any evidence?
+            2. Observe **evidence** - how likely is that evidence under each hypothesis?
+            3. Multiply and normalise → **posterior** - your new, updated belief.
 
             The more surprising the evidence (low P(B)), the more it shifts your belief.
             If P(B|A) ≫ P(B|¬A), seeing B strongly supports A.
@@ -7809,18 +7809,18 @@ elif section == "bayes_theorem":
         st.markdown("### Interactive: update your belief")
         col1, col2 = st.columns([1, 2])
         with col1:
-            prior = st.slider("Prior P(A) — initial belief", 0.01, 0.99, 0.3, step=0.01, key="bt_prior")
-            lik_given_a  = st.slider("Likelihood P(B|A) — evidence if A true",  0.01, 0.99, 0.9, step=0.01, key="bt_lika")
-            lik_given_na = st.slider("Likelihood P(B|¬A) — evidence if A false", 0.01, 0.99, 0.2, step=0.01, key="bt_likna")
+            prior = st.slider("Prior P(A) - initial belief", 0.01, 0.99, 0.3, step=0.01, key="bt_prior")
+            lik_given_a  = st.slider("Likelihood P(B|A) - evidence if A true",  0.01, 0.99, 0.9, step=0.01, key="bt_lika")
+            lik_given_na = st.slider("Likelihood P(B|¬A) - evidence if A false", 0.01, 0.99, 0.2, step=0.01, key="bt_likna")
 
             pb = lik_given_a * prior + lik_given_na * (1 - prior)
             posterior = (lik_given_a * prior) / pb
 
             st.metric("Posterior P(A|B)", f"{posterior:.3f}", delta=f"{posterior-prior:+.3f} from prior")
             if posterior > prior:
-                st.success(f"Evidence B supports A — belief rose from {prior:.2f} → {posterior:.2f}")
+                st.success(f"Evidence B supports A - belief rose from {prior:.2f} → {posterior:.2f}")
             else:
-                st.warning(f"Evidence B undermines A — belief fell from {prior:.2f} → {posterior:.2f}")
+                st.warning(f"Evidence B undermines A - belief fell from {prior:.2f} → {posterior:.2f}")
 
         with col2:
             fig = go.Figure()
@@ -7848,7 +7848,7 @@ elif section == "bayes_theorem":
                        "given the same evidence. Grey diagonal = no update (uninformative evidence).")
 
     with tab2:
-        st.markdown("### Conditional probability — the building block")
+        st.markdown("### Conditional probability - the building block")
         st.markdown('<div class="formula-box">P(A|B) = P(A ∩ B) / P(B)</div>', unsafe_allow_html=True)
         st.markdown("""
         P(A|B) reads: *"probability of A given that B has already happened"*.
@@ -7890,7 +7890,7 @@ elif section == "bayes_theorem":
 
     with tab3:
         st.markdown("### Classic example: medical screening test")
-        st.markdown("This is the most important application of Bayes' theorem — "
+        st.markdown("This is the most important application of Bayes' theorem - "
                     "and the most counterintuitive result in statistics.")
 
         col1, col2 = st.columns([1, 1])
@@ -7983,7 +7983,7 @@ elif section == "correlation":
             """)
 
         st.markdown("---")
-        st.markdown("### Interactive scatter — drag the correlation")
+        st.markdown("### Interactive scatter - drag the correlation")
         col1, col2 = st.columns([1, 2])
         with col1:
             target_r = st.slider("Target correlation r", -1.0, 1.0, 0.7, step=0.05, key="corr_r")
@@ -8022,7 +8022,7 @@ elif section == "correlation":
             st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
-        st.markdown("### Correlation matrix — all pairwise relationships at once")
+        st.markdown("### Correlation matrix - all pairwise relationships at once")
         st.markdown("A **correlation matrix** shows Pearson r between every pair of variables. "
                     "It's the first thing you should look at in any new dataset.")
 
@@ -8071,7 +8071,7 @@ elif section == "correlation":
         cases = [
             ("X causes Y", "X → Y", "Ice cream sales correlate with drowning deaths because summer (heat) causes both.",
              "Direct causation is possible but needs experimental evidence (randomised control trial).", "#1D9E75"),
-            ("Y causes X", "Y → X", "Shoe size correlates with reading ability in children — but shoe size doesn't teach reading.",
+            ("Y causes X", "Y → X", "Shoe size correlates with reading ability in children - but shoe size doesn't teach reading.",
              "Reverse causation: age (Y) causes both shoe size and reading ability.", "#EF9F27"),
             ("Z causes both", "Z → X and Z → Y", "Nicolas Cage film releases correlate with pool drownings.",
              "A lurking confounder Z (year, population growth) drives both X and Y.", "#E24B4A"),
@@ -8084,7 +8084,7 @@ elif section == "correlation":
                 st.caption(explain)
 
         st.markdown("""
-        **Spearman rank correlation** is a non-parametric alternative to Pearson r — it measures
+        **Spearman rank correlation** is a non-parametric alternative to Pearson r - it measures
         monotonic (not just linear) relationships and is less sensitive to outliers:
         """)
         st.markdown('<div class="formula-box">ρ = 1 − 6Σdᵢ² / (n(n²−1))   where dᵢ = rank(xᵢ) − rank(yᵢ)</div>',
@@ -8097,10 +8097,10 @@ elif section == "cross_validation":
     st.title("🗂️ Cross-Validation")
     st.markdown("""
     <div class="concept-card">
-    Training error always looks better than a model deserves — it's graded on data it has
+    Training error always looks better than a model deserves - it's graded on data it has
     already seen. <b>Cross-validation</b> gets an honest estimate by splitting the data into
     folds, training on some, and scoring on the rest, then rotating which fold is held out.
-    It's the workhorse behind choosing a model's complexity — the same job <b>AIC/BIC</b> do
+    It's the workhorse behind choosing a model's complexity - the same job <b>AIC/BIC</b> do
     with a formula instead of a held-out split.
     </div>
     """, unsafe_allow_html=True)
@@ -8182,15 +8182,15 @@ elif section == "cross_validation":
         fig2.update_layout(xaxis_title="x", yaxis_title="y", yaxis_range=[-3, 3],
             height=320, legend=dict(orientation='h', y=1.14))
         st.plotly_chart(fig2, use_container_width=True)
-        st.caption("This fold's held-out points never influence the line shown here — that's "
+        st.caption("This fold's held-out points never influence the line shown here - that's "
                    "what makes the resulting error an honest estimate. Cycle through every "
                    "fold and average, and you get the CV curve above.")
 
     with tab2:
         st.markdown("""
         **k controls a tradeoff.** A small k (like 2) trains on less data each round, so
-        the estimate is *biased upward* — each model is trained on a smaller, weaker sample.
-        A large k — up to the extreme of **Leave-One-Out CV (LOOCV)**, where k = n — trains
+        the estimate is *biased upward* - each model is trained on a smaller, weaker sample.
+        A large k - up to the extreme of **Leave-One-Out CV (LOOCV)**, where k = n - trains
         on almost all the data each time, so bias drops, but the n training sets now overlap
         almost completely, making the resulting folds highly *correlated* and the overall
         estimate *higher variance*. **k = 5 or 10** is the standard compromise.
@@ -8199,14 +8199,14 @@ elif section == "cross_validation":
         st.markdown("#### LOOCV has a shortcut for linear models")
         st.markdown("""
         Refitting a model n times sounds expensive, but for ordinary least squares it never
-        needs to happen — the leave-one-out error at point *i* can be recovered from a
+        needs to happen - the leave-one-out error at point *i* can be recovered from a
         **single fit on all the data**, using the same leverage <b>hᵢᵢ</b> from the hat matrix
         seen in <b>Cook's Distance</b>:
         """, unsafe_allow_html=True)
         st.markdown('<div class="formula-box">LOOCV = (1/n) Σᵢ [ eᵢ / (1 − hᵢᵢ) ]²</div>',
             unsafe_allow_html=True)
         st.markdown("""
-        A point with high leverage (large hᵢᵢ) gets its residual inflated more when removed —
+        A point with high leverage (large hᵢᵢ) gets its residual inflated more when removed -
         because a high-leverage point pulls the fitted line toward itself, so the line moves
         further away once that point is gone.
         """)
@@ -8229,7 +8229,7 @@ elif section == "cross_validation":
         c1, c2 = st.columns(2)
         c1.metric("LOOCV (n refits, brute force)", f"{np.mean(naive_errs):.4f}")
         c2.metric("LOOCV (one fit + shortcut formula)", f"{np.mean(shortcut_errs):.4f}")
-        st.caption("Same answer, computed two very different ways — one loop over n models, "
+        st.caption("Same answer, computed two very different ways - one loop over n models, "
                    "one line of algebra on a single fit.")
 
         st.markdown("#### Why k = 5–10 in practice")
@@ -8249,7 +8249,7 @@ elif section == "cross_validation":
             height=280)
         st.plotly_chart(fig3, use_container_width=True)
         st.caption("Fewer, larger folds (small k) give a CV score that swings more depending "
-                   "on how the data happened to be split — that's the variance cost of small k, "
+                   "on how the data happened to be split - that's the variance cost of small k, "
                    "on top of the bias cost from training on less data each round.")
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -8262,7 +8262,7 @@ elif section == "cooks_distance":
     <b>Cook's distance</b> measures how much the fitted regression line would change if
     a single point were removed from the dataset. A point earns a high Cook's distance
     by combining two things: an unusual <b>x</b> position (<em>leverage</em>) and a
-    <b>large residual</b> (the model fits it badly). Either alone is often harmless —
+    <b>large residual</b> (the model fits it badly). Either alone is often harmless -
     together, they mean one point is quietly steering the whole model.
     </div>
     """, unsafe_allow_html=True)
@@ -8289,16 +8289,16 @@ elif section == "cooks_distance":
             noise_cd = st.slider("Noise", 0.1, 2.0, 0.6, step=0.1, key="cd_noise")
             outlier_idx = st.slider("Point to displace", 0, n_cd - 1, 0, key="cd_idx")
             outlier_x_shift = st.slider("Push its x outward", 0.0, 6.0, 0.0, step=0.2, key="cd_xshift",
-                help="Increases leverage — how extreme this point's x position is")
+                help="Increases leverage - how extreme this point's x position is")
             outlier_y_shift = st.slider("Push its y away from the line", 0.0, 8.0, 0.0, step=0.2, key="cd_yshift",
-                help="Increases the residual — how badly the point is fit")
+                help="Increases the residual - how badly the point is fit")
 
         np.random.seed(7)
         x_cd = np.random.uniform(-4, 4, n_cd)
         y_cd = 1.2 * x_cd + 0.5 + np.random.normal(0, noise_cd, n_cd)
         # x-shift pushes the point to the right edge and beyond (pure leverage control);
         # y-shift is then applied relative to the true line at its new x (pure residual
-        # control) — this keeps both sliders monotonic no matter where the point started.
+        # control) - this keeps both sliders monotonic no matter where the point started.
         x_cd[outlier_idx] = 4.0 + outlier_x_shift
         y_cd[outlier_idx] = 1.2 * x_cd[outlier_idx] + 0.5 + outlier_y_shift
 
@@ -8341,7 +8341,7 @@ elif section == "cooks_distance":
             annotation_text="4/n cutoff", annotation_position="top left")
         fig_bar.update_layout(xaxis_title="Point", yaxis_title="Cook's distance", height=280)
         st.plotly_chart(fig_bar, use_container_width=True)
-        st.caption("Bars above the orange line are flagged as unusually influential — "
+        st.caption("Bars above the orange line are flagged as unusually influential - "
                    "the model's fit depends meaningfully on that single point.")
 
     with tab2:
@@ -8351,13 +8351,13 @@ elif section == "cooks_distance":
         st.markdown('<div class="formula-box">Dᵢ = eᵢ² / (p·MSE) · hᵢᵢ / (1−hᵢᵢ)²</div>',
             unsafe_allow_html=True)
         st.markdown("""
-        - **eᵢ** — the residual at point *i* (how far off the prediction is)
-        - **hᵢᵢ** — the *leverage* of point *i* (how extreme its x-value is; from the diagonal
+        - **eᵢ** - the residual at point *i* (how far off the prediction is)
+        - **hᵢᵢ** - the *leverage* of point *i* (how extreme its x-value is; from the diagonal
           of the hat matrix **H = X(XᵀX)⁻¹Xᵀ**)
-        - **p** — number of fitted parameters (2 for simple linear regression: slope + intercept)
+        - **p** - number of fitted parameters (2 for simple linear regression: slope + intercept)
 
         A point needs **both** a sizeable residual **and** high leverage to get a large
-        Cook's distance — that's why it catches influence that plain residual plots miss.
+        Cook's distance - that's why it catches influence that plain residual plots miss.
         """)
 
         quad_labels = ["Low leverage,\nlow residual", "High leverage,\nlow residual",
@@ -8376,7 +8376,7 @@ elif section == "cooks_distance":
             height=380)
         st.plotly_chart(fig_q, use_container_width=True)
         st.caption("Bubble size and color both track Cook's distance. The dangerous "
-                   "quadrant is far right and high up — high leverage **and** a bad fit. "
+                   "quadrant is far right and high up - high leverage **and** a bad fit. "
                    "Try widening the x-shift or y-shift sliders in the first tab and watch "
                    "the flagged point (red) move into that corner.")
 
@@ -8389,7 +8389,7 @@ elif section == "aic_bic":
     <div class="concept-card">
     The <b>Akaike</b> and <b>Bayesian Information Criteria</b> score a model on two things
     at once: how well it fits the data, and how many parameters it needed to get there.
-    Adding parameters always makes the in-sample fit look better — AIC/BIC add a penalty
+    Adding parameters always makes the in-sample fit look better - AIC/BIC add a penalty
     for that, so the model with the <em>lowest</em> score is the best trade-off, not just
     the best fit. They're the formal, single-number version of the eyeball test in
     <b>Overfitting & Underfitting</b>.
@@ -8457,7 +8457,7 @@ elif section == "aic_bic":
         c4.metric("Best degree by BIC", best_bic_deg)
 
         if best_bic_deg <= best_aic_deg:
-            st.info(f"**BIC picks degree {best_bic_deg}, AIC picks degree {best_aic_deg}** — "
+            st.info(f"**BIC picks degree {best_bic_deg}, AIC picks degree {best_aic_deg}** - "
                     "BIC's heavier penalty on parameter count usually makes it choose an "
                     "equally simple or simpler model than AIC.")
         else:
@@ -8471,11 +8471,11 @@ elif section == "aic_bic":
         st.markdown('<div class="formula-box">BIC = k·ln(n) − 2ln(L̂)  &nbsp;≈&nbsp;  n·ln(RSS/n) + k·ln(n)</div>',
             unsafe_allow_html=True)
         st.markdown("""
-        - **k** — number of fitted parameters (for a degree-*d* polynomial, k = d + 1)
-        - **n** — number of training observations
-        - **L̂** — the model's maximised likelihood; for ordinary least squares with
+        - **k** - number of fitted parameters (for a degree-*d* polynomial, k = d + 1)
+        - **n** - number of training observations
+        - **L̂** - the model's maximised likelihood; for ordinary least squares with
           Gaussian errors this reduces to the RSS-based approximation shown above
-        - **RSS** — residual sum of squares on the training data
+        - **RSS** - residual sum of squares on the training data
 
         The only difference is the penalty term: **2k** for AIC versus **k·ln(n)** for BIC.
         """)
@@ -8494,7 +8494,7 @@ elif section == "aic_bic":
             height=300, legend=dict(orientation='h', y=1.14))
         st.plotly_chart(fig2, use_container_width=True)
         st.caption("Once a dataset has more than about 8 points, BIC's ln(n) penalty exceeds "
-                   "AIC's flat penalty of 2 — and keeps growing. That's why BIC tends to favour "
+                   "AIC's flat penalty of 2 - and keeps growing. That's why BIC tends to favour "
                    "sparser models than AIC as the sample gets larger, especially useful when "
                    "comparing models with very different parameter counts. For a penalty applied "
                    "directly inside training rather than after the fact, see **Regularization**.")
@@ -8521,13 +8521,13 @@ elif section == "hypothesis_testing":
         with col1:
             st.markdown("""
             **The two hypotheses:**
-            - **H₀ (null)** — the boring default: no effect, no difference
-            - **H₁ (alternative)** — what you're trying to show: there IS an effect
+            - **H₀ (null)** - the boring default: no effect, no difference
+            - **H₁ (alternative)** - what you're trying to show: there IS an effect
 
             **The p-value:**
             > *"If H₀ were true, what is the probability of seeing data at least this extreme?"*
 
-            A small p-value means the data would be very surprising under H₀ — evidence against it.
+            A small p-value means the data would be very surprising under H₀ - evidence against it.
             """)
             st.markdown('<div class="formula-box">'
                 'p-value = P(data this extreme | H₀ true)<br><br>'
@@ -8537,14 +8537,14 @@ elif section == "hypothesis_testing":
         with col2:
             st.markdown("""
             **What p-value is NOT:**
-            - ❌ "Probability that H₀ is true" — it's not
-            - ❌ "Probability your result is a false alarm" — also not
+            - ❌ "Probability that H₀ is true" - it's not
+            - ❌ "Probability your result is a false alarm" - also not
             - ❌ A measure of effect size or practical importance
 
             **What it IS:**
             - ✅ A tail probability under H₀
             - ✅ A decision threshold: below α → reject H₀
-            - ✅ Heavily influenced by sample size — large n → tiny p even for tiny effects
+            - ✅ Heavily influenced by sample size - large n → tiny p even for tiny effects
             """)
             st.markdown('<div class="formula-box">'
                 'Statistical significance ≠ practical significance<br>'
@@ -8613,7 +8613,7 @@ elif section == "hypothesis_testing":
                        "If your test statistic falls in the red zone, p < α.")
 
     with tab2:
-        st.markdown("### One-sample t-test — is this mean different from a target?")
+        st.markdown("### One-sample t-test - is this mean different from a target?")
         st.markdown('<div class="formula-box">'
             't = (x̄ − μ₀) / (s / √n)     df = n − 1'
             '</div>', unsafe_allow_html=True)
@@ -8644,9 +8644,9 @@ elif section == "hypothesis_testing":
                 f'p-value = {p_t:.4f}'
                 f'</div>', unsafe_allow_html=True)
             if p_t < alpha_t:
-                st.success(f"Reject H₀ — mean significantly different from {mu0} (p={p_t:.4f})")
+                st.success(f"Reject H₀ - mean significantly different from {mu0} (p={p_t:.4f})")
             else:
-                st.warning(f"Fail to reject H₀ — no significant difference from {mu0} (p={p_t:.4f})")
+                st.warning(f"Fail to reject H₀ - no significant difference from {mu0} (p={p_t:.4f})")
 
         with col2:
             x_t = np.linspace(-5, 5, 500)
@@ -8674,7 +8674,7 @@ elif section == "hypothesis_testing":
             st.plotly_chart(fig, use_container_width=True)
 
     with tab3:
-        st.markdown("### Type I and Type II errors — the two ways to be wrong")
+        st.markdown("### Type I and Type II errors - the two ways to be wrong")
 
         col1, col2 = st.columns(2)
         with col1:
@@ -8685,12 +8685,12 @@ elif section == "hypothesis_testing":
             | **Fail to reject H₀** | ✅ Correct | ❌ Type II error (β) |
             """)
             st.markdown("""
-            - **Type I error (false positive)** — you conclude there's an effect when there isn't.
+            - **Type I error (false positive)** - you conclude there's an effect when there isn't.
               Rate controlled by α (your significance threshold).
-            - **Type II error (false negative)** — you miss a real effect.
+            - **Type II error (false negative)** - you miss a real effect.
               Rate = β; statistical **power** = 1−β.
             - Lowering α (stricter threshold) reduces Type I but increases Type II.
-            - Increasing sample size n reduces **both** — the primary way to increase power.
+            - Increasing sample size n reduces **both** - the primary way to increase power.
             """)
         with col2:
             st.markdown("#### Interactive: trade-off between α and power")
@@ -8707,11 +8707,11 @@ elif section == "hypothesis_testing":
             st.metric("Statistical power (1−β)", f"{power:.1%}")
             st.metric("Type II error rate β",    f"{1-power:.1%}")
             if power < 0.5:
-                st.error("Very low power — you're likely to miss the effect. Increase n or effect size.")
+                st.error("Very low power - you're likely to miss the effect. Increase n or effect size.")
             elif power < 0.8:
-                st.warning("Power below the conventional 0.8 threshold — consider a larger sample.")
+                st.warning("Power below the conventional 0.8 threshold - consider a larger sample.")
             else:
-                st.success("Good power — the study is likely to detect the effect if it exists.")
+                st.success("Good power - the study is likely to detect the effect if it exists.")
 
         st.markdown("---")
         st.markdown("""
@@ -8747,10 +8747,10 @@ elif section == "sampling_estimation":
 
     # ── TAB 1: Standard Error ─────────────────────────────────────────────
     with tab1:
-        st.markdown("### Standard error — uncertainty of an estimate")
+        st.markdown("### Standard error - uncertainty of an estimate")
         st.markdown("""
         The **standard deviation** describes spread in your *data*.
-        The **standard error** describes uncertainty in your *estimate of the mean* —
+        The **standard error** describes uncertainty in your *estimate of the mean* -
         how much would the sample mean jump around if you drew a new sample?
         """)
         col1, col2 = st.columns(2)
@@ -8771,8 +8771,8 @@ elif section == "sampling_estimation":
         with col2:
             st.markdown("""
             **Key intuitions:**
-            - SE shrinks as **√n** — doubling n halves SE, but quadrupling n is needed to halve SE again
-            - SE is NOT the std dev of your data — it's how precisely you know the *mean*
+            - SE shrinks as **√n** - doubling n halves SE, but quadrupling n is needed to halve SE again
+            - SE is NOT the std dev of your data - it's how precisely you know the *mean*
             - Every statistic has its own SE: SE of proportion = √(p(1−p)/n), SE of regression coefficient = s/√(Σ(x−x̄)²)
             - SE is the denominator of every t-statistic: t = (x̄ − μ₀) / SE
             """)
@@ -8815,7 +8815,7 @@ elif section == "sampling_estimation":
                 legend=dict(x=0.6, y=0.99),
                 margin=dict(l=40, r=60, t=20, b=40))
             st.plotly_chart(fig, use_container_width=True)
-            st.caption("The diminishing returns of larger samples — SE follows a 1/√n curve. "
+            st.caption("The diminishing returns of larger samples - SE follows a 1/√n curve. "
                        "Early gains (n: 1→10) are huge; gains from n=400→500 are tiny.")
 
         st.markdown("---")
@@ -8841,7 +8841,7 @@ elif section == "sampling_estimation":
             At n={n_eval} examples, your reported accuracy of {acc:.0%} has SE = {se_acc:.4f}.
 
             This means two models reporting **{acc:.0%}** and **{acc+2*se_acc:.1%}** on the same
-            test set may not actually be different — the gap is within noise.
+            test set may not actually be different - the gap is within noise.
 
             **Rule of thumb:** to distinguish two models differing by Δ in accuracy,
             you need roughly n ≈ (1.96/Δ)² · p̂(1−p̂) test examples.
@@ -8855,7 +8855,7 @@ elif section == "sampling_estimation":
 
     # ── TAB 2: Central Limit Theorem ──────────────────────────────────────
     with tab2:
-        st.markdown("### Central Limit Theorem — why everything becomes normal")
+        st.markdown("### Central Limit Theorem - why everything becomes normal")
         st.markdown("""
         The **CLT** states: regardless of the shape of the population distribution,
         the distribution of sample means approaches a **normal distribution** as n grows,
@@ -8931,7 +8931,7 @@ elif section == "sampling_estimation":
 
     # ── TAB 3: Confidence Intervals ───────────────────────────────────────
     with tab3:
-        st.markdown("### Confidence intervals — putting a range on your estimate")
+        st.markdown("### Confidence intervals - putting a range on your estimate")
         st.markdown("""
         A **confidence interval** is a range computed from sample data that, under repeated
         sampling, contains the true population parameter a specified percentage of the time.
@@ -8944,7 +8944,7 @@ elif section == "sampling_estimation":
 
         st.markdown("""
         > ⚠️ **Common misinterpretation:** a 95% CI does NOT mean "95% probability the true
-        > mean is in this interval." The true mean is fixed — it's either in the interval or not.
+        > mean is in this interval." The true mean is fixed - it's either in the interval or not.
         > What it means: if you repeated the experiment 100 times, ~95 of those intervals
         > would contain the true mean.
         """)
@@ -9006,7 +9006,7 @@ elif section == "sampling_estimation":
                 xaxis_title="Value", yaxis_title="Simulation trial",
                 margin=dict(l=40, r=20, t=30, b=40),
                 title=dict(
-                    text=f"{n_trials} simulated {conf_level:.0%} CIs — {covers.sum()} contain true μ ({coverage:.0%})",
+                    text=f"{n_trials} simulated {conf_level:.0%} CIs - {covers.sum()} contain true μ ({coverage:.0%})",
                     font=dict(size=12)))
             st.plotly_chart(fig, use_container_width=True)
             st.caption("Green = interval contains true μ. Red = it misses. "
@@ -9037,11 +9037,11 @@ elif section == "rag":
     <b>Retrieval-Augmented Generation (RAG)</b> grounds an LLM's responses in external
     knowledge by retrieving relevant documents at query time and injecting them into the
     prompt. Instead of relying solely on weights learned during training, the model can
-    access up-to-date, domain-specific, or proprietary information — without retraining.
+    access up-to-date, domain-specific, or proprietary information - without retraining.
     </div>
     """, unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs(["The pipeline", "Retrieval — how similarity search works", "RAG vs fine-tuning"])
+    tab1, tab2, tab3 = st.tabs(["The pipeline", "Retrieval - how similarity search works", "RAG vs fine-tuning"])
 
     # ── TAB 1: Pipeline flow diagram ─────────────────────────────────────
     with tab1:
@@ -9124,14 +9124,14 @@ elif section == "rag":
 
         details = {
             "1. User Query": (
-                "The user asks a natural-language question — no special syntax needed.",
+                "The user asks a natural-language question - no special syntax needed.",
                 'Example: *"What were the key findings of the Q3 2024 earnings report?"*',
                 "The query can be a question, a keyword, or even a sentence fragment. RAG works with all of them.",
             ),
             "2. Embed Query": (
                 "The query is converted into a dense vector using the **same embedding model** used to index the documents.",
                 '<div class="formula-box">query_vec = embed_model(query)  → ℝᵈ</div>',
-                "Critical: query and documents **must use the same embedding model** — mismatched models break similarity search.",
+                "Critical: query and documents **must use the same embedding model** - mismatched models break similarity search.",
             ),
             "3. Vector Search": (
                 "The query vector is compared against all stored document vectors using cosine similarity (or dot product for normalised vectors).",
@@ -9146,17 +9146,17 @@ elif section == "rag":
             "5. Build Prompt": (
                 "Retrieved chunks are injected into the LLM prompt as context, typically before the user question.",
                 "```\nSYSTEM: You are a helpful assistant. Use the context below to answer.\n\nCONTEXT:\n[chunk 1]...\n[chunk 2]...\n\nQUESTION: {user_query}\nANSWER:\n```",
-                "Prompt design matters enormously — instruct the model to cite sources, say 'I don't know' if context is insufficient, and not to hallucinate beyond the context.",
+                "Prompt design matters enormously - instruct the model to cite sources, say 'I don't know' if context is insufficient, and not to hallucinate beyond the context.",
             ),
             "6. LLM Generate": (
                 "The LLM generates an answer conditioned on both the retrieved context and its parametric knowledge.",
-                "A well-designed RAG system instructs the model to **prefer the retrieved context** over its training knowledge — reducing hallucination.",
+                "A well-designed RAG system instructs the model to **prefer the retrieved context** over its training knowledge - reducing hallucination.",
                 "Post-generation, a **faithfulness check** can verify whether the answer is grounded in the retrieved chunks (e.g. via an LLM-as-judge).",
             ),
             "Offline: Document Ingestion & Indexing": (
                 "Before RAG can work, documents must be pre-processed: **chunk** → **embed** → **store**.",
                 "**Chunking strategy** is critical: too small = lost context; too large = irrelevant noise mixed in. Common approaches: fixed-size with overlap, sentence-aware, or semantic chunking.",
-                "The resulting vector index is stored in a vector database and updated whenever documents are added or changed — unlike fine-tuning, this requires no model retraining.",
+                "The resulting vector index is stored in a vector database and updated whenever documents are added or changed - unlike fine-tuning, this requires no model retraining.",
             ),
         }
         title, formula_or_example, note = details[selected_stage]
@@ -9171,10 +9171,10 @@ elif section == "rag":
 
     # ── TAB 2: How retrieval works ────────────────────────────────────────
     with tab2:
-        st.markdown("### Retrieval — similarity search in embedding space")
+        st.markdown("### Retrieval - similarity search in embedding space")
         st.markdown("""
         The heart of RAG is finding the documents most semantically similar to the query.
-        This is exactly **cosine similarity in embedding space** — the same operation
+        This is exactly **cosine similarity in embedding space** - the same operation
         covered in the Embeddings and Vector Spaces concepts.
         """)
         st.markdown('<div class="formula-box">score(q, d) = (q · d) / (‖q‖ · ‖d‖)  ∈ [−1, 1]</div>',
@@ -9182,7 +9182,7 @@ elif section == "rag":
 
         # Simulate a toy retrieval scenario
         st.markdown("### Interactive: toy document retrieval")
-        st.markdown("Simulated 2D embeddings — in practice these are 768–3072 dimensional.")
+        st.markdown("Simulated 2D embeddings - in practice these are 768–3072 dimensional.")
 
         col1, col2 = st.columns([1, 2])
         with col1:
@@ -9317,13 +9317,13 @@ elif section == "rag":
             st.markdown("""
             - Exact: brute-force cosine (small corpora)
             - ANN: HNSW, IVF, ScaNN (millions of vectors)
-            - Hybrid: sparse (BM25 keyword) + dense (embedding) — often best
+            - Hybrid: sparse (BM25 keyword) + dense (embedding) - often best
             - Reranker as second-pass improves precision
             """)
 
     # ── TAB 3: RAG vs fine-tuning ─────────────────────────────────────────
     with tab3:
-        st.markdown("### RAG vs fine-tuning — when to use which")
+        st.markdown("### RAG vs fine-tuning - when to use which")
         st.markdown("""
         Both RAG and fine-tuning can improve an LLM's performance on a specific task,
         but they solve different problems. Choosing wrong is expensive.
@@ -9334,13 +9334,13 @@ elif section == "rag":
             ("Knowledge type",        "Factual, retrievable documents",         "Style, format, reasoning patterns"),
             ("Knowledge freshness",   "✅ Update index, no retraining",         "❌ Retrain to add new knowledge"),
             ("Data required",         "Document corpus (unstructured OK)",      "High-quality prompt-completion pairs"),
-            ("Cost",                  "✅ Low — embedding + vector DB",         "❌ High — GPU training time"),
+            ("Cost",                  "✅ Low - embedding + vector DB",         "❌ High - GPU training time"),
             ("Latency",               "⚠️ Adds retrieval step (~50–200ms)",     "✅ No retrieval overhead"),
-            ("Hallucination risk",    "✅ Lower — answer grounded in docs",     "❌ Higher — relies on memorisation"),
+            ("Hallucination risk",    "✅ Lower - answer grounded in docs",     "❌ Higher - relies on memorisation"),
             ("Auditability",          "✅ Can cite source chunks",              "❌ Knowledge baked into weights"),
             ("Handles novel queries", "✅ Retrieves relevant docs dynamically", "⚠️ Only what was in training data"),
             ("Private data",          "✅ Keep data in your own vector DB",     "⚠️ Data used in training run"),
-            ("Adapting tone/style",   "❌ Doesn't change model behaviour",     "✅ Strong — model learns the style"),
+            ("Adapting tone/style",   "❌ Doesn't change model behaviour",     "✅ Strong - model learns the style"),
             ("Domain reasoning",      "⚠️ Depends on base model capability",   "✅ Model learns domain-specific logic"),
         ]
         df = pd.DataFrame(rows, columns=["Dimension", "RAG", "Fine-tuning"])
@@ -9356,7 +9356,7 @@ elif section == "rag":
             - You have proprietary data that can't leave your infrastructure
             - You want to add knowledge without touching the model
             - Your queries are diverse and hard to anticipate at training time
-            - Budget is constrained — indexing is cheap, training is not
+            - Budget is constrained - indexing is cheap, training is not
 
             **Common RAG stacks:** LangChain / LlamaIndex + pgvector / Pinecone / Weaviate + OpenAI / Anthropic
             """)
@@ -9379,7 +9379,7 @@ elif section == "rag":
             ("Naive RAG", "Query → retrieve → generate. Simple but suffers when query is vague."),
             ("HyDE", "Generate a hypothetical answer first, embed that, then retrieve. Improves recall for abstract queries."),
             ("RAG Fusion", "Expand query into multiple sub-queries, retrieve for each, fuse results. Better coverage."),
-            ("Agentic RAG", "LLM decides when and what to retrieve — can issue multiple retrieval calls in a ReAct loop."),
+            ("Agentic RAG", "LLM decides when and what to retrieve - can issue multiple retrieval calls in a ReAct loop."),
             ("GraphRAG", "Documents represented as a knowledge graph; retrieval traverses relationships, not just similarity."),
         ]
         for name, desc in patterns:
