@@ -3808,7 +3808,7 @@ elif section == "eigenvalues":
     st.markdown("""
     <div class="concept-card">
     An <b>eigenvector</b> of a matrix A is a special direction that doesn't rotate under A -
-    it only stretches or shrinks. The <b>eigenvalue</b> λ tells you by how much.
+    it only stretches, shrinks or flips (when λ is negative). The <b>eigenvalue</b> λ tells you by how much.
     They appear in PCA (dimensionality reduction), understanding covariance, and stability analysis.
     </div>
     """, unsafe_allow_html=True)
@@ -3820,18 +3820,27 @@ elif section == "eigenvalues":
         col1, col2 = st.columns([1, 2])
         with col1:
             preset_e = st.selectbox("Matrix preset", [
-                "Custom", "Scaling", "Rotation 30°", "Shear", "Symmetric"])
+                "Custom", "Scaling", "Rotation 30°", "Shear", "Symmetric"], key="e_preset")
             presets_e = {
                 "Scaling":      [[3,0],[0,1.5]],
                 "Rotation 30°": [[np.cos(np.pi/6),-np.sin(np.pi/6)],[np.sin(np.pi/6),np.cos(np.pi/6)]],
                 "Shear":        [[1,2],[0,1]],
                 "Symmetric":    [[3,1],[1,2]],
             }
-            def_e = presets_e.get(preset_e, [[2,1],[1,2]])
-            e00 = st.number_input("A[1,1]", value=float(def_e[0][0]), step=0.5, key="e00")
-            e01 = st.number_input("A[1,2]", value=float(def_e[0][1]), step=0.5, key="e01")
-            e10 = st.number_input("A[2,1]", value=float(def_e[1][0]), step=0.5, key="e10")
-            e11 = st.number_input("A[2,2]", value=float(def_e[1][1]), step=0.5, key="e11")
+            # Push the chosen preset into the input boxes (keyed widgets ignore a changed value=)
+            e_keys = ["e00", "e01", "e10", "e11"]
+            if st.session_state.get("e_preset_prev") != preset_e:
+                if preset_e in presets_e:
+                    m = presets_e[preset_e]
+                    for k, v in zip(e_keys, [m[0][0], m[0][1], m[1][0], m[1][1]]):
+                        st.session_state[k] = float(v)
+                st.session_state["e_preset_prev"] = preset_e
+            for k, v in zip(e_keys, [2.0, 1.0, 1.0, 2.0]):   # starting matrix for "Custom"
+                st.session_state.setdefault(k, v)
+            e00 = st.number_input("A[1,1]", step=0.5, key="e00")
+            e01 = st.number_input("A[1,2]", step=0.5, key="e01")
+            e10 = st.number_input("A[2,1]", step=0.5, key="e10")
+            e11 = st.number_input("A[2,2]", step=0.5, key="e11")
             A_e = np.array([[e00,e01],[e10,e11]])
 
         try:
@@ -3869,7 +3878,7 @@ elif section == "eigenvalues":
                             text=f"v{i+1} (λ={lam.real:.2f})",
                             font=dict(color=col_ev, size=12), showarrow=False)
 
-            lim_e = max(3.0, float(np.abs(A_e).max())*1.5)
+            lim_e = max(3.0, float(np.linalg.norm(A_e, 2))*1.2)   # largest stretch of any unit vector
             fig.update_layout(
                 xaxis=dict(range=[-lim_e,lim_e], zeroline=True, zerolinecolor='#ccc'),
                 yaxis=dict(range=[-lim_e,lim_e], zeroline=True, zerolinecolor='#ccc',
@@ -3887,6 +3896,10 @@ elif section == "eigenvalues":
                 col_c.markdown(f"v{i+1} = [{ev[0].real:.3f}, {ev[1].real:.3f}]")
             st.markdown(f"**Trace** (sum of eigenvalues) = {np.trace(A_e):.3f} &nbsp;|&nbsp; "
                 f"**Determinant** (product of eigenvalues) = {np.linalg.det(A_e):.3f}")
+            if abs(np.linalg.det(eigenvectors.real)) < 1e-6:
+                st.info("Repeated eigenvalue with only **one** eigenvector direction - v1 and v2 "
+                        "above lie on the same line. A matrix like this is called *defective* "
+                        "(e.g. a shear).")
         else:
             st.warning("This matrix has complex eigenvalues (rotation without real eigenvectors).")
 
