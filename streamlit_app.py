@@ -3052,7 +3052,7 @@ elif section == "matrix_ops":
             st.markdown("**Element-by-element breakdown:**")
             for i in range(2):
                 for j in range(2):
-                    st.markdown(f"({op[0]}{symbol}{op[0]})[{i+1},{j+1}] = "
+                    st.markdown(f"(A{symbol}B)[{i+1},{j+1}] = "
                                 f"{Aas[i,j]:.1f} {symbol} {Bas[i,j]:.1f} = **{result[i,j]:.2f}**")
 
             st.markdown("---")
@@ -3095,7 +3095,7 @@ elif section == "matrix_ops":
             v_out = A @ v_in
             st.markdown(f'<div class="formula-box">A · v = [{v_out[0]:.2f}, {v_out[1]:.2f}]</div>',
                 unsafe_allow_html=True)
-            st.caption(f"Input: 3D → Output: 2D  (A projects the vector into a lower-dimensional space)")
+            st.caption(f"Input: 3D → Output: 2D  (A maps the vector into a lower-dimensional space)")
 
     with tab2:
         st.markdown("### What a 2×2 matrix does to space")
@@ -3103,7 +3103,8 @@ elif section == "matrix_ops":
         col1, col2 = st.columns([1, 2])
         with col1:
             preset = st.selectbox("Preset transformation", [
-                "Custom", "Rotate 45°", "Scale x2", "Shear", "Reflection (y-axis)", "Stretch x, squash y"])
+                "Custom", "Rotate 45°", "Scale x2", "Shear", "Reflection (y-axis)", "Stretch x, squash y"],
+                key="m_preset")
             presets = {
                 "Rotate 45°":            [[np.cos(np.pi/4),-np.sin(np.pi/4)],[np.sin(np.pi/4),np.cos(np.pi/4)]],
                 "Scale x2":              [[2,0],[0,2]],
@@ -3111,14 +3112,20 @@ elif section == "matrix_ops":
                 "Reflection (y-axis)":   [[-1,0],[0,1]],
                 "Stretch x, squash y":   [[2,0],[0,0.5]],
             }
-            if preset != "Custom":
-                default = presets[preset]
-            else:
-                default = [[1,0],[0,1]]
-            m00 = st.number_input("M[1,1]", value=float(default[0][0]), step=0.1, key="m00")
-            m01 = st.number_input("M[1,2]", value=float(default[0][1]), step=0.1, key="m01")
-            m10 = st.number_input("M[2,1]", value=float(default[1][0]), step=0.1, key="m10")
-            m11 = st.number_input("M[2,2]", value=float(default[1][1]), step=0.1, key="m11")
+            # Push the chosen preset into the input boxes (keyed widgets ignore a changed value=)
+            m_keys = ["m00", "m01", "m10", "m11"]
+            if st.session_state.get("m_preset_prev") != preset:
+                if preset in presets:
+                    pm = presets[preset]
+                    for k, v in zip(m_keys, [pm[0][0], pm[0][1], pm[1][0], pm[1][1]]):
+                        st.session_state[k] = float(v)
+                st.session_state["m_preset_prev"] = preset
+            for k, v in zip(m_keys, [1.0, 0.0, 0.0, 1.0]):   # identity as the starting "Custom" matrix
+                st.session_state.setdefault(k, v)
+            m00 = st.number_input("M[1,1]", step=0.1, key="m00")
+            m01 = st.number_input("M[1,2]", step=0.1, key="m01")
+            m10 = st.number_input("M[2,1]", step=0.1, key="m10")
+            m11 = st.number_input("M[2,2]", step=0.1, key="m11")
             M = np.array([[m00,m01],[m10,m11]])
             det = np.linalg.det(M)
             st.metric("Determinant", f"{det:.3f}")
@@ -3173,9 +3180,10 @@ elif section == "matrix_ops":
             st.markdown("**Identity matrix:** A·I = A")
             st.markdown(f'<div class="formula-box">I = [[1,0],[0,1]]</div>', unsafe_allow_html=True)
             st.markdown("**Inverse:** A·A⁻¹ = I  (only if det ≠ 0)")
+            st.caption("M is the matrix from the *Geometric transformation* tab - change it there.")
             M2 = np.array([[m00,m01],[m10,m11]])
             if abs(np.linalg.det(M2)) > 1e-6:
-                inv = np.linalg.inv(M2)
+                inv = np.linalg.inv(M2) + 0.0   # + 0.0 turns −0.0 into 0.0 for display
                 st.markdown(f'<div class="formula-box">M⁻¹ = [[{inv[0,0]:.2f},{inv[0,1]:.2f}],<br>[{inv[1,0]:.2f},{inv[1,1]:.2f}]]</div>',
                     unsafe_allow_html=True)
             else:
@@ -3206,6 +3214,8 @@ elif section == "matrix_ops":
                 st.error("det = 0 → matrix collapses space onto a line or point. Not invertible (singular).")
             elif det_val < 0:
                 st.warning(f"det < 0 ({det_val:.2f}) → orientation flips (reflection) and area scales by {abs(det_val):.2f}×")
+            elif abs(det_val - 1) < 1e-6:
+                st.success("det = 1 → area is preserved (e.g. a rotation or a shear) - same size, possibly a different shape")
             elif det_val < 1:
                 st.info(f"0 < det < 1 ({det_val:.2f}) → area shrinks to {det_val:.2f}× original")
             else:
