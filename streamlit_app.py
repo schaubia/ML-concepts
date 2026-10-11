@@ -3439,7 +3439,7 @@ elif section == "partial_deriv":
         xs = np.linspace(-2.5, 2.5, 60)
         ys = np.linspace(-2.5, 2.5, 60)
         X, Y = np.meshgrid(xs, ys)
-        Z = np.clip(f_p(X, Y), -10, 10)
+        Z = f_p(X, Y)   # no extra clipping - the surface shows the function's true shape
         fig = go.Figure(data=[go.Surface(x=X, y=Y, z=Z, colorscale='RdPu',
             opacity=0.85, showscale=False)])
         # mark the point
@@ -3447,11 +3447,12 @@ elif section == "partial_deriv":
             marker=dict(color='#E24B4A', size=6), name='(x₀,y₀)'))
         # gradient arrow in xy-plane (projected)
         grad_len = 0.5
-        fig.add_trace(go.Scatter3d(
-            x=[x_p, x_p + grad_len*dfdx_val/(np.sqrt(dfdx_val**2+dfdy_val**2)+1e-9)],
-            y=[y_p, y_p + grad_len*dfdy_val/(np.sqrt(dfdx_val**2+dfdy_val**2)+1e-9)],
-            z=[f_val, f_val], mode='lines',
-            line=dict(color='#EF9F27', width=6), name='Gradient direction'))
+        if show_grad_arrows:
+            fig.add_trace(go.Scatter3d(
+                x=[x_p, x_p + grad_len*dfdx_val/(np.sqrt(dfdx_val**2+dfdy_val**2)+1e-9)],
+                y=[y_p, y_p + grad_len*dfdy_val/(np.sqrt(dfdx_val**2+dfdy_val**2)+1e-9)],
+                z=[f_val, f_val], mode='lines',
+                line=dict(color='#EF9F27', width=6), name='Gradient direction'))
         fig.update_layout(scene=dict(xaxis_title='x', yaxis_title='y', zaxis_title='f(x,y)',
             camera=dict(eye=dict(x=1.5, y=1.5, z=1.2))),
             height=430, margin=dict(l=0,r=0,b=0,t=0))
@@ -3466,6 +3467,10 @@ elif section == "partial_deriv":
     c3.metric("∂f/∂y at point", f"{dfdy_val:.4f}")
     st.markdown(f"**Gradient vector:** ∇f = [{dfdx_val:.4f}, {dfdy_val:.4f}] - points in direction of steepest ascent. "
         f"Gradient descent moves in the **opposite** direction: −∇f.")
+    if np.hypot(dfdx_val, dfdy_val) < 1e-9:
+        st.info("∇f = [0, 0] here - this is a **stationary point** (a minimum, maximum or saddle point), "
+                "so the gradient arrow vanishes and gradient descent would stop here. "
+                "Try x² + y² (minimum) and x² − y² (saddle) at (0, 0).")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
