@@ -5065,19 +5065,30 @@ elif section == "svd":
     """, unsafe_allow_html=True)
     st.markdown('<div class="formula-box">A = U · Σ · Vᵀ &nbsp;&nbsp;&nbsp; (m×n) = (m×m)(m×n)(n×n)</div>',
         unsafe_allow_html=True)
+    st.caption("These are the sizes of the *full* SVD. In practice the *reduced* SVD is used: with r = min(m, n), "
+               "U is m×r, Σ is r×r and Vᵀ is r×n - the extra columns of the full U or V only multiply zeros in Σ.")
 
-    tab1, tab2 = st.tabs(["Image compression", "Low-rank approximation explorer"])
+    tab1, tab2 = st.tabs(["Image compression", "U, Σ, Vᵀ explorer"])
 
     with tab1:
         st.markdown("### SVD as lossy compression - keep only the top k singular values")
         col1, col2 = st.columns([1, 2])
         with col1:
-            img_type = st.selectbox("Test image", ["Gradient", "Stripes", "Checkerboard", "Random noise", "Smooth blob"])
+            img_type = st.selectbox("Test image", ["Shapes", "Gradient", "Stripes", "Checkerboard", "Random noise", "Smooth blob"],
+                help="Gradient and Smooth blob are rank 1, Stripes and Checkerboard rank 2 - perfect at tiny k. "
+                     "Shapes has many singular values and sharpens gradually; noise barely compresses at all.")
             k_svd = st.slider("Rank k (singular values kept)", 1, 30, 5)
             img_size = 40
 
         np.random.seed(0)
-        if img_type == "Gradient":
+        if img_type == "Shapes":   # circle + tilted square: many singular values, decaying gradually
+            yy, xx = np.mgrid[0:img_size, 0:img_size]
+            circle = (xx-13)**2 + (yy-14)**2 <= 8**2
+            u_r = (xx-27)*np.cos(np.pi/6) + (yy-26)*np.sin(np.pi/6)
+            v_r = -(xx-27)*np.sin(np.pi/6) + (yy-26)*np.cos(np.pi/6)
+            square = (np.abs(u_r) <= 7) & (np.abs(v_r) <= 7)
+            img = np.clip(circle*1.0 + square*0.6, 0, 1)
+        elif img_type == "Gradient":
             img = np.outer(np.linspace(0,1,img_size), np.linspace(0,1,img_size))
         elif img_type == "Stripes":
             img = np.tile(np.linspace(0,1,img_size), (img_size,1))
@@ -5106,12 +5117,16 @@ elif section == "svd":
                 marker_color=['#534AB7' if i<k_capped else '#AFA9EC' for i in range(len(S))],
                 showlegend=False), row=1, col=3)
             fig.add_vline(x=k_capped+0.5, line_dash='dash', line_color='#E24B4A', row=1, col=3)
+            fig.update_yaxes(autorange='reversed', row=1, col=1)   # row 0 at the top, like an image
+            fig.update_yaxes(autorange='reversed', row=1, col=2)
             fig.update_layout(height=350)
             st.plotly_chart(fig, width='stretch')
 
         c1,c2,c3,c4 = st.columns(4)
         c1.metric("Rank k", k_capped)
-        c2.metric("Variance captured", f"{var_captured:.1%}")
+        c2.metric("Energy captured (σ² share)", f"{var_captured:.1%}",
+                  help="Σσᵢ² over kept values ÷ Σσᵢ² over all = share of the squared Frobenius norm. "
+                       "It equals 'variance explained' only when the data is mean-centred first, as in PCA.")
         c3.metric("Reconstruction MSE", f"{error:.4f}")
         c4.metric("Storage ratio", f"{compression:.2f}×", help="<1 means compressed")
         st.caption(f"Blue bars = kept singular values. Grey = discarded. "
@@ -5154,9 +5169,12 @@ elif section == "svd":
         import pandas as pd
         st.dataframe(pd.DataFrame({
             "Singular value": [f"σ{i+1} = {S_s[i]:.3f}" for i in range(len(S_s))],
-            "Variance share": [f"{S_s[i]**2/(S_s**2).sum():.1%}" for i in range(len(S_s))],
+            "Energy share (σ²)": [f"{S_s[i]**2/(S_s**2).sum():.1%}" for i in range(len(S_s))],
             "Cumulative": [f"{(S_s[:i+1]**2).sum()/(S_s**2).sum():.1%}" for i in range(len(S_s))],
         }), width='stretch', hide_index=True)
+        st.caption(f"The matrix was built with true rank {rank_svd}, then noise was added. Look for "
+                   f"{rank_svd} large singular value{'s' if rank_svd > 1 else ''} followed by small, noise-level ones - "
+                   "that gap is how SVD reveals the hidden low-rank structure.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # REACT LOOP
