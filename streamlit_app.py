@@ -3465,7 +3465,8 @@ elif section == "integral":
     st.title("∫ Integral")
     st.markdown("""
     <div class="concept-card">
-    The <b>integral</b> accumulates the total area between a function and the x-axis.
+    The <b>integral</b> accumulates the <b>signed</b> area between a function and the x-axis -
+    parts below the axis count as negative.
     In ML it appears in probability (area under a PDF = 1), expected values,
     and understanding continuous loss landscapes.
     </div>
@@ -3479,19 +3480,24 @@ elif section == "integral":
         col1, col2 = st.columns([1, 2])
         with col1:
             fn_i = st.selectbox("Function", ["x²", "sin(x)", "eˣ", "x³−2x", "cos(x)"])
-            a_i = st.slider("Lower limit a", -3.0, 2.9, 0.0, step=0.1)
-            b_i = st.slider("Upper limit b", a_i+0.1, 3.0, 2.0, step=0.1)
+            a_i, b_i = st.slider("Limits [a, b]", -3.0, 3.0, (0.0, 2.0), step=0.1,
+                                 help="Drag the two handles - a is always left of b.")
             n_rect = st.slider("Number of rectangles n", 2, 100, 10)
             method = st.radio("Method", ["Left", "Right", "Midpoint"], horizontal=True)
 
-        fn_i_map = {
-            "x²":      (lambda x: x**2,            "x³/3"),
-            "sin(x)":  (lambda x: np.sin(x),       "−cos(x)"),
-            "eˣ":      (lambda x: np.exp(np.clip(x,-10,4)), "eˣ"),
-            "x³−2x":   (lambda x: x**3 - 2*x,      "x⁴/4 − x²"),
-            "cos(x)":  (lambda x: np.cos(x),       "sin(x)"),
+        fn_i_map = {   # (f, antiderivative F, F as text)
+            "x²":      (lambda x: x**2,         lambda x: x**3/3,          "x³/3"),
+            "sin(x)":  (lambda x: np.sin(x),    lambda x: -np.cos(x),      "−cos(x)"),
+            "eˣ":      (lambda x: np.exp(x),    lambda x: np.exp(x),       "eˣ"),
+            "x³−2x":   (lambda x: x**3 - 2*x,   lambda x: x**4/4 - x**2,   "x⁴/4 − x²"),
+            "cos(x)":  (lambda x: np.cos(x),    lambda x: np.sin(x),       "sin(x)"),
         }
-        f_i, antideriv_str = fn_i_map[fn_i]
+        f_i, F_i, antideriv_str = fn_i_map[fn_i]
+        if b_i - a_i < 1e-9:   # zero-width interval: integral is 0, widen slightly so the demo still draws
+            st.info("a and b are equal - the integral over a zero-width interval is 0. "
+                    "Showing a 0.1-wide interval instead; move the handles apart.")
+            if b_i < 3.0: b_i = a_i + 0.1
+            else:         a_i = b_i - 0.1
 
         x_plot = np.linspace(a_i-0.3, b_i+0.3, 400)
         y_plot = np.array([f_i(xi) for xi in x_plot])
@@ -3503,9 +3509,8 @@ elif section == "integral":
         heights = np.array([f_i(xi) for xi in xs_rect])
         riemann_sum = float(np.sum(heights) * dx)
 
-        # numerical true integral
-        x_fine = np.linspace(a_i, b_i, 2000)
-        true_integral = float(np.trapezoid([f_i(xi) for xi in x_fine], x_fine))
+        # exact integral from the antiderivative: F(b) − F(a)
+        true_integral = float(F_i(b_i) - F_i(a_i))
 
         with col2:
             fig = go.Figure()
@@ -3534,10 +3539,10 @@ elif section == "integral":
         integrals = [
             ("xⁿ  (n≠−1)",   "xⁿ⁺¹/(n+1) + C",  "Power rule - every polynomial term"),
             ("1/x",           "ln|x| + C",         "Appears in log-loss, entropy"),
-            ("eˣ",            "eˣ + C",            "Its own antiderivative - unique property"),
+            ("eˣ",            "eˣ + C",            "Its own antiderivative - unique up to a constant multiple"),
             ("sin(x)",        "−cos(x) + C",       "Oscillating functions, Fourier"),
             ("cos(x)",        "sin(x) + C",        "Oscillating functions"),
-            ("1/(1+x²)",      "arctan(x) + C",     "Probability distributions"),
+            ("1/(1+x²)",      "arctan(x) + C",     "Cauchy distribution (heavy-tailed)"),
         ]
         st.dataframe(pd.DataFrame(integrals, columns=["f(x)","∫f(x)dx","Where it appears"]),
             width='stretch', hide_index=True)
