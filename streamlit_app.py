@@ -6460,7 +6460,7 @@ elif section == "embeddings":
                 title=dict(text="Toy co-occurrence matrix X_ij", font=dict(size=12)),
             )
             st.plotly_chart(fig_co, width='stretch')
-            st.caption("GloVe optimises vectors so w_i · w_j ≈ log(X_ij). High counts → similar vectors.")
+            st.caption("GloVe optimises vectors so w_i · w_j ≈ log(X_ij). High counts → large dot product (words that appear together, e.g. king-crown - not necessarily synonyms).")
 
         st.markdown("---")
         st.markdown("### Side-by-side comparison")
@@ -6469,7 +6469,7 @@ elif section == "embeddings":
             ("Learning signal",    "Local context windows",                   "Global co-occurrence matrix"),
             ("Training objective", "Predict neighbour words (classification)", "Fit log co-occurrence counts (regression)"),
             ("Model type",         "Shallow neural network",                  "Weighted least-squares factorization"),
-            ("Memory during train","Low - streams one window at a time",       "High - builds full N×N matrix first"),
+            ("Memory during train","Low - streams one window at a time",       "High - builds a large (sparse) N×N co-occurrence table first"),
             ("Strengths",          "Syntactic patterns; fast to train",        "Semantic analogies; leverages full corpus"),
             ("Weaknesses",         "Misses long-range corpus statistics",      "Memory-intensive for large vocabularies"),
             ("Both share",         "Dense fixed-size vectors per word",        "Dense fixed-size vectors per word"),
@@ -6575,7 +6575,8 @@ elif section == "embeddings":
             theta_a = np.arctan2(va[1], va[0])
             theta_b = np.arctan2(vb[1], vb[0])
             arc_r   = 0.5
-            arc_t   = np.linspace(min(theta_a, theta_b), max(theta_a, theta_b), 50)
+            d_theta = (theta_b - theta_a + np.pi) % (2*np.pi) - np.pi   # signed shortest turn from A to B
+            arc_t   = theta_a + np.linspace(0, d_theta, 50)
             fig.add_trace(go.Scatter(
                 x=arc_r * np.cos(arc_t),
                 y=arc_r * np.sin(arc_t),
@@ -6599,12 +6600,14 @@ elif section == "embeddings":
         st.markdown("### The famous analogy: king − man + woman ≈ queen")
         v_analogy = toy_words["king"] - toy_words["man"] + toy_words["woman"]
         sims_analogy = {w: np.dot(v_analogy, toy_words[w]) / (np.linalg.norm(v_analogy) * np.linalg.norm(toy_words[w]))
-                        for w in word_list}
+                        for w in word_list if w not in ("king", "man", "woman")}   # input words excluded, as in Word2Vec
         top3 = sorted(sims_analogy.items(), key=lambda x: -x[1])[:3]
         st.markdown(f"In this toy space: **king − man + woman** is closest to → "
                     f"**{top3[0][0]}** (sim={top3[0][1]:.2f}), "
                     f"{top3[1][0]} ({top3[1][1]:.2f}), "
                     f"{top3[2][0]} ({top3[2][1]:.2f})")
+        st.caption("The three input words are left out of the ranking - standard practice in Word2Vec tools, "
+                   "otherwise the answer is often just one of the inputs.")
 
     # ── TAB 3: Static vs Contextual ──────────────────────────────────────
     with tab3:
@@ -6642,7 +6645,7 @@ elif section == "embeddings":
             ("2003", "Neural LM\n(Bengio et al.)", "First dense word vectors as by-product of language modelling", "#ccc"),
             ("2013", "Word2Vec\n(Mikolov, Google)", "Efficient skip-gram & CBOW; popularised word embeddings", "#534AB7"),
             ("2014", "GloVe\n(Pennington, Stanford)", "Global co-occurrence matrix factorization", "#534AB7"),
-            ("2017", "ELMo\n(Peters et al.)", "First contextual embeddings from bi-directional LSTMs", "#1D9E75"),
+            ("2018", "ELMo\n(Peters et al.)", "First contextual embeddings from bi-directional LSTMs", "#1D9E75"),
             ("2018", "BERT\n(Devlin, Google)", "Transformer encoder; masked language modelling; fine-tunable", "#1D9E75"),
             ("2019+", "Sentence-BERT,\nOpenAI Ada, etc.", "Optimised for sentence-level similarity and retrieval", "#EF9F27"),
         ]
@@ -6677,7 +6680,7 @@ elif section == "embeddings":
         **When to use which:**
         | Use case | Best choice |
         |---|---|
-        | Large-scale similarity search / ANN index | Static (Word2Vec, GloVe, Ada) |
+        | Large-scale similarity search / ANN index | Static (Word2Vec, GloVe) for words; sentence embeddings (Sentence-BERT, Ada) for text |
         | Text classification with limited compute | Static + simple classifier |
         | Named entity recognition, QA, NLU | Contextual (BERT family) |
         | Sentence / document retrieval (RAG) | Sentence-BERT, Ada-002, or similar |
