@@ -1,9 +1,22 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
+
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
+
+# Number formatting for formulas shown to the user (shared by several pages)
+def _vin(x):
+    """Input number as a person writes it: 2, 2.3, (−0.7) - no trailing .0, negatives in brackets."""
+    s = f"{round(x, 2):g}".replace("-", "−")
+    return f"({s})" if x < 0 else s
+
+def _vout(x):
+    """Result: up to 3 decimals, trailing zeros dropped (7.000 → 7, 2.236 stays)."""
+    s = f"{x:.3f}".rstrip("0").rstrip(".")
+    return "0" if s in ("-0", "") else s.replace("-", "−")
+
 
 st.set_page_config(
     page_title="ML Concepts",
@@ -2866,16 +2879,6 @@ elif section == "vectors":
     """, unsafe_allow_html=True)
 
     tab1, tab2, tab3 = st.tabs(["2D visualisation", "Dot product & similarity", "Vector operations"])
-
-    def _vin(x):
-        """Input number as a person writes it: 2, 2.3, (−0.7) - no trailing .0, negatives in brackets."""
-        s = f"{round(x, 2):g}".replace("-", "−")
-        return f"({s})" if x < 0 else s
-
-    def _vout(x):
-        """Result: up to 3 decimals, trailing zeros dropped (7.000 → 7, 2.236 stays)."""
-        s = f"{x:.3f}".rstrip("0").rstrip(".")
-        return "0" if s in ("-0", "") else s.replace("-", "−")
 
     with tab1:
         col1, col2 = st.columns([1, 2])
@@ -6180,9 +6183,11 @@ elif section == "vector_norms":
             elif p_val == 2.0:
                 st.success("p = 2 → L2 norm (Euclidean). Perfect circle.")
             elif p_val >= 6.0:
-                st.info("p → ∞ → L∞ norm. Approaches a square: max(|v₁|, |v₂|).")
+                st.info(f"p = {p_val:.1f} is large → approaching the L∞ norm, whose unit ball is a square: max(|v₁|, |v₂|).")
+            elif p_val < 2.0:
+                st.info(f"p = {p_val:.1f} - intermediate shape between diamond (p=1) and circle (p=2).")
             else:
-                st.info(f"p = {p_val:.1f} - intermediate shape between diamond and circle.")
+                st.info(f"p = {p_val:.1f} - intermediate shape between circle (p=2) and square (p→∞).")
 
         with col2:
             # Generate unit-ball contour for current p
@@ -6249,13 +6254,15 @@ elif section == "vector_norms":
             linf = np.max(np.abs(v))
 
             st.markdown('<div class="formula-box">‖v‖₀  =  ' + str(l0) + '  (non-zero entries)</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="formula-box">‖v‖₁  =  |{vx}| + |{vy}|  =  {l1:.3f}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="formula-box">‖v‖₂  =  √({vx}² + {vy}²)  =  {l2:.3f}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="formula-box">‖v‖∞  =  max(|{vx}|, |{vy}|)  =  {linf:.3f}</div>', unsafe_allow_html=True)
+            st.caption("‖v‖₀ is not a true norm: scaling the vector doesn't change it (‖2v‖₀ = ‖v‖₀). "
+                       "It is still called the 'L0 norm' because it counts how sparse a vector is.")
+            st.markdown(f'<div class="formula-box">‖v‖₁  =  |{_vin(vx)}| + |{_vin(vy)}|  =  {_vout(l1)}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="formula-box">‖v‖₂  =  √({_vin(vx)}² + {_vin(vy)}²)  =  {_vout(l2)}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="formula-box">‖v‖∞  =  max(|{_vin(vx)}|, |{_vin(vy)}|)  =  {_vout(linf)}</div>', unsafe_allow_html=True)
 
             st.markdown("---")
             st.markdown("**Relationship (always true):**")
-            st.markdown(f"‖v‖∞ ≤ ‖v‖₂ ≤ ‖v‖₁  →  {linf:.2f} ≤ {l2:.2f} ≤ {l1:.2f}")
+            st.markdown(f"‖v‖∞ ≤ ‖v‖₂ ≤ ‖v‖₁  →  {_vout(linf)} ≤ {_vout(l2)} ≤ {_vout(l1)}")
 
         with col2:
             fig = go.Figure()
@@ -6283,7 +6290,7 @@ elif section == "vector_norms":
             fig.add_trace(go.Scatter(x=[0, vx], y=[0, vy], mode="lines+markers",
                 line=dict(color="#534AB7", width=3),
                 marker=dict(size=[0, 10], color="#534AB7"),
-                name=f"v = [{vx}, {vy}]"))
+                name=f"v = [{_vin(vx)}, {_vin(vy)}]"))
 
             # Projections to axes (L1 path)
             fig.add_trace(go.Scatter(
@@ -6313,11 +6320,13 @@ elif section == "vector_norms":
         st.markdown("""
         In regularized training, we minimize:
         """)
-        st.markdown('<div class="formula-box">Loss(w) + λ · ‖w‖ₚ</div>', unsafe_allow_html=True)
+        st.markdown('<div class="formula-box">L1 (Lasso): Loss(w) + λ·‖w‖₁ &nbsp;&nbsp;|&nbsp;&nbsp; L2 (Ridge): Loss(w) + λ·‖w‖₂²</div>', unsafe_allow_html=True)
         st.markdown("""
         The optimal solution is where the **loss contours** first touch the **norm ball**.
         The geometry of the ball determines whether that touching point has zeros.
         """)
+        st.caption("Simplification: the demo draws the ball with radius 1/λ. The real rule is only that a larger λ "
+                   "means a smaller ball - the exact radius for a given λ depends on the loss.")
 
         col1, col2 = st.columns([1, 2])
         with col1:
@@ -6387,21 +6396,28 @@ elif section == "vector_norms":
             )
             st.plotly_chart(fig, width='stretch')
 
-            if norm_type == "L1":
+            min_inside = (abs(loss_center_x)**p_reg + abs(loss_center_y)**p_reg) <= ball_r**p_reg
+            if min_inside:
+                st.warning(f"Constraint not active: the unconstrained minimum ({loss_center_x:.1f}, {loss_center_y:.1f}) "
+                           f"is already inside the {norm_type} ball (r = {ball_r:.2f}), so the solution is the minimum "
+                           "itself and regularization changes nothing. Increase λ to shrink the ball.")
+            elif norm_type == "L1":
                 if abs(opt_w1) < 0.05 or abs(opt_w2) < 0.05:
                     st.success(f"★ L1 solution sits at a **corner** of the diamond → one weight is ~0 (sparse!)  "
                                f"w = ({opt_w1:.2f}, {opt_w2:.2f})")
                 else:
-                    st.info(f"Solution: w = ({opt_w1:.2f}, {opt_w2:.2f}) - try moving the loss minimum further from the axes to see a corner solution.")
+                    st.info(f"Solution: w = ({opt_w1:.2f}, {opt_w2:.2f}) - on an edge of the diamond, so both weights are non-zero. "
+                            "Move the loss minimum closer to one axis (e.g. w₁* = 3, w₂* = 0.5) to see a corner solution.")
             else:
-                st.info(f"★ L2 solution is on the **smooth circle** → both weights shrink but neither reaches exactly 0.  "
+                st.info(f"★ L2 solution is on the **smooth circle** → both weights shrink towards 0, but typically "
+                        f"neither reaches exactly 0 (only if it was already 0 at the unconstrained minimum).  "
                         f"w = ({opt_w1:.2f}, {opt_w2:.2f})")
 
         st.markdown("""
         **Take-aways:**
         | | L1 norm | L2 norm |
         |---|---|---|
-        | Penalty term | λ(|w₁| + |w₂|) | λ(w₁² + w₂²) |
+        | Penalty term | λ(\\|w₁\\| + \\|w₂\\|) | λ(w₁² + w₂²) |
         | Ball shape | Diamond (corners on axes) | Circle (smooth) |
         | Optimal solution | Likely at a corner → **sparse weights** | On the curve → **small but non-zero weights** |
         | Use when | You want feature selection | You want all features to contribute a little |
