@@ -6802,7 +6802,10 @@ elif section == "vector_spaces":
             st.markdown("**Original vector v:**")
             st.markdown(f'<div class="formula-box">[{vx:.2f}, {vy:.2f}]<br>‖v‖ = {mag:.3f}</div>', unsafe_allow_html=True)
             st.markdown("**Unit vector v̂:**")
-            st.markdown(f'<div class="formula-box">[{ux:.3f}, {uy:.3f}]<br>‖v̂‖ = {np.sqrt(ux**2+uy**2):.3f}</div>', unsafe_allow_html=True)
+            if mag > 1e-9:
+                st.markdown(f'<div class="formula-box">[{ux:.3f}, {uy:.3f}]<br>‖v̂‖ = {np.sqrt(ux**2+uy**2):.3f}</div>', unsafe_allow_html=True)
+            else:
+                st.warning("v is the zero vector - it has no direction, so its unit vector v̂ is undefined.")
 
             st.markdown("---")
             st.markdown("**Standard basis unit vectors:**")
@@ -6861,7 +6864,8 @@ elif section == "vector_spaces":
         - **Cosine similarity** compares embeddings as unit vectors - magnitude is normalised away so only direction counts
         - **Attention** in transformers projects queries and keys, then computes dot products - the scale-dot-product
           uses √d to keep unit-scale variance
-        - **Weight initialisation** schemes (Xavier, He) ensure weight vectors start near unit scale
+        - **Weight initialisation** schemes (Xavier, He) scale the random weights so the *variance of the signal*
+          stays roughly constant from layer to layer - neither blowing up nor shrinking to zero
         """)
 
     # ── TAB 2: Basis & span ───────────────────────────────────────────────
@@ -6891,20 +6895,21 @@ elif section == "vector_spaces":
             vx_t = alpha*b1x + beta*b2x
             vy_t = alpha*b1y + beta*b2y
 
-            st.markdown(f'<div class="formula-box">v = {alpha}·b₁ + {beta}·b₂<br>= [{vx_t:.2f}, {vy_t:.2f}]</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="formula-box">v = {_vin(alpha)}·b₁ + {_vin(beta)}·b₂<br>= [{_vout(vx_t)}, {_vout(vy_t)}]</div>', unsafe_allow_html=True)
 
             if abs(det) < 0.05:
-                st.error("⚠️ det ≈ 0 - these vectors are linearly dependent! They only span a line, not the full 2D plane.")
+                st.error("⚠️ det ≈ 0 - these vectors are linearly dependent! They only span a line "
+                         "(or just the origin, if both are zero), not the full 2D plane.")
             else:
                 st.success(f"✓ Linearly independent (det = {det:.2f}) - they span all of ℝ².")
 
         with col2:
             fig = go.Figure()
-            lim = 4.5
+            lim = max(4.5, abs(vx_t) + 1, abs(vy_t) + 1, abs(b1x) + 1, abs(b1y) + 1, abs(b2x) + 1, abs(b2y) + 1)
 
             # Shade the span region (parallelogram grid)
-            grid_a = np.linspace(-3, 3, 10)
-            grid_b = np.linspace(-3, 3, 10)
+            grid_a = np.arange(-3, 4)   # whole steps, so grid crossings are integer α, β
+            grid_b = np.arange(-3, 4)
             for a in grid_a:
                 xs = [a*b1x + g*b2x for g in [-3,3]]
                 ys = [a*b1y + g*b2y for g in [-3,3]]
@@ -6988,11 +6993,11 @@ elif section == "vector_spaces":
                 perp_vec = a - proj_vec
 
             st.markdown("**Scalar projection** (signed length along b̂):")
-            st.markdown(f'<div class="formula-box">a·b̂ = {scalar_proj:.3f}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="formula-box">a·b̂ = {_vout(scalar_proj)}</div>', unsafe_allow_html=True)
             st.markdown("**Vector projection** (the actual shadow vector):")
-            st.markdown(f'<div class="formula-box">proj_b(a) = [{proj_vec[0]:.3f}, {proj_vec[1]:.3f}]</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="formula-box">proj_b(a) = [{_vout(proj_vec[0])}, {_vout(proj_vec[1])}]</div>', unsafe_allow_html=True)
             st.markdown("**Perpendicular component** a⊥:")
-            st.markdown(f'<div class="formula-box">a⊥ = [{perp_vec[0]:.3f}, {perp_vec[1]:.3f}]</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="formula-box">a⊥ = [{_vout(perp_vec[0])}, {_vout(perp_vec[1])}]</div>', unsafe_allow_html=True)
             st.caption("a = proj_b(a) + a⊥   (decomposition is always exact)")
 
         with col2:
@@ -7035,8 +7040,10 @@ elif section == "vector_spaces":
             ))
 
             # right-angle marker at proj_vec
-            if b_norm2 > 1e-9:
+            if b_norm2 > 1e-9 and np.linalg.norm(perp_vec) > 1e-6:
                 perp_dir = np.array([-b_hat[1], b_hat[0]]) * 0.25
+                if np.dot(perp_dir, perp_vec) < 0:   # put the marker on the same side as a
+                    perp_dir = -perp_dir
                 corner = proj_vec + perp_dir
                 fig.add_trace(go.Scatter(
                     x=[proj_vec[0], corner[0], corner[0]+b_hat[0]*0.25],
@@ -7112,7 +7119,11 @@ elif section == "vector_spaces":
             st.markdown("**Dot product check:**")
             st.markdown(f'<div class="formula-box">v · v⊥ = {dot_check:.6f} ≈ 0 ✓</div>', unsafe_allow_html=True)
             st.markdown("**Unit vectors (orthonormal pair):**")
-            st.markdown(f'<div class="formula-box">û = [{v1_unit[0]:.3f}, {v1_unit[1]:.3f}]<br>û⊥ = [{v2_unit[0]:.3f}, {v2_unit[1]:.3f}]</div>', unsafe_allow_html=True)
+            if np.linalg.norm(v1) > 1e-9:
+                st.markdown(f'<div class="formula-box">û = [{v1_unit[0]:.3f}, {v1_unit[1]:.3f}]<br>û⊥ = [{v2_unit[0]:.3f}, {v2_unit[1]:.3f}]</div>', unsafe_allow_html=True)
+            else:
+                st.warning("v is the zero vector - it has no direction, so there is no orthonormal pair to build. "
+                           "(The dot product is 0, but zero vectors aren't unit vectors.)")
 
         with col2:
             fig = go.Figure()
@@ -7121,7 +7132,7 @@ elif section == "vector_spaces":
             # Unit circle
             theta_c = np.linspace(0, 2*np.pi, 200)
             fig.add_trace(go.Scatter(x=np.cos(theta_c), y=np.sin(theta_c),
-                mode="lines", line=dict(color="#eee", width=1.5), showlegend=False))
+                mode="lines", line=dict(color="#ccc", width=1.5, dash="dot"), showlegend=False))
 
             # v and v⊥ (original)
             for vec, label, color in [(v1,"v","#534AB7"),(v2,"v⊥","#E24B4A")]:
@@ -7156,7 +7167,7 @@ elif section == "vector_spaces":
                 margin=dict(l=40,r=20,t=20,b=40),
             )
             st.plotly_chart(fig, width='stretch')
-            st.caption("Solid arrows = original vectors. Dashed = unit versions (touching unit circle). "
+            st.caption("Thick arrows = original vectors. Thin arrows = unit versions (ending on the dotted unit circle). "
                        "Right-angle marker at origin confirms orthogonality.")
 
         st.markdown("---")
@@ -7173,13 +7184,14 @@ elif section == "vector_spaces":
             st.markdown("#### Attention heads")
             st.markdown("""
             Multiple attention heads learn **different** subspaces. Near-orthogonal heads
-            capture different aspects of meaning - syntax in one, semantics in another.
+            can capture different aspects of the input - for example one head may track
+            syntax while another tracks meaning.
             """)
         with cols[2]:
             st.markdown("#### Weight matrices (QR)")
             st.markdown("""
-            Orthogonal weight initialisation preserves gradient norms during backprop -
-            a key technique for training deep networks without vanishing gradients.
+            Orthogonal weight initialisation preserves vector norms through each linear layer,
+            which helps gradients avoid vanishing or exploding in deep networks.
             """)
 
         st.markdown("""
@@ -7187,7 +7199,8 @@ elif section == "vector_spaces":
         """)
         st.markdown('<div class="formula-box">u₁ = v₁ / ‖v₁‖<br>u₂ = (v₂ − (v₂·u₁)u₁) / ‖…‖<br>u₃ = (v₃ − (v₃·u₁)u₁ − (v₃·u₂)u₂) / ‖…‖  …</div>', unsafe_allow_html=True)
         st.caption("At each step: subtract the projections onto all previous basis vectors, then normalise. "
-                   "This is exactly what QR decomposition does algorithmically.")
+                   "QR decomposition produces the same orthonormal basis - though libraries like NumPy compute it "
+                   "with more numerically stable methods (Householder reflections) rather than plain Gram-Schmidt.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # RECURRENT NETWORKS
