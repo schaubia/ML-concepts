@@ -2867,6 +2867,16 @@ elif section == "vectors":
 
     tab1, tab2, tab3 = st.tabs(["2D visualisation", "Dot product & similarity", "Vector operations"])
 
+    def _vin(x):
+        """Input number as a person writes it: 2, 2.3, (−0.7) - no trailing .0, negatives in brackets."""
+        s = f"{round(x, 2):g}".replace("-", "−")
+        return f"({s})" if x < 0 else s
+
+    def _vout(x):
+        """Result: up to 3 decimals, trailing zeros dropped (7.000 → 7, 2.236 stays)."""
+        s = f"{x:.3f}".rstrip("0").rstrip(".")
+        return "0" if s in ("-0", "") else s.replace("-", "−")
+
     with tab1:
         col1, col2 = st.columns([1, 2])
         with col1:
@@ -2921,15 +2931,18 @@ elif section == "vectors":
             theta_a = np.arctan2(ay, ax)
             theta_b = np.arctan2(by, bx)
             arc_r = 0.6
-            thetas = np.linspace(min(theta_a, theta_b), max(theta_a, theta_b), 40)
+            d_theta = (theta_b - theta_a + np.pi) % (2*np.pi) - np.pi   # signed shortest turn from a to b
+            thetas = theta_a + np.linspace(0, d_theta, 40)
             fig.add_trace(go.Scatter(x=arc_r*np.cos(thetas), y=arc_r*np.sin(thetas),
                 mode='lines', line=dict(color='gray', width=1, dash='dot'),
                 showlegend=False))
-            mid_t = (theta_a + theta_b)/2
+            mid_t = theta_a + d_theta/2
             fig.add_annotation(x=arc_r*1.4*np.cos(mid_t), y=arc_r*1.4*np.sin(mid_t),
                 text=f"{angle:.1f}°", showarrow=False, font=dict(size=11, color='gray'))
 
             lim = max(abs(ax),abs(ay),abs(bx),abs(by),abs(ax+bx),abs(ay+by)) + 1
+            if show_diff:
+                lim = max(lim, abs(ax-bx) + 1, abs(ay-by) + 1)
             fig.update_layout(xaxis=dict(range=[-lim,lim], zeroline=True, zerolinecolor='#ccc'),
                 yaxis=dict(range=[-lim,lim], zeroline=True, zerolinecolor='#ccc',
                     scaleanchor='x', scaleratio=1),
@@ -2941,7 +2954,10 @@ elif section == "vectors":
         c1.metric("|a|  magnitude", f"{mag_a:.3f}")
         c2.metric("|b|  magnitude", f"{mag_b:.3f}")
         c3.metric("a·b  dot product", f"{dot:.3f}")
-        c4.metric("Angle between", f"{angle:.1f}°")
+        c4.metric("Angle between", f"{angle:.1f}°" if min(mag_a, mag_b) > 1e-9 else "undefined")
+        if min(mag_a, mag_b) <= 1e-9:
+            st.warning("One of the vectors is the zero vector - it has no direction, "
+                       "so the angle between a and b is undefined.")
 
     with tab2:
         st.markdown('<div class="formula-box">a · b = Σ aᵢbᵢ = |a||b|cos θ</div>', unsafe_allow_html=True)
@@ -2970,7 +2986,7 @@ elif section == "vectors":
                 line=dict(color="#EF9F27",width=1.5,dash="dot"))
             fig.add_annotation(x=proj/2, y=-0.2, text=f"projection = {proj:.2f}",
                 showarrow=False, font=dict(color="#EF9F27",size=11))
-            fig.update_layout(xaxis=dict(range=[-0.5,mag_demo+0.5],zeroline=True),
+            fig.update_layout(xaxis=dict(range=[-mag_demo-0.5,mag_demo+0.5],zeroline=True),
                 yaxis=dict(range=[-0.5,mag_demo+0.5],scaleanchor='x',scaleratio=1,zeroline=True),
                 height=320, plot_bgcolor='white', showlegend=False,
                 margin=dict(l=10,r=10,t=10,b=10))
@@ -2978,11 +2994,13 @@ elif section == "vectors":
         st.metric("Dot product a·b", f"{dp:.3f}")
         if angle_deg < 90:   st.success(f"Angle < 90° → positive dot product → vectors point in similar direction")
         elif angle_deg == 90: st.info("Angle = 90° → dot product = 0 → vectors are orthogonal (perpendicular)")
-        else:                 st.warning(f"Angle > 90° → negative dot product → vectors point in opposite directions")
+        elif angle_deg < 180: st.warning("Angle > 90° → negative dot product → vectors point away from each other")
+        else:                 st.error("Angle = 180° → most negative dot product (−|a||b|) → vectors point in exactly opposite directions")
         st.markdown("> **In ML:** cosine similarity between two embedding vectors uses exactly this - dot product divided by magnitudes.")
 
     with tab3:
         st.markdown("### Common vector operations")
+        st.caption("a and b are the vectors from the **2D visualisation** tab - change them with the sliders there.")
         col1, col2 = st.columns(2)
         v = np.array([ax, ay])
         u = np.array([bx, by])
@@ -2990,18 +3008,21 @@ elif section == "vectors":
             st.markdown("**Scalar multiplication**")
             scalar = st.slider("scalar s", -3.0, 3.0, 2.0, step=0.1)
             sv = scalar * v
-            st.markdown(f'<div class="formula-box">s·a = {scalar}·[{ax},{ay}] = [{sv[0]:.2f},{sv[1]:.2f}]</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="formula-box">s·a = {_vin(scalar)}·[{_vin(ax)}, {_vin(ay)}] = [{_vout(sv[0])}, {_vout(sv[1])}]</div>', unsafe_allow_html=True)
             st.markdown("**Unit vector (normalise)**")
-            unit = v / (np.linalg.norm(v) + 1e-9)
-            st.markdown(f'<div class="formula-box">â = a/|a| = [{unit[0]:.3f},{unit[1]:.3f}]  |â|={np.linalg.norm(unit):.3f}</div>', unsafe_allow_html=True)
+            if np.linalg.norm(v) > 1e-9:
+                unit = v / np.linalg.norm(v)
+                st.markdown(f'<div class="formula-box">â = a/|a| = [{_vout(unit[0])}, {_vout(unit[1])}] &nbsp; |â| = {_vout(np.linalg.norm(unit))}</div>', unsafe_allow_html=True)
+            else:
+                st.warning("a is the zero vector - it has no direction, so its unit vector is undefined.")
         with col2:
             st.markdown("**L1 and L2 norms**")
             l1 = np.sum(np.abs(v)); l2 = np.linalg.norm(v)
-            st.markdown(f'<div class="formula-box">‖a‖₁ = |{ax}|+|{ay}| = {l1:.3f}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="formula-box">‖a‖₂ = √({ax}²+{ay}²) = {l2:.3f}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="formula-box">‖a‖₁ = |{_vin(ax)}| + |{_vin(ay)}| = {_vout(l1)}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="formula-box">‖a‖₂ = √({_vin(ax)}² + {_vin(ay)}²) = {_vout(l2)}</div>', unsafe_allow_html=True)
             st.markdown("**Cross product magnitude (2D)**")
             cross = abs(ax*by - ay*bx)
-            st.markdown(f'<div class="formula-box">|a×b| = |{ax}·{by} − {ay}·{bx}| = {cross:.3f}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="formula-box">|a×b| = |{_vin(ax)}·{_vin(by)} − {_vin(ay)}·{_vin(bx)}| = {_vout(cross)}</div>', unsafe_allow_html=True)
             st.caption("= area of parallelogram formed by a and b")
 
 
