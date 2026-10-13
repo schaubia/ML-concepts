@@ -7912,13 +7912,16 @@ elif section == "bayes_theorem":
         with col2:
             st.markdown("#### Intuition: updating beliefs")
             st.markdown("""
-            Think of it as a two-step process:
+            Think of it as a three-step process:
             1. Start with a **prior** - what do you believe before any evidence?
             2. Observe **evidence** - how likely is that evidence under each hypothesis?
             3. Multiply and normalise → **posterior** - your new, updated belief.
 
-            The more surprising the evidence (low P(B)), the more it shifts your belief.
-            If P(B|A) ≫ P(B|¬A), seeing B strongly supports A.
+            What drives the update is the **likelihood ratio** P(B|A) / P(B|¬A) - how much more
+            likely the evidence is if A is true than if it is false:
+            - ratio ≫ 1 → seeing B strongly supports A
+            - ratio ≈ 1 → B is uninformative, belief barely moves
+            - ratio ≪ 1 → seeing B counts against A
             """)
             st.markdown("#### Expanded form")
             st.markdown('<div class="formula-box">'
@@ -7939,7 +7942,10 @@ elif section == "bayes_theorem":
             posterior = (lik_given_a * prior) / pb
 
             st.metric("Posterior P(A|B)", f"{posterior:.3f}", delta=f"{posterior-prior:+.3f} from prior")
-            if posterior > prior:
+            if abs(lik_given_a - lik_given_na) < 1e-9:
+                st.info(f"P(B|A) = P(B|¬A) - the evidence is equally likely either way, so it is "
+                        f"uninformative. Belief stays at {prior:.2f}.")
+            elif posterior > prior:
                 st.success(f"Evidence B supports A - belief rose from {prior:.2f} → {posterior:.2f}")
             else:
                 st.warning(f"Evidence B undermines A - belief fell from {prior:.2f} → {posterior:.2f}")
@@ -8013,7 +8019,7 @@ elif section == "bayes_theorem":
     with tab3:
         st.markdown("### Classic example: medical screening test")
         st.markdown("This is the most important application of Bayes' theorem - "
-                    "and the most counterintuitive result in statistics.")
+                    "and one of the most counterintuitive results in statistics.")
 
         col1, col2 = st.columns([1, 1])
         with col1:
@@ -8045,11 +8051,11 @@ elif section == "bayes_theorem":
         with col2:
             # Visualise with population of 10,000
             N = 10000
-            n_sick     = int(N * prevalence)
+            n_sick     = int(round(N * prevalence))
             n_healthy  = N - n_sick
-            tp = int(n_sick    * sensitivity)
+            tp = int(round(n_sick    * sensitivity))
             fn = n_sick    - tp
-            fp = int(n_healthy * false_pos_rate)
+            fp = int(round(n_healthy * false_pos_rate))
             tn = n_healthy - fp
 
             fig = go.Figure(data=[
@@ -8064,7 +8070,8 @@ elif section == "bayes_theorem":
                 margin=dict(l=20,r=20,t=60,b=40))
             st.plotly_chart(fig, width='stretch')
             st.caption(f"Test + column: {tp:,} true positives vs {fp:,} false positives. "
-                       f"PPV = {tp}/{tp+fp} = {ppv:.1%}")
+                       f"PPV ≈ {tp:,}/{tp+fp:,} = {tp/(tp+fp):.1%} with whole people "
+                       f"(exact formula: {ppv:.1%}).")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CORRELATION & COVARIANCE
