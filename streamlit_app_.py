@@ -1,9 +1,22 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
+
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
+
+# Number formatting for formulas shown to the user (shared by several pages)
+def _vin(x):
+    """Input number as a person writes it: 2, 2.3, (−0.7) - no trailing .0, negatives in brackets."""
+    s = f"{round(x, 2):g}".replace("-", "−")
+    return f"({s})" if x < 0 else s
+
+def _vout(x):
+    """Result: up to 3 decimals, trailing zeros dropped (7.000 → 7, 2.236 stays)."""
+    s = f"{x:.3f}".rstrip("0").rstrip(".")
+    return "0" if s in ("-0", "") else s.replace("-", "−")
+
 
 st.set_page_config(
     page_title="ML Concepts",
@@ -2921,15 +2934,18 @@ elif section == "vectors":
             theta_a = np.arctan2(ay, ax)
             theta_b = np.arctan2(by, bx)
             arc_r = 0.6
-            thetas = np.linspace(min(theta_a, theta_b), max(theta_a, theta_b), 40)
+            d_theta = (theta_b - theta_a + np.pi) % (2*np.pi) - np.pi   # signed shortest turn from a to b
+            thetas = theta_a + np.linspace(0, d_theta, 40)
             fig.add_trace(go.Scatter(x=arc_r*np.cos(thetas), y=arc_r*np.sin(thetas),
                 mode='lines', line=dict(color='gray', width=1, dash='dot'),
                 showlegend=False))
-            mid_t = (theta_a + theta_b)/2
+            mid_t = theta_a + d_theta/2
             fig.add_annotation(x=arc_r*1.4*np.cos(mid_t), y=arc_r*1.4*np.sin(mid_t),
                 text=f"{angle:.1f}°", showarrow=False, font=dict(size=11, color='gray'))
 
             lim = max(abs(ax),abs(ay),abs(bx),abs(by),abs(ax+bx),abs(ay+by)) + 1
+            if show_diff:
+                lim = max(lim, abs(ax-bx) + 1, abs(ay-by) + 1)
             fig.update_layout(xaxis=dict(range=[-lim,lim], zeroline=True, zerolinecolor='#ccc'),
                 yaxis=dict(range=[-lim,lim], zeroline=True, zerolinecolor='#ccc',
                     scaleanchor='x', scaleratio=1),
@@ -2941,7 +2957,10 @@ elif section == "vectors":
         c1.metric("|a|  magnitude", f"{mag_a:.3f}")
         c2.metric("|b|  magnitude", f"{mag_b:.3f}")
         c3.metric("a·b  dot product", f"{dot:.3f}")
-        c4.metric("Angle between", f"{angle:.1f}°")
+        c4.metric("Angle between", f"{angle:.1f}°" if min(mag_a, mag_b) > 1e-9 else "undefined")
+        if min(mag_a, mag_b) <= 1e-9:
+            st.warning("One of the vectors is the zero vector - it has no direction, "
+                       "so the angle between a and b is undefined.")
 
     with tab2:
         st.markdown('<div class="formula-box">a · b = Σ aᵢbᵢ = |a||b|cos θ</div>', unsafe_allow_html=True)
@@ -2970,7 +2989,7 @@ elif section == "vectors":
                 line=dict(color="#EF9F27",width=1.5,dash="dot"))
             fig.add_annotation(x=proj/2, y=-0.2, text=f"projection = {proj:.2f}",
                 showarrow=False, font=dict(color="#EF9F27",size=11))
-            fig.update_layout(xaxis=dict(range=[-0.5,mag_demo+0.5],zeroline=True),
+            fig.update_layout(xaxis=dict(range=[-mag_demo-0.5,mag_demo+0.5],zeroline=True),
                 yaxis=dict(range=[-0.5,mag_demo+0.5],scaleanchor='x',scaleratio=1,zeroline=True),
                 height=320, plot_bgcolor='white', showlegend=False,
                 margin=dict(l=10,r=10,t=10,b=10))
@@ -2978,11 +2997,13 @@ elif section == "vectors":
         st.metric("Dot product a·b", f"{dp:.3f}")
         if angle_deg < 90:   st.success(f"Angle < 90° → positive dot product → vectors point in similar direction")
         elif angle_deg == 90: st.info("Angle = 90° → dot product = 0 → vectors are orthogonal (perpendicular)")
-        else:                 st.warning(f"Angle > 90° → negative dot product → vectors point in opposite directions")
+        elif angle_deg < 180: st.warning("Angle > 90° → negative dot product → vectors point away from each other")
+        else:                 st.error("Angle = 180° → most negative dot product (−|a||b|) → vectors point in exactly opposite directions")
         st.markdown("> **In ML:** cosine similarity between two embedding vectors uses exactly this - dot product divided by magnitudes.")
 
     with tab3:
         st.markdown("### Common vector operations")
+        st.caption("a and b are the vectors from the **2D visualisation** tab - change them with the sliders there.")
         col1, col2 = st.columns(2)
         v = np.array([ax, ay])
         u = np.array([bx, by])
@@ -2990,18 +3011,21 @@ elif section == "vectors":
             st.markdown("**Scalar multiplication**")
             scalar = st.slider("scalar s", -3.0, 3.0, 2.0, step=0.1)
             sv = scalar * v
-            st.markdown(f'<div class="formula-box">s·a = {scalar}·[{ax},{ay}] = [{sv[0]:.2f},{sv[1]:.2f}]</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="formula-box">s·a = {_vin(scalar)}·[{_vin(ax)}, {_vin(ay)}] = [{_vout(sv[0])}, {_vout(sv[1])}]</div>', unsafe_allow_html=True)
             st.markdown("**Unit vector (normalise)**")
-            unit = v / (np.linalg.norm(v) + 1e-9)
-            st.markdown(f'<div class="formula-box">â = a/|a| = [{unit[0]:.3f},{unit[1]:.3f}]  |â|={np.linalg.norm(unit):.3f}</div>', unsafe_allow_html=True)
+            if np.linalg.norm(v) > 1e-9:
+                unit = v / np.linalg.norm(v)
+                st.markdown(f'<div class="formula-box">â = a/|a| = [{_vout(unit[0])}, {_vout(unit[1])}] &nbsp; |â| = {_vout(np.linalg.norm(unit))}</div>', unsafe_allow_html=True)
+            else:
+                st.warning("a is the zero vector - it has no direction, so its unit vector is undefined.")
         with col2:
             st.markdown("**L1 and L2 norms**")
             l1 = np.sum(np.abs(v)); l2 = np.linalg.norm(v)
-            st.markdown(f'<div class="formula-box">‖a‖₁ = |{ax}|+|{ay}| = {l1:.3f}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="formula-box">‖a‖₂ = √({ax}²+{ay}²) = {l2:.3f}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="formula-box">‖a‖₁ = |{_vin(ax)}| + |{_vin(ay)}| = {_vout(l1)}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="formula-box">‖a‖₂ = √({_vin(ax)}² + {_vin(ay)}²) = {_vout(l2)}</div>', unsafe_allow_html=True)
             st.markdown("**Cross product magnitude (2D)**")
             cross = abs(ax*by - ay*bx)
-            st.markdown(f'<div class="formula-box">|a×b| = |{ax}·{by} − {ay}·{bx}| = {cross:.3f}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="formula-box">|a×b| = |{_vin(ax)}·{_vin(by)} − {_vin(ay)}·{_vin(bx)}| = {_vout(cross)}</div>', unsafe_allow_html=True)
             st.caption("= area of parallelogram formed by a and b")
 
 
@@ -6159,9 +6183,11 @@ elif section == "vector_norms":
             elif p_val == 2.0:
                 st.success("p = 2 → L2 norm (Euclidean). Perfect circle.")
             elif p_val >= 6.0:
-                st.info("p → ∞ → L∞ norm. Approaches a square: max(|v₁|, |v₂|).")
+                st.info(f"p = {p_val:.1f} is large → approaching the L∞ norm, whose unit ball is a square: max(|v₁|, |v₂|).")
+            elif p_val < 2.0:
+                st.info(f"p = {p_val:.1f} - intermediate shape between diamond (p=1) and circle (p=2).")
             else:
-                st.info(f"p = {p_val:.1f} - intermediate shape between diamond and circle.")
+                st.info(f"p = {p_val:.1f} - intermediate shape between circle (p=2) and square (p→∞).")
 
         with col2:
             # Generate unit-ball contour for current p
@@ -6228,13 +6254,15 @@ elif section == "vector_norms":
             linf = np.max(np.abs(v))
 
             st.markdown('<div class="formula-box">‖v‖₀  =  ' + str(l0) + '  (non-zero entries)</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="formula-box">‖v‖₁  =  |{vx}| + |{vy}|  =  {l1:.3f}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="formula-box">‖v‖₂  =  √({vx}² + {vy}²)  =  {l2:.3f}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="formula-box">‖v‖∞  =  max(|{vx}|, |{vy}|)  =  {linf:.3f}</div>', unsafe_allow_html=True)
+            st.caption("‖v‖₀ is not a true norm: scaling the vector doesn't change it (‖2v‖₀ = ‖v‖₀). "
+                       "It is still called the 'L0 norm' because it counts how sparse a vector is.")
+            st.markdown(f'<div class="formula-box">‖v‖₁  =  |{_vin(vx)}| + |{_vin(vy)}|  =  {_vout(l1)}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="formula-box">‖v‖₂  =  √({_vin(vx)}² + {_vin(vy)}²)  =  {_vout(l2)}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="formula-box">‖v‖∞  =  max(|{_vin(vx)}|, |{_vin(vy)}|)  =  {_vout(linf)}</div>', unsafe_allow_html=True)
 
             st.markdown("---")
             st.markdown("**Relationship (always true):**")
-            st.markdown(f"‖v‖∞ ≤ ‖v‖₂ ≤ ‖v‖₁  →  {linf:.2f} ≤ {l2:.2f} ≤ {l1:.2f}")
+            st.markdown(f"‖v‖∞ ≤ ‖v‖₂ ≤ ‖v‖₁  →  {_vout(linf)} ≤ {_vout(l2)} ≤ {_vout(l1)}")
 
         with col2:
             fig = go.Figure()
@@ -6262,7 +6290,7 @@ elif section == "vector_norms":
             fig.add_trace(go.Scatter(x=[0, vx], y=[0, vy], mode="lines+markers",
                 line=dict(color="#534AB7", width=3),
                 marker=dict(size=[0, 10], color="#534AB7"),
-                name=f"v = [{vx}, {vy}]"))
+                name=f"v = [{_vin(vx)}, {_vin(vy)}]"))
 
             # Projections to axes (L1 path)
             fig.add_trace(go.Scatter(
@@ -6292,11 +6320,13 @@ elif section == "vector_norms":
         st.markdown("""
         In regularized training, we minimize:
         """)
-        st.markdown('<div class="formula-box">Loss(w) + λ · ‖w‖ₚ</div>', unsafe_allow_html=True)
+        st.markdown('<div class="formula-box">L1 (Lasso): Loss(w) + λ·‖w‖₁ &nbsp;&nbsp;|&nbsp;&nbsp; L2 (Ridge): Loss(w) + λ·‖w‖₂²</div>', unsafe_allow_html=True)
         st.markdown("""
         The optimal solution is where the **loss contours** first touch the **norm ball**.
         The geometry of the ball determines whether that touching point has zeros.
         """)
+        st.caption("Simplification: the demo draws the ball with radius 1/λ. The real rule is only that a larger λ "
+                   "means a smaller ball - the exact radius for a given λ depends on the loss.")
 
         col1, col2 = st.columns([1, 2])
         with col1:
@@ -6366,21 +6396,28 @@ elif section == "vector_norms":
             )
             st.plotly_chart(fig, width='stretch')
 
-            if norm_type == "L1":
+            min_inside = (abs(loss_center_x)**p_reg + abs(loss_center_y)**p_reg) <= ball_r**p_reg
+            if min_inside:
+                st.warning(f"Constraint not active: the unconstrained minimum ({loss_center_x:.1f}, {loss_center_y:.1f}) "
+                           f"is already inside the {norm_type} ball (r = {ball_r:.2f}), so the solution is the minimum "
+                           "itself and regularization changes nothing. Increase λ to shrink the ball.")
+            elif norm_type == "L1":
                 if abs(opt_w1) < 0.05 or abs(opt_w2) < 0.05:
                     st.success(f"★ L1 solution sits at a **corner** of the diamond → one weight is ~0 (sparse!)  "
                                f"w = ({opt_w1:.2f}, {opt_w2:.2f})")
                 else:
-                    st.info(f"Solution: w = ({opt_w1:.2f}, {opt_w2:.2f}) - try moving the loss minimum further from the axes to see a corner solution.")
+                    st.info(f"Solution: w = ({opt_w1:.2f}, {opt_w2:.2f}) - on an edge of the diamond, so both weights are non-zero. "
+                            "Move the loss minimum closer to one axis (e.g. w₁* = 3, w₂* = 0.5) to see a corner solution.")
             else:
-                st.info(f"★ L2 solution is on the **smooth circle** → both weights shrink but neither reaches exactly 0.  "
+                st.info(f"★ L2 solution is on the **smooth circle** → both weights shrink towards 0, but typically "
+                        f"neither reaches exactly 0 (only if it was already 0 at the unconstrained minimum).  "
                         f"w = ({opt_w1:.2f}, {opt_w2:.2f})")
 
         st.markdown("""
         **Take-aways:**
         | | L1 norm | L2 norm |
         |---|---|---|
-        | Penalty term | λ(|w₁| + |w₂|) | λ(w₁² + w₂²) |
+        | Penalty term | λ(\\|w₁\\| + \\|w₂\\|) | λ(w₁² + w₂²) |
         | Ball shape | Diamond (corners on axes) | Circle (smooth) |
         | Optimal solution | Likely at a corner → **sparse weights** | On the curve → **small but non-zero weights** |
         | Use when | You want feature selection | You want all features to contribute a little |
@@ -6765,7 +6802,10 @@ elif section == "vector_spaces":
             st.markdown("**Original vector v:**")
             st.markdown(f'<div class="formula-box">[{vx:.2f}, {vy:.2f}]<br>‖v‖ = {mag:.3f}</div>', unsafe_allow_html=True)
             st.markdown("**Unit vector v̂:**")
-            st.markdown(f'<div class="formula-box">[{ux:.3f}, {uy:.3f}]<br>‖v̂‖ = {np.sqrt(ux**2+uy**2):.3f}</div>', unsafe_allow_html=True)
+            if mag > 1e-9:
+                st.markdown(f'<div class="formula-box">[{ux:.3f}, {uy:.3f}]<br>‖v̂‖ = {np.sqrt(ux**2+uy**2):.3f}</div>', unsafe_allow_html=True)
+            else:
+                st.warning("v is the zero vector - it has no direction, so its unit vector v̂ is undefined.")
 
             st.markdown("---")
             st.markdown("**Standard basis unit vectors:**")
@@ -6824,7 +6864,8 @@ elif section == "vector_spaces":
         - **Cosine similarity** compares embeddings as unit vectors - magnitude is normalised away so only direction counts
         - **Attention** in transformers projects queries and keys, then computes dot products - the scale-dot-product
           uses √d to keep unit-scale variance
-        - **Weight initialisation** schemes (Xavier, He) ensure weight vectors start near unit scale
+        - **Weight initialisation** schemes (Xavier, He) scale the random weights so the *variance of the signal*
+          stays roughly constant from layer to layer - neither blowing up nor shrinking to zero
         """)
 
     # ── TAB 2: Basis & span ───────────────────────────────────────────────
@@ -6854,20 +6895,21 @@ elif section == "vector_spaces":
             vx_t = alpha*b1x + beta*b2x
             vy_t = alpha*b1y + beta*b2y
 
-            st.markdown(f'<div class="formula-box">v = {alpha}·b₁ + {beta}·b₂<br>= [{vx_t:.2f}, {vy_t:.2f}]</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="formula-box">v = {_vin(alpha)}·b₁ + {_vin(beta)}·b₂<br>= [{_vout(vx_t)}, {_vout(vy_t)}]</div>', unsafe_allow_html=True)
 
             if abs(det) < 0.05:
-                st.error("⚠️ det ≈ 0 - these vectors are linearly dependent! They only span a line, not the full 2D plane.")
+                st.error("⚠️ det ≈ 0 - these vectors are linearly dependent! They only span a line "
+                         "(or just the origin, if both are zero), not the full 2D plane.")
             else:
                 st.success(f"✓ Linearly independent (det = {det:.2f}) - they span all of ℝ².")
 
         with col2:
             fig = go.Figure()
-            lim = 4.5
+            lim = max(4.5, abs(vx_t) + 1, abs(vy_t) + 1, abs(b1x) + 1, abs(b1y) + 1, abs(b2x) + 1, abs(b2y) + 1)
 
             # Shade the span region (parallelogram grid)
-            grid_a = np.linspace(-3, 3, 10)
-            grid_b = np.linspace(-3, 3, 10)
+            grid_a = np.arange(-3, 4)   # whole steps, so grid crossings are integer α, β
+            grid_b = np.arange(-3, 4)
             for a in grid_a:
                 xs = [a*b1x + g*b2x for g in [-3,3]]
                 ys = [a*b1y + g*b2y for g in [-3,3]]
@@ -6951,11 +6993,11 @@ elif section == "vector_spaces":
                 perp_vec = a - proj_vec
 
             st.markdown("**Scalar projection** (signed length along b̂):")
-            st.markdown(f'<div class="formula-box">a·b̂ = {scalar_proj:.3f}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="formula-box">a·b̂ = {_vout(scalar_proj)}</div>', unsafe_allow_html=True)
             st.markdown("**Vector projection** (the actual shadow vector):")
-            st.markdown(f'<div class="formula-box">proj_b(a) = [{proj_vec[0]:.3f}, {proj_vec[1]:.3f}]</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="formula-box">proj_b(a) = [{_vout(proj_vec[0])}, {_vout(proj_vec[1])}]</div>', unsafe_allow_html=True)
             st.markdown("**Perpendicular component** a⊥:")
-            st.markdown(f'<div class="formula-box">a⊥ = [{perp_vec[0]:.3f}, {perp_vec[1]:.3f}]</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="formula-box">a⊥ = [{_vout(perp_vec[0])}, {_vout(perp_vec[1])}]</div>', unsafe_allow_html=True)
             st.caption("a = proj_b(a) + a⊥   (decomposition is always exact)")
 
         with col2:
@@ -6998,8 +7040,10 @@ elif section == "vector_spaces":
             ))
 
             # right-angle marker at proj_vec
-            if b_norm2 > 1e-9:
+            if b_norm2 > 1e-9 and np.linalg.norm(perp_vec) > 1e-6:
                 perp_dir = np.array([-b_hat[1], b_hat[0]]) * 0.25
+                if np.dot(perp_dir, perp_vec) < 0:   # put the marker on the same side as a
+                    perp_dir = -perp_dir
                 corner = proj_vec + perp_dir
                 fig.add_trace(go.Scatter(
                     x=[proj_vec[0], corner[0], corner[0]+b_hat[0]*0.25],
@@ -7075,7 +7119,11 @@ elif section == "vector_spaces":
             st.markdown("**Dot product check:**")
             st.markdown(f'<div class="formula-box">v · v⊥ = {dot_check:.6f} ≈ 0 ✓</div>', unsafe_allow_html=True)
             st.markdown("**Unit vectors (orthonormal pair):**")
-            st.markdown(f'<div class="formula-box">û = [{v1_unit[0]:.3f}, {v1_unit[1]:.3f}]<br>û⊥ = [{v2_unit[0]:.3f}, {v2_unit[1]:.3f}]</div>', unsafe_allow_html=True)
+            if np.linalg.norm(v1) > 1e-9:
+                st.markdown(f'<div class="formula-box">û = [{v1_unit[0]:.3f}, {v1_unit[1]:.3f}]<br>û⊥ = [{v2_unit[0]:.3f}, {v2_unit[1]:.3f}]</div>', unsafe_allow_html=True)
+            else:
+                st.warning("v is the zero vector - it has no direction, so there is no orthonormal pair to build. "
+                           "(The dot product is 0, but zero vectors aren't unit vectors.)")
 
         with col2:
             fig = go.Figure()
@@ -7084,7 +7132,7 @@ elif section == "vector_spaces":
             # Unit circle
             theta_c = np.linspace(0, 2*np.pi, 200)
             fig.add_trace(go.Scatter(x=np.cos(theta_c), y=np.sin(theta_c),
-                mode="lines", line=dict(color="#eee", width=1.5), showlegend=False))
+                mode="lines", line=dict(color="#ccc", width=1.5, dash="dot"), showlegend=False))
 
             # v and v⊥ (original)
             for vec, label, color in [(v1,"v","#534AB7"),(v2,"v⊥","#E24B4A")]:
@@ -7119,7 +7167,7 @@ elif section == "vector_spaces":
                 margin=dict(l=40,r=20,t=20,b=40),
             )
             st.plotly_chart(fig, width='stretch')
-            st.caption("Solid arrows = original vectors. Dashed = unit versions (touching unit circle). "
+            st.caption("Thick arrows = original vectors. Thin arrows = unit versions (ending on the dotted unit circle). "
                        "Right-angle marker at origin confirms orthogonality.")
 
         st.markdown("---")
@@ -7136,13 +7184,14 @@ elif section == "vector_spaces":
             st.markdown("#### Attention heads")
             st.markdown("""
             Multiple attention heads learn **different** subspaces. Near-orthogonal heads
-            capture different aspects of meaning - syntax in one, semantics in another.
+            can capture different aspects of the input - for example one head may track
+            syntax while another tracks meaning.
             """)
         with cols[2]:
             st.markdown("#### Weight matrices (QR)")
             st.markdown("""
-            Orthogonal weight initialisation preserves gradient norms during backprop -
-            a key technique for training deep networks without vanishing gradients.
+            Orthogonal weight initialisation preserves vector norms through each linear layer,
+            which helps gradients avoid vanishing or exploding in deep networks.
             """)
 
         st.markdown("""
@@ -7150,7 +7199,8 @@ elif section == "vector_spaces":
         """)
         st.markdown('<div class="formula-box">u₁ = v₁ / ‖v₁‖<br>u₂ = (v₂ − (v₂·u₁)u₁) / ‖…‖<br>u₃ = (v₃ − (v₃·u₁)u₁ − (v₃·u₂)u₂) / ‖…‖  …</div>', unsafe_allow_html=True)
         st.caption("At each step: subtract the projections onto all previous basis vectors, then normalise. "
-                   "This is exactly what QR decomposition does algorithmically.")
+                   "QR decomposition produces the same orthonormal basis - though libraries like NumPy compute it "
+                   "with more numerically stable methods (Householder reflections) rather than plain Gram-Schmidt.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # RECURRENT NETWORKS

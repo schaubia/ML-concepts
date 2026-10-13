@@ -8521,10 +8521,12 @@ elif section == "aic_bic":
     tab1, tab2 = st.tabs(["Interactive model selection", "Formula & AIC vs. BIC"])
 
     def _aic_bic(y_true, y_pred, k, n):
+        # k counts every estimated parameter: the d+1 polynomial coefficients AND the noise variance σ²
         rss = max(np.sum((y_true - y_pred) ** 2), 1e-10)
         aic = n * np.log(rss / n) + 2 * k
         bic = n * np.log(rss / n) + k * np.log(n)
-        return aic, bic
+        aicc = aic + 2 * k * (k + 1) / (n - k - 1) if n - k - 1 > 0 else np.inf   # small-sample correction
+        return aic, bic, aicc
 
     with tab1:
         col1, col2 = st.columns([1, 3])
@@ -8538,16 +8540,17 @@ elif section == "aic_bic":
         y_tr = np.sin(x_tr) + np.random.normal(0, noise_ab, n_train_ab)
 
         degrees = list(range(1, 11))
-        aics, bics = [], []
+        aics, bics, aiccs = [], [], []
         for d in degrees:
-            k = d + 1
+            k = d + 2   # d+1 coefficients + σ²
             c = np.polyfit(x_tr, y_tr, d)
             pp = np.poly1d(c)
-            a, b = _aic_bic(y_tr, pp(x_tr), k, n_train_ab)
-            aics.append(a); bics.append(b)
+            a, b, ac = _aic_bic(y_tr, pp(x_tr), k, n_train_ab)
+            aics.append(a); bics.append(b); aiccs.append(ac)
 
-        best_aic_deg = degrees[int(np.argmin(aics))]
-        best_bic_deg = degrees[int(np.argmin(bics))]
+        best_aic_deg  = degrees[int(np.argmin(aics))]
+        best_bic_deg  = degrees[int(np.argmin(bics))]
+        best_aicc_deg = degrees[int(np.argmin(aiccs))]
 
         with col2:
             fig = go.Figure()
@@ -8555,6 +8558,8 @@ elif section == "aic_bic":
                 mode='lines+markers', line=dict(color='#534AB7', width=2.5)))
             fig.add_trace(go.Scatter(x=degrees, y=bics, name='BIC',
                 mode='lines+markers', line=dict(color='#E24B4A', width=2.5)))
+            fig.add_trace(go.Scatter(x=degrees, y=aiccs, name='AICc',
+                mode='lines+markers', line=dict(color='#1D9E75', width=2.5, dash='dash')))
             fig.add_vline(x=sel_degree, line=dict(color='#EF9F27', dash='dash'),
                 annotation_text=f"Selected: degree {sel_degree}")
             fig.add_trace(go.Scatter(x=[best_aic_deg], y=[aics[best_aic_deg - 1]],
@@ -8563,43 +8568,60 @@ elif section == "aic_bic":
             fig.add_trace(go.Scatter(x=[best_bic_deg], y=[bics[best_bic_deg - 1]],
                 mode='markers', marker=dict(color='#E24B4A', size=14, symbol='star'),
                 name=f'BIC minimum (degree {best_bic_deg})'))
+            fig.add_trace(go.Scatter(x=[best_aicc_deg], y=[aiccs[best_aicc_deg - 1]],
+                mode='markers', marker=dict(color='#1D9E75', size=14, symbol='star'),
+                name=f'AICc minimum (degree {best_aicc_deg})'))
             fig.update_layout(xaxis_title="Polynomial degree", yaxis_title="Score (lower is better)",
                 height=360, legend=dict(orientation='h', y=1.16))
             st.plotly_chart(fig, width='stretch')
 
-        k_sel = sel_degree + 1
+        k_sel = sel_degree + 2
         c_sel = np.polyfit(x_tr, y_tr, sel_degree)
         pp_sel = np.poly1d(c_sel)
-        aic_sel, bic_sel = _aic_bic(y_tr, pp_sel(x_tr), k_sel, n_train_ab)
+        aic_sel, bic_sel, aicc_sel = _aic_bic(y_tr, pp_sel(x_tr), k_sel, n_train_ab)
 
-        c1, c2, c3, c4 = st.columns(4)
+        c1, c2, c3 = st.columns(3)
         c1.metric("Selected AIC", f"{aic_sel:.1f}")
         c2.metric("Selected BIC", f"{bic_sel:.1f}")
-        c3.metric("Best degree by AIC", best_aic_deg)
-        c4.metric("Best degree by BIC", best_bic_deg)
+        c3.metric("Selected AICc", f"{aicc_sel:.1f}")
+        c4, c5, c6 = st.columns(3)
+        c4.metric("Best degree by AIC", best_aic_deg)
+        c5.metric("Best degree by BIC", best_bic_deg)
+        c6.metric("Best degree by AICc", best_aicc_deg)
+        st.caption("Only differences between models matter - the absolute score (even a negative one) has no meaning on its own.")
 
-        if best_bic_deg <= best_aic_deg:
-            st.info(f"**BIC picks degree {best_bic_deg}, AIC picks degree {best_aic_deg}** - "
-                    "BIC's heavier penalty on parameter count usually makes it choose an "
-                    "equally simple or simpler model than AIC.")
+        if best_aicc_deg < best_aic_deg:
+            st.warning(f"**Small-sample warning:** with only {n_train_ab} points, plain AIC picks degree "
+                       f"{best_aic_deg} ({best_aic_deg + 2} parameters) - it is overfitting. AICc corrects for "
+                       f"the small sample and picks degree {best_aicc_deg}. Plain AIC and BIC assume n is much "
+                       "larger than k; use AICc when n/k is below about 40.")
         else:
-            st.info(f"AIC and BIC both point to a similarly simple model here "
-                    f"(degree {best_aic_deg} vs {best_bic_deg}).")
+            st.info(f"**AIC picks degree {best_aic_deg}, BIC picks degree {best_bic_deg}, AICc picks degree "
+                    f"{best_aicc_deg}.** BIC's heavier penalty means it never chooses a more complex model "
+                    "than AIC once n ≥ 8.")
 
     with tab2:
         st.markdown("Both criteria trade off **fit** against **complexity**, but weigh the penalty differently:")
-        st.markdown('<div class="formula-box">AIC = 2k − 2ln(L̂)  &nbsp;≈&nbsp;  n·ln(RSS/n) + 2k</div>',
+        st.markdown('<div class="formula-box">AIC = 2k − 2ln(L̂)  &nbsp;=&nbsp;  n·ln(RSS/n) + 2k + constant</div>',
             unsafe_allow_html=True)
-        st.markdown('<div class="formula-box">BIC = k·ln(n) − 2ln(L̂)  &nbsp;≈&nbsp;  n·ln(RSS/n) + k·ln(n)</div>',
+        st.markdown('<div class="formula-box">BIC = k·ln(n) − 2ln(L̂)  &nbsp;=&nbsp;  n·ln(RSS/n) + k·ln(n) + constant</div>',
+            unsafe_allow_html=True)
+        st.markdown('<div class="formula-box">AICc = AIC + 2k(k+1) / (n − k − 1)  &nbsp;&nbsp;<small>(small-sample correction)</small></div>',
             unsafe_allow_html=True)
         st.markdown("""
-        - **k** - number of fitted parameters (for a degree-*d* polynomial, k = d + 1)
+        - **k** - number of estimated parameters. For a degree-*d* polynomial with Gaussian noise,
+          k = d + 2: the d + 1 coefficients plus the noise variance σ²
         - **n** - number of training observations
         - **L̂** - the model's maximised likelihood; for ordinary least squares with
           Gaussian errors this reduces to the RSS-based approximation shown above
         - **RSS** - residual sum of squares on the training data
 
-        The only difference is the penalty term: **2k** for AIC versus **k·ln(n)** for BIC.
+        - **constant** - the same for every model fitted to the same data, so it cancels when you
+          compare models. Only *differences* in AIC/BIC matter.
+
+        The only difference between AIC and BIC is the penalty term: **2k** for AIC versus **k·ln(n)** for BIC.
+        **AICc** adds an extra penalty that grows sharply as k approaches n. It matters for small
+        samples (rule of thumb: n/k below about 40) and fades away as n grows, becoming plain AIC.
         """)
 
         ns = np.arange(2, 500)
