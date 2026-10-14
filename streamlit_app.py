@@ -8431,7 +8431,9 @@ elif section == "cooks_distance":
         with col1:
             n_cd = st.slider("Number of points", 10, 40, 20, key="cd_n")
             noise_cd = st.slider("Noise", 0.1, 2.0, 0.6, step=0.1, key="cd_noise")
-            outlier_idx = st.slider("Point to displace", 0, n_cd - 1, 0, key="cd_idx")
+            outlier_idx = st.slider("Point to displace", 0, n_cd - 1, 0, key="cd_idx",
+                help="The chosen point is first moved to the right edge (x = 4), on the true line. "
+                     "The two sliders below then push it from there, so they behave the same for every point.")
             outlier_x_shift = st.slider("Push its x outward", 0.0, 6.0, 0.0, step=0.2, key="cd_xshift",
                 help="Increases leverage - how extreme this point's x position is")
             outlier_y_shift = st.slider("Push its y away from the line", 0.0, 8.0, 0.0, step=0.2, key="cd_yshift",
@@ -8485,8 +8487,11 @@ elif section == "cooks_distance":
             annotation_text="4/n cutoff", annotation_position="top left")
         fig_bar.update_layout(xaxis_title="Point", yaxis_title="Cook's distance", height=280)
         st.plotly_chart(fig_bar, width='stretch')
-        st.caption("Bars above the orange line are flagged as unusually influential - "
-                   "the model's fit depends meaningfully on that single point.")
+        n_flag = int((cooks_full > thresh).sum())
+        st.caption(f"{n_flag} point{'s' if n_flag != 1 else ''} above the 4/n line. 4/n is a *screening* rule: "
+                   "even in clean data a couple of ordinary points usually exceed it, so a red bar means "
+                   "'take a closer look', not 'remove this point'. The stricter classic threshold is D > 1 - "
+                   "a point above 1 moves the fitted line substantially on its own.")
 
     with tab2:
         st.markdown("""
@@ -8504,25 +8509,45 @@ elif section == "cooks_distance":
         Cook's distance - that's why it catches influence that plain residual plots miss.
         """)
 
-        quad_labels = ["Low leverage,\nlow residual", "High leverage,\nlow residual",
-                       "Low leverage,\nhigh residual", "High leverage,\nhigh residual"]
+        lev_cut = 2 * 2 / n_cd                    # 2p/n with p = 2
+        res_cut = 2 * np.sqrt(mse_full)           # |residual| > 2·√MSE ≈ 2 standard deviations
+        abs_res = np.abs(resid_full)
+        x_max = max(h_full.max(), lev_cut * 1.6) * 1.1
+        y_max = max(abs_res.max(), res_cut * 1.6) * 1.1
+
         fig_q = go.Figure()
         fig_q.add_trace(go.Scatter(
-            x=h_full, y=np.abs(resid_full), mode='markers',
+            x=h_full, y=abs_res, mode='markers',
             marker=dict(size=8 + 60 * cooks_full / (cooks_full.max() + 1e-9),
                         color=cooks_full, colorscale='RdPu', showscale=True,
-                        colorbar=dict(title="Cook's D", thickness=12)),
+                        colorbar=dict(title="Cook's D", thickness=12),
+                        line=dict(color=np.where(np.arange(n_cd) == outlier_idx, "#E24B4A", "rgba(0,0,0,0)"),
+                                  width=np.where(np.arange(n_cd) == outlier_idx, 3, 0))),
             text=[f"P{i}: D={cooks_full[i]:.3f}" for i in range(n_cd)],
             hoverinfo='text'))
-        fig_q.add_vline(x=2 * 2 / n_cd, line=dict(color="#999", dash="dot"),
+        fig_q.add_annotation(x=h_full[outlier_idx], y=abs_res[outlier_idx],
+            text=f"<b>P{outlier_idx}</b> (flagged)", font=dict(color="#E24B4A", size=12),
+            showarrow=True, arrowcolor="#E24B4A", ax=30, ay=-25)
+        fig_q.add_vline(x=lev_cut, line=dict(color="#999", dash="dot"),
             annotation_text="leverage cutoff (2p/n)", annotation_position="top")
+        fig_q.add_hline(y=res_cut, line=dict(color="#999", dash="dot"),
+            annotation_text="residual cutoff (2·√MSE)", annotation_position="right")
+        for qx, qy, label, col_q in [
+            (lev_cut / 2,                   res_cut / 2,                  "Low leverage,<br>low residual",   "#999"),
+            ((lev_cut + x_max) / 2,         res_cut / 2,                  "High leverage,<br>low residual",  "#999"),
+            (lev_cut / 2,                   (res_cut + y_max) / 2,        "Low leverage,<br>high residual",  "#999"),
+            ((lev_cut + x_max) / 2,         (res_cut + y_max) / 2,        "High leverage,<br>high residual - danger", "#E24B4A"),
+        ]:
+            fig_q.add_annotation(x=qx, y=qy, text=label, showarrow=False,
+                font=dict(color=col_q, size=11), opacity=0.8)
         fig_q.update_layout(xaxis_title="Leverage hᵢᵢ", yaxis_title="|Residual|",
-            height=380)
+            xaxis=dict(range=[0, x_max]), yaxis=dict(range=[0, y_max]),
+            height=400)
         st.plotly_chart(fig_q, width='stretch')
-        st.caption("Bubble size and color both track Cook's distance. The dangerous "
-                   "quadrant is far right and high up - high leverage **and** a bad fit. "
-                   "Try widening the x-shift or y-shift sliders in the first tab and watch "
-                   "the flagged point (red) move into that corner.")
+        st.caption("Bubble size and color both track Cook's distance. The dotted lines split the plot into "
+                   "four quadrants; the dangerous one is top right - high leverage **and** a bad fit. "
+                   "Push the x-shift and y-shift sliders in the first tab and watch the flagged point "
+                   "(red outline) move into that corner.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # AIC / BIC
