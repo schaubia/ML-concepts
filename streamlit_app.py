@@ -7499,13 +7499,20 @@ elif section == "central_tendency":
             raw = st.text_area("Enter numbers (comma-separated)",
                 value="4, 7, 7, 8, 10, 12, 15, 15, 15, 100",
                 height=80, key="ct_raw")
+            default_ct = np.array([4,7,7,8,10,12,15,15,15,100], dtype=float)
             try:
                 data_ct = np.array([float(x.strip()) for x in raw.split(",") if x.strip()])
                 valid = True
             except ValueError:
-                st.error("Please enter valid numbers separated by commas.")
-                data_ct = np.array([4,7,7,8,10,12,15,15,15,100], dtype=float)
-                valid = False
+                data_ct, valid = default_ct, False
+                st.error("Please enter valid numbers separated by commas. Showing the default data.")
+            if valid and len(data_ct) == 0:
+                data_ct, valid = default_ct, False
+                st.error("No numbers entered. Showing the default data.")
+            if valid and not np.all(np.isfinite(data_ct)):
+                data_ct, valid = default_ct, False
+                st.error("'nan' and 'inf' are not real data values - please enter ordinary numbers. "
+                         "Showing the default data.")
 
             n = len(data_ct)
             mean_val   = np.mean(data_ct)
@@ -7513,8 +7520,12 @@ elif section == "central_tendency":
             # mode: most frequent value(s)
             vals, counts = np.unique(data_ct, return_counts=True)
             max_count = counts.max()
-            modes = vals[counts == max_count]
-            mode_str = ", ".join([str(int(m) if m == int(m) else m) for m in modes])
+            if max_count == 1 and n > 1:
+                modes = np.array([])          # every value appears once → no meaningful mode
+                mode_str = "none (every value appears once)"
+            else:
+                modes = vals[counts == max_count]
+                mode_str = ", ".join([_vout(m) for m in modes])
 
             st.markdown(f'<div class="formula-box">'
                 f'<b>Mean</b>   x̄ = Σxᵢ / n = {mean_val:.3f}<br>'
@@ -7531,11 +7542,11 @@ elif section == "central_tendency":
                 marker_color="#c5c1f0", marker_line=dict(color="#534AB7", width=1),
                 name="Data", opacity=0.8))
             # Vertical lines for each measure
+            mode_lines = [(float(m), f"Mode {_vout(m)}", "#EF9F27") for m in modes]
             for val, label, color in [
                 (mean_val,   f"Mean {mean_val:.2f}",   "#E24B4A"),
                 (median_val, f"Median {median_val:.2f}", "#1D9E75"),
-                (float(modes[0]), f"Mode {mode_str}", "#EF9F27"),
-            ]:
+            ] + mode_lines:
                 fig.add_vline(x=val, line=dict(color=color, width=2.5, dash="dash"),
                     annotation_text=label, annotation_position="top",
                     annotation_font=dict(color=color, size=11))
@@ -7558,7 +7569,8 @@ elif section == "central_tendency":
         with col3:
             st.markdown("#### Mode")
             st.markdown('<div class="formula-box">The value (or values) that appear most frequently.<br><br>A dataset can be unimodal, bimodal, or multimodal.</div>', unsafe_allow_html=True)
-            st.markdown("The only measure that works for categorical data (e.g. most common colour).")
+            st.markdown("The only measure that works for *unordered* categories (e.g. most common colour). "
+                        "For *ordered* categories (e.g. ratings poor → excellent) the median works too.")
 
     # ── TAB 2: Effect of outliers ─────────────────────────────────────────
     with tab2:
@@ -7615,7 +7627,8 @@ elif section == "central_tendency":
             ("Symmetric, no outliers (e.g. height)", "✅ Mean - uses all data efficiently", "✅ Median - similar result", "⚠️ Mode - may not be unique"),
             ("Skewed distribution (e.g. income)",    "❌ Distorted by tail",               "✅ Median - robust",         "⚠️ Mode - only shows peak"),
             ("Outliers present",                     "❌ Pulled toward outliers",           "✅ Median - ignores magnitude", "⚠️ Unaffected but limited"),
-            ("Categorical data (e.g. colours)",      "❌ Not applicable",                   "❌ Not applicable",          "✅ Mode - only option"),
+            ("Unordered categories (e.g. colours)",  "❌ Not applicable",                   "❌ Not applicable",          "✅ Mode - only option"),
+            ("Ordered categories (e.g. ratings)",    "❌ Not meaningful",                   "✅ Median - middle rating",  "✅ Mode - most common rating"),
             ("Reporting 'typical' salary",           "❌ Misleading if skewed",             "✅ Standard practice",       "⚠️ Possible but unusual"),
             ("ML: imputing missing values",          "✅ Common - preserves mean",          "✅ Robust to outliers",      "✅ For categorical features"),
             ("ML: loss function centre",             "✅ MSE minimised at mean",            "✅ MAE minimised at median", "-"),
@@ -7628,14 +7641,16 @@ elif section == "central_tendency":
         col1, col2, col3 = st.columns(3)
         skew_cases = [
             ("Symmetric", "Mean ≈ Median ≈ Mode", "Normal distribution, balanced data", "#534AB7"),
-            ("Right-skewed\n(positive)", "Mode < Median < Mean", "Income, house prices, response times - long right tail pulls mean up", "#E24B4A"),
-            ("Left-skewed\n(negative)", "Mean < Median < Mode", "Age at retirement, exam scores with ceiling - long left tail pulls mean down", "#1D9E75"),
+            ("Right-skewed\n(positive)", "Usually: Mode < Median < Mean", "Income, house prices, response times - long right tail pulls mean up", "#E24B4A"),
+            ("Left-skewed\n(negative)", "Usually: Mean < Median < Mode", "Age at death in wealthy countries, exam scores with a ceiling - long left tail pulls mean down", "#1D9E75"),
         ]
         for col, (name, order, example, color) in zip([col1,col2,col3], skew_cases):
             with col:
                 st.markdown(f"**{name}**")
                 st.markdown(f'<div class="formula-box" style="border-left:4px solid {color}">{order}</div>', unsafe_allow_html=True)
                 st.caption(example)
+        st.caption("'Usually' because this ordering is a rule of thumb, not a law - it can fail, "
+                   "especially for discrete data or distributions with several peaks.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # DISPERSION
