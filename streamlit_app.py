@@ -8123,6 +8123,7 @@ elif section == "correlation":
             | +0.3 to +0.7 | Moderate positive |
             | −0.3 to +0.3 | Weak / no linear relationship |
             | −0.7 to −0.3 | Moderate negative |
+            | −1.0 to −0.7 | Strong negative |
             | −1.0 | Perfect negative linear relationship |
             """)
 
@@ -8137,15 +8138,18 @@ elif section == "correlation":
             x = rng.standard_normal(n_pts)
             y = target_r * x + noise_level * rng.standard_normal(n_pts)
             actual_r = np.corrcoef(x, y)[0, 1]
-            cov_val  = np.cov(x, y)[0, 1]
+            cov_val  = np.cov(x, y)[0, 1]          # divides by n−1
+            sd_x, sd_y = np.std(x, ddof=1), np.std(y, ddof=1)   # also n−1, so r = Cov/(σₓσᵧ) checks out exactly
 
             st.metric("Actual Pearson r", f"{actual_r:.3f}")
             st.metric("Covariance", f"{cov_val:.3f}")
+            st.caption("Covariance and both σ use n − 1 (sample estimates). Using n for all three gives the "
+                       "same r - the factors cancel - but they must match.")
             st.markdown(f'<div class="formula-box">'
-                f'x̄ = {np.mean(x):.2f}, σₓ = {np.std(x):.2f}<br>'
-                f'ȳ = {np.mean(y):.2f}, σᵧ = {np.std(y):.2f}<br>'
+                f'x̄ = {np.mean(x):.2f}, σₓ = {sd_x:.2f}<br>'
+                f'ȳ = {np.mean(y):.2f}, σᵧ = {sd_y:.2f}<br>'
                 f'Cov = {cov_val:.3f}<br>'
-                f'r = {cov_val:.3f} / ({np.std(x):.3f}·{np.std(y):.3f}) = {actual_r:.3f}'
+                f'r = {cov_val:.3f} / ({sd_x:.3f}·{sd_y:.3f}) = {actual_r:.3f}'
                 f'</div>', unsafe_allow_html=True)
 
         with col2:
@@ -8196,31 +8200,42 @@ elif section == "correlation":
         st.markdown("""
         **Reading the matrix:**
         - Diagonal is always 1.0 (a variable perfectly correlates with itself)
-        - Dark red = strong positive, dark blue = strong negative, white ≈ 0
+        - Dark blue = strong positive, dark red = strong negative, white ≈ 0
         - Age and Income are positively correlated (by design). Height and Noise are near-zero with everything.
 
         **In ML:**
         - Highly correlated features (|r| > 0.9) → multicollinearity in linear models → remove one
         - PCA uses the covariance matrix to find uncorrelated principal components
-        - Feature selection: drop features with near-zero correlation to the target
+        - Feature selection: near-zero correlation with the target is a *hint*, not proof a feature is useless -
+          Pearson r only sees **linear** relationships (e.g. y = x² over a symmetric range has r ≈ 0 yet x predicts y perfectly)
         """)
 
     with tab3:
         st.markdown("### Correlation ≠ causation")
         st.markdown("""
-        A high r between X and Y can arise from three very different situations.
+        A high r between X and Y can arise from four very different situations.
         Confusing correlation with causation is one of the most common errors in data science.
         """)
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         cases = [
-            ("X causes Y", "X → Y", "Ice cream sales correlate with drowning deaths because summer (heat) causes both.",
-             "Direct causation is possible but needs experimental evidence (randomised control trial).", "#1D9E75"),
-            ("Y causes X", "Y → X", "Shoe size correlates with reading ability in children - but shoe size doesn't teach reading.",
-             "Reverse causation: age (Y) causes both shoe size and reading ability.", "#EF9F27"),
-            ("Z causes both", "Z → X and Z → Y", "Nicolas Cage film releases correlate with pool drownings.",
-             "A lurking confounder Z (year, population growth) drives both X and Y.", "#E24B4A"),
+            ("X causes Y", "X → Y",
+             "Smoking correlates with lung cancer - and smoking really does cause it.",
+             "Direct causation is possible, but it takes strong evidence to establish: ideally a randomised "
+             "experiment, or - as with smoking - decades of consistent studies ruling out other explanations.", "#1D9E75"),
+            ("Y causes X (reverse)", "Y → X",
+             "Fires with more firefighters cause more damage.",
+             "Reverse causation: bigger fires cause both more firefighters to be sent and more damage. "
+             "The firefighters don't cause the damage - the arrow points the other way.", "#EF9F27"),
+            ("Z causes both (confounder)", "Z → X and Z → Y",
+             "Ice cream sales correlate with drownings; children's shoe size correlates with reading ability.",
+             "A lurking confounder drives both: summer heat (more ice cream, more swimming), "
+             "age (bigger feet, better reading).", "#E24B4A"),
+            ("Pure chance", "no link",
+             "Nicolas Cage film releases correlate with pool drownings.",
+             "Spurious correlation: search through enough unrelated data series and some will match by "
+             "coincidence. There is no causal link at all.", "#888780"),
         ]
-        for col, (title, arrow, example, explain, color) in zip([col1,col2,col3], cases):
+        for col, (title, arrow, example, explain, color) in zip([col1,col2,col3,col4], cases):
             with col:
                 st.markdown(f"**{title}**")
                 st.markdown(f'<div class="formula-box" style="border-left:4px solid {color}">{arrow}</div>', unsafe_allow_html=True)
@@ -8233,6 +8248,8 @@ elif section == "correlation":
         """)
         st.markdown('<div class="formula-box">ρ = 1 − 6Σdᵢ² / (n(n²−1))   where dᵢ = rank(xᵢ) − rank(yᵢ)</div>',
             unsafe_allow_html=True)
+        st.caption("This shortcut is exact only when there are no tied values. With ties, Spearman ρ is computed "
+                   "as Pearson r on the ranks (tied values share their average rank).")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CROSS-VALIDATION
