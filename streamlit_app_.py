@@ -17,6 +17,19 @@ def _vout(x):
     s = f"{x:.3f}".rstrip("0").rstrip(".")
     return "0" if s in ("-0", "") else s.replace("-", "−")
 
+def _parse_numbers(raw, default):
+    """Parse comma-separated numbers. Returns (array, error message or None); falls back to default on bad input."""
+    try:
+        arr = np.array([float(x.strip()) for x in raw.split(",") if x.strip()])
+    except ValueError:
+        return np.asarray(default, dtype=float), "Please enter valid numbers separated by commas. Showing the default data."
+    if len(arr) == 0:
+        return np.asarray(default, dtype=float), "No numbers entered. Showing the default data."
+    if not np.all(np.isfinite(arr)):
+        return np.asarray(default, dtype=float), ("'nan' and 'inf' are not real data values - please enter ordinary "
+                                                  "numbers. Showing the default data.")
+    return arr, None
+
 
 st.set_page_config(
     page_title="ML Concepts",
@@ -4644,14 +4657,23 @@ elif section == "naive_bayes":
         c1,c2,c3 = st.columns(3)
         c1.metric("Prior", f"{prior:.4f}")
         c2.metric("Posterior", f"{posterior:.4f}")
-        change = (posterior - prior) / (prior + 1e-12)
-        c3.metric("Belief change", f"{change:+.1f}×")
-        st.markdown(f"""
-        **Bayes formula applied:**
-        - P(disease | positive) = P(+|disease)·P(disease) / P(+) = {sensitivity:.2f}·{prior:.3f} / {p_pos:.4f} = **{posterior:.4f}**
-        """)
-        if prior < 0.01 and posterior < 0.3:
-            st.info("Even with a positive test, the posterior is low because the disease is rare - this is the **base rate fallacy**.")
+        c3.metric("Belief change", f"{posterior / prior:.2f}× the prior",
+                  help="Posterior ÷ prior: how many times more (or less) likely the disease is after the test.")
+        if test_result == "Positive ✅":
+            st.markdown(f"""
+            **Bayes formula applied:**
+            - P(disease | positive) = P(+|disease)·P(disease) / P(+) = {sensitivity:.2f}·{prior:.3f} / {p_pos:.4f} = **{posterior:.4f}**
+            """)
+        else:
+            st.markdown(f"""
+            **Bayes formula applied:**
+            - P(disease | negative) = P(−|disease)·P(disease) / P(−) = {1-sensitivity:.2f}·{prior:.3f} / {p_neg:.4f} = **{posterior:.4f}**
+            """)
+        if test_result == "Positive ✅" and prior <= 0.01 and posterior < 0.5:
+            st.info(f"Even after a positive test from a {sensitivity:.0%}-sensitive test, the chance of disease is only "
+                    f"{posterior:.1%} - because the disease is rare, most positives are false alarms. "
+                    f"The **base rate fallacy** is the mistake of ignoring this and assuming the answer is close to "
+                    f"{sensitivity:.0%}.")
 
     with tab2:
         st.markdown("### Gaussian Naive Bayes - 2D feature classifier")
@@ -4660,12 +4682,18 @@ elif section == "naive_bayes":
             n_nb = st.slider("Samples per class", 20, 80, 40, key="nb_n")
             sep_nb = st.slider("Class separation", 0.5, 3.0, 1.5, step=0.1, key="nb_sep")
             seed_nb = st.slider("Seed", 0, 10, 1, key="nb_seed")
+            rho_nb = st.slider("Feature correlation within each class", 0.0, 0.95, 0.0, step=0.05, key="nb_rho",
+                help="0 = features independent, exactly what Naive Bayes assumes. "
+                     "Raise it to break the 'naive' assumption and watch what goes wrong.")
             test_x1 = st.slider("Test point - feature 1", -4.0, 4.0, 0.5, step=0.1)
             test_x2 = st.slider("Test point - feature 2", -4.0, 4.0, 0.5, step=0.1)
 
         np.random.seed(seed_nb)
-        X_nb0 = np.random.randn(n_nb, 2) + np.array([-sep_nb/2, 0])
-        X_nb1 = np.random.randn(n_nb, 2) + np.array([sep_nb/2,  0])
+        cov_nb = np.array([[1.0, rho_nb], [rho_nb, 1.0]])      # same covariance in both classes
+        L_nb = np.linalg.cholesky(cov_nb)
+        mu0_true, mu1_true = np.array([-sep_nb/2, 0.0]), np.array([sep_nb/2, 0.0])
+        X_nb0 = np.random.randn(n_nb, 2) @ L_nb.T + mu0_true
+        X_nb1 = np.random.randn(n_nb, 2) @ L_nb.T + mu1_true
         X_nb  = np.vstack([X_nb0, X_nb1])
         y_nb  = np.array([0]*n_nb + [1]*n_nb)
 
@@ -4677,23 +4705,36 @@ elif section == "naive_bayes":
         def gauss_pdf(x, mu, sigma):
             return np.exp(-0.5*((x-mu)/sigma)**2) / (sigma*np.sqrt(2*np.pi) + 1e-9)
 
-        def nb_predict_proba(x):
-            log_probs = []
-            for c in [0,1]:
-                lp = np.log(priors_nb[c])
-                lp += np.sum(np.log(gauss_pdf(x, means[c], stds[c]) + 1e-12))
-                log_probs.append(lp)
-            log_probs = np.array(log_probs)
-            log_probs -= log_probs.max()
-            probs = np.exp(log_probs)
-            return probs / probs.sum()
+        def nb_predict_proba(X):
+            """Naive Bayes P(class | x) for an (m, 2) array of points - features treated as independent."""
+            X = np.atleast_2d(X)
+            lp = np.stack([np.log(priors_nb[c]) +
+                           np.sum(np.log(gauss_pdf(X, means[c], stds[c]) + 1e-12), axis=1) for c in [0, 1]], axis=1)
+            lp -= lp.max(axis=1, keepdims=True)
+            pr = np.exp(lp)
+            return pr / pr.sum(axis=1, keepdims=True)
+
+        # True Bayes-optimal rule (known means & full covariance, equal priors): linear in x
+        w_true = np.linalg.solve(cov_nb, mu1_true - mu0_true)
+        b_true = -0.5 * (mu1_true + mu0_true) @ w_true
+        def true_proba1(X):
+            return 1 / (1 + np.exp(-(np.atleast_2d(X) @ w_true + b_true)))
 
         # decision boundary grid
         xx_nb, yy_nb = np.meshgrid(np.linspace(-5,5,120), np.linspace(-5,5,120))
         grid_nb = np.c_[xx_nb.ravel(), yy_nb.ravel()]
-        Z_nb = np.array([nb_predict_proba(pt)[1] for pt in grid_nb]).reshape(xx_nb.shape)
+        Z_nb = nb_predict_proba(grid_nb)[:, 1].reshape(xx_nb.shape)
 
-        test_proba = nb_predict_proba(np.array([test_x1, test_x2]))
+        test_proba = nb_predict_proba(np.array([test_x1, test_x2]))[0]
+        test_true1 = float(true_proba1(np.array([test_x1, test_x2]))[0])
+
+        # accuracy on fresh data: Naive Bayes vs the best possible rule
+        rng_eval = np.random.default_rng(123)
+        Xe = np.vstack([rng_eval.standard_normal((2000, 2)) @ L_nb.T + mu0_true,
+                        rng_eval.standard_normal((2000, 2)) @ L_nb.T + mu1_true])
+        ye = np.r_[np.zeros(2000), np.ones(2000)]
+        acc_nb   = np.mean((nb_predict_proba(Xe)[:, 1] >= 0.5) == ye)
+        acc_true = np.mean((true_proba1(Xe) >= 0.5) == ye)
 
         with col2:
             fig = go.Figure()
@@ -4709,13 +4750,37 @@ elif section == "naive_bayes":
                 name=f'Test → Class {pred_cls}',
                 marker=dict(color=['#534AB7','#E24B4A'][pred_cls], size=14,
                     symbol='star', line=dict(color='black',width=1.5))))
-            fig.update_layout(xaxis=dict(range=[-5,5]), yaxis=dict(range=[-5,5]),
-                height=400, legend=dict(orientation='h', y=1.1))
+            # true optimal boundary: w·x + b = 0
+            if abs(w_true[1]) > 1e-9:
+                xb = np.linspace(-5, 5, 50)
+                yb = -(w_true[0] * xb + b_true) / w_true[1]
+            else:
+                xb = np.full(50, -b_true / w_true[0]); yb = np.linspace(-5, 5, 50)
+            fig.add_trace(go.Scatter(x=xb, y=yb, mode='lines', name='Best possible boundary',
+                line=dict(color='#1D9E75', width=2.5, dash='dash')))
+            fig.add_trace(go.Contour(x=np.linspace(-5,5,120), y=np.linspace(-5,5,120), z=Z_nb,
+                contours=dict(start=0.5, end=0.5, size=1, coloring='lines'),
+                line=dict(color='#333', width=2), showscale=False, name='Naive Bayes boundary',
+                showlegend=True, hoverinfo='skip'))
+            fig.update_layout(xaxis=dict(range=[-5,5]), yaxis=dict(range=[-5,5], scaleanchor='x'),
+                height=420, legend=dict(orientation='h', y=1.12))
             st.plotly_chart(fig, width='stretch')
 
-        c1, c2 = st.columns(2)
-        c1.metric("P(Class 0 | x)", f"{test_proba[0]:.4f}")
-        c2.metric("P(Class 1 | x)", f"{test_proba[1]:.4f}")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Naive Bayes P(Class 1 | x)", f"{test_proba[1]:.4f}")
+        c2.metric("True P(Class 1 | x)", f"{test_true1:.4f}",
+                  help="Using the real means and the full covariance (including the correlation).")
+        c3.metric("Accuracy on new data", f"NB {acc_nb:.1%}",
+                  delta=f"{(acc_nb - acc_true)*100:+.1f} pts vs best possible {acc_true:.1%}",
+                  delta_color="normal")
+        if rho_nb == 0:
+            st.caption("Correlation 0: the features really are independent within each class, so the 'naive' "
+                       "assumption holds - the Naive Bayes boundary (solid) lines up with the best possible one (dashed).")
+        else:
+            st.warning(f"Correlation {rho_nb:.2f}: the features move together within each class, but Naive Bayes "
+                       "multiplies their probabilities as if they were independent. Its boundary (solid) stays "
+                       "upright while the best boundary (dashed) tilts, and its probabilities become miscalibrated - "
+                       "compare the two P(Class 1 | x) values for the test point.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -4967,11 +5032,13 @@ elif section == "probability":
             show_68 = st.checkbox("Show 68–95–99.7 rule", value=True)
             x_query = st.slider("Query point x", -6.0, 6.0, 1.0, step=0.1)
 
-        x_nd = np.linspace(mu-5*sigma, mu+5*sigma, 400)
+        from scipy import stats as scipy_stats
+        # plot μ ± 5σ, widened if needed so the query point is always visible
+        x_lo, x_hi = min(mu - 5*sigma, x_query - 0.5), max(mu + 5*sigma, x_query + 0.5)
+        x_nd = np.linspace(x_lo, x_hi, 600)
         y_nd = np.exp(-0.5*((x_nd-mu)/sigma)**2) / (sigma*np.sqrt(2*np.pi))
         pdf_at_x = np.exp(-0.5*((x_query-mu)/sigma)**2) / (sigma*np.sqrt(2*np.pi))
-        cdf_at_x = float(0.5*(1+np.sign(x_query-mu)*
-                    (1-np.exp(-0.7071*(abs(x_query-mu)/sigma)**1.6)))) # approx
+        cdf_at_x = float(scipy_stats.norm.cdf(x_query, loc=mu, scale=sigma))   # exact P(X ≤ x)
 
         with col2:
             fig = go.Figure()
@@ -4994,10 +5061,13 @@ elif section == "probability":
                 height=380, legend=dict(orientation='h', y=1.12))
             st.plotly_chart(fig, width='stretch')
 
-        c1,c2,c3 = st.columns(3)
-        c1.metric("PDF f(x)", f"{pdf_at_x:.4f}")
-        c2.metric("Mean μ", mu)
-        c3.metric("Variance σ²", f"{sigma**2:.2f}")
+        c1,c2,c3,c4 = st.columns(4)
+        c1.metric("PDF f(x)", f"{pdf_at_x:.4f}",
+                  help="A density, not a probability - it can be larger than 1 when σ is small.")
+        c2.metric("P(X ≤ x)", f"{cdf_at_x:.4f}",
+                  help="The CDF: area under the curve to the left of the query point.")
+        c3.metric("Mean μ", f"{mu:g}")
+        c4.metric("Variance σ²", f"{sigma**2:.2f}")
 
     with tab2:
         col1, col2 = st.columns([1, 2])
@@ -5013,8 +5083,10 @@ elif section == "probability":
                 title = f"Binomial(n={n_bin}, p={p_bin})"
             else:
                 lam = st.slider("λ (rate)", 0.5, 15.0, 4.0, step=0.5)
-                k_vals = np.arange(0, int(lam*3)+1)
-                pmf = np.exp(-lam) * lam**k_vals / np.array([np.math.factorial(k) for k in k_vals])
+                from scipy import stats as scipy_stats
+                k_max = max(10, int(scipy_stats.poisson.ppf(0.999, lam)))   # show ≥ 99.9% of the probability
+                k_vals = np.arange(0, k_max + 1)
+                pmf = scipy_stats.poisson.pmf(k_vals, lam)
                 mean_d, var_d = lam, lam
                 title = f"Poisson(λ={lam})"
 
@@ -5059,6 +5131,8 @@ elif section == "probability":
         fig.update_layout(xaxis_title="x", yaxis_title="PDF", height=320,
             legend=dict(orientation='h', y=1.15))
         st.plotly_chart(fig, width='stretch')
+        st.caption("Unlike the discrete entropy, the continuous (differential) entropy can be negative: "
+                   "½ ln(2πeσ²) < 0 whenever σ < 0.24. Only differences in entropy are meaningful here.")
 
         st.markdown("""
         **In ML:**
@@ -5068,7 +5142,8 @@ elif section == "probability":
           regularisation term in VAE training: KL(q ∥ p)
         - **Softmax output** forms a categorical distribution - high-entropy outputs signal
           the model is uncertain between classes
-        - **Cross-entropy loss** = negative log-likelihood under the true distribution
+        - **Cross-entropy loss** = negative log-likelihood of the true labels under the model's
+          predicted distribution
 
         > 📊 For the connection between σ, variance, and spread in data,
         > see **Dispersion** in Statistics & Data Science.
@@ -7677,48 +7752,55 @@ elif section == "dispersion":
             raw_d = st.text_area("Enter numbers (comma-separated)",
                 value="10, 12, 13, 14, 15, 16, 17, 18, 20, 50",
                 height=80, key="disp_raw")
-            try:
-                data_d = np.array([float(x.strip()) for x in raw_d.split(",") if x.strip()])
-            except ValueError:
-                st.error("Please enter valid numbers.")
-                data_d = np.array([10,12,13,14,15,16,17,18,20,50], dtype=float)
+            data_d, err_d = _parse_numbers(raw_d, [10,12,13,14,15,16,17,18,20,50])
+            if err_d:
+                st.error(err_d)
 
             n_d    = len(data_d)
             mean_d = np.mean(data_d)
             # Population vs sample
             pop_var  = np.var(data_d, ddof=0)
-            samp_var = np.var(data_d, ddof=1)
             pop_std  = np.std(data_d, ddof=0)
-            samp_std = np.std(data_d, ddof=1)
+            samp_var = np.var(data_d, ddof=1) if n_d >= 2 else np.nan   # ÷(n−1) needs at least 2 values
+            samp_std = np.std(data_d, ddof=1) if n_d >= 2 else np.nan
 
             kind = st.radio("Formula type", ["Population (÷n)", "Sample (÷n−1)"], horizontal=True, key="disp_kind")
             var_show = pop_var  if kind.startswith("Population") else samp_var
             std_show = pop_std  if kind.startswith("Population") else samp_std
             denom    = "n" if kind.startswith("Population") else "n−1"
+            v_sym, s_sym = ("σ²", "σ") if kind.startswith("Population") else ("s²", "s")
+            if np.isnan(var_show):
+                st.warning("The sample formula divides by n − 1, so it needs at least 2 values. "
+                           "Add more numbers or switch to Population.")
+                var_txt = std_txt = "undefined"
+            else:
+                var_txt, std_txt = f"{var_show:.3f}", f"{std_show:.3f}"
 
             st.markdown(f'<div class="formula-box">'
                 f'Mean x̄ = {mean_d:.3f}<br><br>'
-                f'Variance σ² = Σ(xᵢ − x̄)² / {denom} = {var_show:.3f}<br>'
-                f'Std Dev  σ  = √σ² = {std_show:.3f}'
+                f'Variance {v_sym} = Σ(xᵢ − x̄)² / {denom} = {var_txt}<br>'
+                f'Std Dev  {s_sym}  = √{v_sym} = {std_txt}'
                 f'</div>', unsafe_allow_html=True)
 
-            st.caption("Population formula (÷n) for the full dataset. "
-                       "Sample formula (÷n−1, Bessel's correction) when estimating from a sample - "
-                       "this makes the estimate unbiased.")
+            st.caption("Population formula (÷n, symbols σ², σ) for the full dataset. "
+                       "Sample formula (÷n−1, Bessel's correction, symbols s², s) when estimating from a sample - "
+                       "this makes the *variance* s² unbiased. The standard deviation s = √s² is still "
+                       "slightly biased low, because a square root of an unbiased estimate isn't unbiased.")
 
         with col2:
             # Show deviations from mean
             deviations = data_d - mean_d
-            colors_dev = ["#E24B4A" if d > 0 else "#1D9E75" for d in deviations]
+            colors_dev = ["#E24B4A" if d > 1e-12 else ("#1D9E75" if d < -1e-12 else "#888780") for d in deviations]
 
             fig = go.Figure()
             xs = list(range(n_d))
             fig.add_hline(y=mean_d, line=dict(color="#534AB7", width=2, dash="dash"),
                 annotation_text=f"Mean={mean_d:.2f}", annotation_position="right")
-            fig.add_hline(y=mean_d + std_show, line=dict(color="#EF9F27", width=1.5, dash="dot"),
-                annotation_text=f"+1σ={mean_d+std_show:.2f}", annotation_position="right")
-            fig.add_hline(y=mean_d - std_show, line=dict(color="#EF9F27", width=1.5, dash="dot"),
-                annotation_text=f"−1σ={mean_d-std_show:.2f}", annotation_position="right")
+            if not np.isnan(std_show):
+                fig.add_hline(y=mean_d + std_show, line=dict(color="#EF9F27", width=1.5, dash="dot"),
+                    annotation_text=f"+1{s_sym}={mean_d+std_show:.2f}", annotation_position="right")
+                fig.add_hline(y=mean_d - std_show, line=dict(color="#EF9F27", width=1.5, dash="dot"),
+                    annotation_text=f"−1{s_sym}={mean_d-std_show:.2f}", annotation_position="right")
 
             # Deviation bars
             for i, (x, y, dev, col) in enumerate(zip(xs, data_d, deviations, colors_dev)):
@@ -7732,7 +7814,7 @@ elif section == "dispersion":
                 xaxis_title="Index", yaxis_title="Value",
                 margin=dict(l=20, r=100, t=20, b=40))
             st.plotly_chart(fig, width='stretch')
-            st.caption("Red points are above the mean, green below. "
+            st.caption("Red points are above the mean, green below, grey exactly on it. "
                        "Vertical lines show each deviation (xᵢ − x̄). "
                        "Orange dashed lines mark ±1 standard deviation.")
 
@@ -7745,7 +7827,7 @@ elif section == "dispersion":
         })
         st.dataframe(dev_table, width='stretch', hide_index=True, height=200)
         st.markdown(f"Sum of (xᵢ − x̄)² = **{np.sum(deviations**2):.3f}**  "
-                    f"÷ {denom} → variance = **{var_show:.3f}** → std dev = **{std_show:.3f}**")
+                    f"÷ {denom} → variance = **{var_txt}** → std dev = **{std_txt}**")
 
     # ── TAB 2: Range, IQR & box plot ──────────────────────────────────────
     with tab2:
@@ -7756,10 +7838,9 @@ elif section == "dispersion":
             raw_b = st.text_area("Enter numbers",
                 value="3, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 45",
                 height=80, key="box_raw")
-            try:
-                data_b = np.array([float(x.strip()) for x in raw_b.split(",") if x.strip()])
-            except ValueError:
-                data_b = np.array([3,7,8,9,10,11,12,13,14,15,16,18,45], dtype=float)
+            data_b, err_b = _parse_numbers(raw_b, [3,7,8,9,10,11,12,13,14,15,16,18,45])
+            if err_b:
+                st.error(err_b)
 
             data_b_sorted = np.sort(data_b)
             q1  = np.percentile(data_b, 25)
@@ -7782,7 +7863,7 @@ elif section == "dispersion":
                 '</div>', unsafe_allow_html=True)
 
             if len(outliers_b) > 0:
-                st.warning(f"Outliers (beyond Q1−1.5×IQR or Q3+1.5×IQR): {outliers_b}")
+                st.warning(f"Outliers (beyond Q1−1.5×IQR or Q3+1.5×IQR): {', '.join(_vout(v) for v in outliers_b)}")
             else:
                 st.success("No outliers detected by the 1.5×IQR rule.")
 
@@ -7879,8 +7960,9 @@ elif section == "dispersion":
             legend=dict(orientation="h", y=1.1),
             margin=dict(l=20, r=20, t=40, b=40))
         st.plotly_chart(fig, width='stretch')
-        st.caption("Both distributions have mean = 10. A model predicting only the mean "
-                   "would be equally wrong about both - yet B's errors are far more severe.")
+        st.caption(f"Both distributions have mean = 10. A model that always predicts 10 is right "
+                   f"*on average* for both, but its typical error is about one standard deviation - "
+                   f"roughly {spread_a:g} for A versus {spread_b:g} for B.")
 
         import pandas as pd
         summary_df = pd.DataFrame({
@@ -8123,6 +8205,7 @@ elif section == "correlation":
             | +0.3 to +0.7 | Moderate positive |
             | −0.3 to +0.3 | Weak / no linear relationship |
             | −0.7 to −0.3 | Moderate negative |
+            | −1.0 to −0.7 | Strong negative |
             | −1.0 | Perfect negative linear relationship |
             """)
 
@@ -8137,15 +8220,18 @@ elif section == "correlation":
             x = rng.standard_normal(n_pts)
             y = target_r * x + noise_level * rng.standard_normal(n_pts)
             actual_r = np.corrcoef(x, y)[0, 1]
-            cov_val  = np.cov(x, y)[0, 1]
+            cov_val  = np.cov(x, y)[0, 1]          # divides by n−1
+            sd_x, sd_y = np.std(x, ddof=1), np.std(y, ddof=1)   # also n−1, so r = Cov/(σₓσᵧ) checks out exactly
 
             st.metric("Actual Pearson r", f"{actual_r:.3f}")
             st.metric("Covariance", f"{cov_val:.3f}")
+            st.caption("Covariance and both σ use n − 1 (sample estimates). Using n for all three gives the "
+                       "same r - the factors cancel - but they must match.")
             st.markdown(f'<div class="formula-box">'
-                f'x̄ = {np.mean(x):.2f}, σₓ = {np.std(x):.2f}<br>'
-                f'ȳ = {np.mean(y):.2f}, σᵧ = {np.std(y):.2f}<br>'
+                f'x̄ = {np.mean(x):.2f}, σₓ = {sd_x:.2f}<br>'
+                f'ȳ = {np.mean(y):.2f}, σᵧ = {sd_y:.2f}<br>'
                 f'Cov = {cov_val:.3f}<br>'
-                f'r = {cov_val:.3f} / ({np.std(x):.3f}·{np.std(y):.3f}) = {actual_r:.3f}'
+                f'r = {cov_val:.3f} / ({sd_x:.3f}·{sd_y:.3f}) = {actual_r:.3f}'
                 f'</div>', unsafe_allow_html=True)
 
         with col2:
@@ -8196,31 +8282,42 @@ elif section == "correlation":
         st.markdown("""
         **Reading the matrix:**
         - Diagonal is always 1.0 (a variable perfectly correlates with itself)
-        - Dark red = strong positive, dark blue = strong negative, white ≈ 0
+        - Dark blue = strong positive, dark red = strong negative, white ≈ 0
         - Age and Income are positively correlated (by design). Height and Noise are near-zero with everything.
 
         **In ML:**
         - Highly correlated features (|r| > 0.9) → multicollinearity in linear models → remove one
         - PCA uses the covariance matrix to find uncorrelated principal components
-        - Feature selection: drop features with near-zero correlation to the target
+        - Feature selection: near-zero correlation with the target is a *hint*, not proof a feature is useless -
+          Pearson r only sees **linear** relationships (e.g. y = x² over a symmetric range has r ≈ 0 yet x predicts y perfectly)
         """)
 
     with tab3:
         st.markdown("### Correlation ≠ causation")
         st.markdown("""
-        A high r between X and Y can arise from three very different situations.
+        A high r between X and Y can arise from four very different situations.
         Confusing correlation with causation is one of the most common errors in data science.
         """)
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         cases = [
-            ("X causes Y", "X → Y", "Ice cream sales correlate with drowning deaths because summer (heat) causes both.",
-             "Direct causation is possible but needs experimental evidence (randomised control trial).", "#1D9E75"),
-            ("Y causes X", "Y → X", "Shoe size correlates with reading ability in children - but shoe size doesn't teach reading.",
-             "Reverse causation: age (Y) causes both shoe size and reading ability.", "#EF9F27"),
-            ("Z causes both", "Z → X and Z → Y", "Nicolas Cage film releases correlate with pool drownings.",
-             "A lurking confounder Z (year, population growth) drives both X and Y.", "#E24B4A"),
+            ("X causes Y", "X → Y",
+             "Smoking correlates with lung cancer - and smoking really does cause it.",
+             "Direct causation is possible, but it takes strong evidence to establish: ideally a randomised "
+             "experiment, or - as with smoking - decades of consistent studies ruling out other explanations.", "#1D9E75"),
+            ("Y causes X (reverse)", "Y → X",
+             "Fires with more firefighters cause more damage.",
+             "Reverse causation: bigger fires cause both more firefighters to be sent and more damage. "
+             "The firefighters don't cause the damage - the arrow points the other way.", "#EF9F27"),
+            ("Z causes both (confounder)", "Z → X and Z → Y",
+             "Ice cream sales correlate with drownings; children's shoe size correlates with reading ability.",
+             "A lurking confounder drives both: summer heat (more ice cream, more swimming), "
+             "age (bigger feet, better reading).", "#E24B4A"),
+            ("Pure chance", "no link",
+             "Nicolas Cage film releases correlate with pool drownings.",
+             "Spurious correlation: search through enough unrelated data series and some will match by "
+             "coincidence. There is no causal link at all.", "#888780"),
         ]
-        for col, (title, arrow, example, explain, color) in zip([col1,col2,col3], cases):
+        for col, (title, arrow, example, explain, color) in zip([col1,col2,col3,col4], cases):
             with col:
                 st.markdown(f"**{title}**")
                 st.markdown(f'<div class="formula-box" style="border-left:4px solid {color}">{arrow}</div>', unsafe_allow_html=True)
@@ -8233,6 +8330,8 @@ elif section == "correlation":
         """)
         st.markdown('<div class="formula-box">ρ = 1 − 6Σdᵢ² / (n(n²−1))   where dᵢ = rank(xᵢ) − rank(yᵢ)</div>',
             unsafe_allow_html=True)
+        st.caption("This shortcut is exact only when there are no tied values. With ties, Spearman ρ is computed "
+                   "as Pearson r on the ranks (tied values share their average rank).")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CROSS-VALIDATION
@@ -8332,12 +8431,20 @@ elif section == "cross_validation":
 
     with tab2:
         st.markdown("""
-        **k controls a tradeoff.** A small k (like 2) trains on less data each round, so
-        the estimate is *biased upward* - each model is trained on a smaller, weaker sample.
-        A large k - up to the extreme of **Leave-One-Out CV (LOOCV)**, where k = n - trains
-        on almost all the data each time, so bias drops, but the n training sets now overlap
-        almost completely, making the resulting folds highly *correlated* and the overall
-        estimate *higher variance*. **k = 5 or 10** is the standard compromise.
+        **Bias: small k is pessimistic.** A small k (like 2) trains each model on only part of
+        the data, so each one is weaker than the final model will be - the CV estimate is
+        *biased upward*. As k grows towards **Leave-One-Out CV (LOOCV)**, where k = n, each
+        model trains on almost all the data and the bias shrinks towards zero.
+
+        **Variance: it depends on the model.** The classic textbook argument is that LOOCV's n
+        training sets overlap almost completely, so the n trained *models* (and their errors)
+        are highly correlated, and averaging correlated errors gives a *higher-variance*
+        estimate. That does happen for **unstable** models (e.g. deep decision trees), but for
+        smooth, stable models like the polynomials here, LOOCV's variance is often just as low
+        as 10-fold's - research (Kohavi 1995; Bengio & Grandvalet 2004) found no universal rule.
+
+        **So why k = 5 or 10?** By k = 5-10 the bias is already small, it costs only 5-10 fits
+        instead of n, and it stays safe for unstable models where LOOCV can be noisy.
         """)
 
         st.markdown("#### LOOCV has a shortcut for linear models")
@@ -8376,7 +8483,39 @@ elif section == "cross_validation":
         st.caption("Same answer, computed two very different ways - one loop over n models, "
                    "one line of algebra on a single fit.")
 
-        st.markdown("#### Why k = 5–10 in practice")
+        st.markdown("#### Bias in action: CV estimate vs the true test error")
+
+        @st.cache_data(show_spinner="Simulating 200 datasets…")
+        def _cv_bias_sim(noise, n, reps=200, degree=3):
+            rng_b = np.random.default_rng(1)
+            ks = [2, 5, 10, n]
+            est = {kk: [] for kk in ks}
+            true_err = []
+            for rep in range(reps):
+                xs = np.sort(rng_b.uniform(-3, 3, n))
+                ys = np.sin(xs) + rng_b.normal(0, noise, n)
+                for kk in ks:
+                    est[kk].append(_cv_curve(xs, ys, kk, [degree], seed=rep)[0][0])
+                pf = np.poly1d(np.polyfit(xs, ys, degree))
+                xt = rng_b.uniform(-3, 3, 4000)
+                true_err.append(np.mean((pf(xt) - (np.sin(xt) + rng_b.normal(0, noise, 4000))) ** 2))
+            return ks, [float(np.median(est[kk])) for kk in ks], float(np.mean(true_err))
+
+        ks_b, med_est, true_mse = _cv_bias_sim(noise_cv, n_cv)
+        fig_b = go.Figure()
+        fig_b.add_trace(go.Bar(x=[f"k={kk}" if kk < n_cv else "LOOCV" for kk in ks_b], y=med_est,
+            marker_color=['#E24B4A', '#EF9F27', '#1D9E75', '#534AB7'], name="Typical CV estimate",
+            text=[f"{v:.3f}" for v in med_est], textposition="outside"))
+        fig_b.add_hline(y=true_mse, line=dict(color="#333", dash="dash"),
+            annotation_text=f"true test error {true_mse:.3f}", annotation_position="top right")
+        fig_b.update_layout(xaxis_title="Fold count", yaxis_title="CV estimate of MSE (degree 3)",
+            yaxis_range=[0, max(med_est + [true_mse]) * 1.3], height=300, showlegend=False)
+        st.plotly_chart(fig_b, width='stretch')
+        st.caption(f"Typical (median) CV estimate over 200 simulated datasets with the same noise and "
+                   f"size as tab 1 ({n_cv} points). Small k overestimates the error because each model "
+                   "trains on less data; by k = 5-10 the estimate is already close to the truth.")
+
+        st.markdown("#### Split-to-split variability")
         ks_demo = [2, 5, 10, n_cv]
         reps = 30
         variances = []
@@ -8389,12 +8528,15 @@ elif section == "cross_validation":
         fig3 = go.Figure()
         fig3.add_trace(go.Bar(x=[f"k={kk}" if kk < n_cv else "LOOCV" for kk in ks_demo],
             y=variances, marker_color=['#E24B4A', '#EF9F27', '#1D9E75', '#534AB7']))
+        fig3.add_annotation(x="LOOCV", y=0, text="0 - only one<br>possible split", showarrow=False,
+            yshift=22, font=dict(color="#534AB7", size=11))
         fig3.update_layout(xaxis_title="Fold count", yaxis_title="Std. dev. of CV score across random fold splits",
             height=280)
         st.plotly_chart(fig3, width='stretch')
-        st.caption("Fewer, larger folds (small k) give a CV score that swings more depending "
-                   "on how the data happened to be split - that's the variance cost of small k, "
-                   "on top of the bias cost from training on less data each round.")
+        st.caption("Same dataset, re-split into folds 30 different ways. Small k gives a score that swings "
+                   "depending on how the data happened to be split. LOOCV is exactly 0 because there is "
+                   "only one way to leave out each point in turn - this chart measures split randomness, "
+                   "not the variance across new datasets discussed above.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # COOK'S DISTANCE
@@ -8721,7 +8863,7 @@ elif section == "hypothesis_testing":
             A small p-value means the data would be very surprising under H₀ - evidence against it.
             """)
             st.markdown('<div class="formula-box">'
-                'p-value = P(data this extreme | H₀ true)<br><br>'
+                'p-value = P(data at least this extreme | H₀ true)<br><br>'
                 'Reject H₀ if  p < α<br>'
                 'Common choice: α = 0.05'
                 '</div>', unsafe_allow_html=True)
@@ -8734,7 +8876,7 @@ elif section == "hypothesis_testing":
 
             **What it IS:**
             - ✅ A tail probability under H₀
-            - ✅ A decision threshold: below α → reject H₀
+            - ✅ Compared against a threshold α you choose in advance: p < α → reject H₀
             - ✅ Heavily influenced by sample size - large n → tiny p even for tiny effects
             """)
             st.markdown('<div class="formula-box">'
@@ -8816,10 +8958,17 @@ elif section == "hypothesis_testing":
                 value="102, 108, 99, 105, 111, 103, 107, 98, 110, 106",
                 height=80, key="tt_raw")
             alpha_t = st.select_slider("α", options=[0.01, 0.05, 0.1], value=0.05, key="tt_alpha")
-            try:
-                sample = np.array([float(v.strip()) for v in raw_tt.split(",") if v.strip()])
-            except ValueError:
-                sample = np.array([102,108,99,105,111,103,107,98,110,106], dtype=float)
+            default_tt = np.array([102,108,99,105,111,103,107,98,110,106], dtype=float)
+            sample, err_tt = _parse_numbers(raw_tt, default_tt)
+            if err_tt:
+                st.error(err_tt)
+            elif len(sample) < 2:
+                st.error("A t-test needs at least 2 values (s divides by n − 1). Showing the default data.")
+                sample = default_tt
+            elif np.std(sample, ddof=1) == 0:
+                st.error("All values are identical, so s = 0 and t = (x̄ − μ₀) / (s/√n) is undefined. "
+                         "Showing the default data.")
+                sample = default_tt
 
             n_s    = len(sample)
             xbar   = np.mean(sample)
@@ -8854,10 +9003,6 @@ elif section == "hypothesis_testing":
                     line=dict(color="rgba(0,0,0,0)"), showlegend=False))
             fig.add_vline(x=t_stat, line=dict(color="#E24B4A", width=2.5),
                 annotation_text=f"t={t_stat:.2f}", annotation_font=dict(color="#E24B4A"))
-            # Sample distribution
-            fig.add_trace(go.Histogram(x=(sample-mu0)/(s/np.sqrt(n_s)),
-                nbinsx=8, histnorm="probability density", opacity=0.3,
-                marker_color="#1D9E75", name="Standardised sample"))
             fig.update_layout(height=320, plot_bgcolor="white",
                 xaxis_title="t statistic", yaxis_title="Density",
                 legend=dict(x=0.01, y=0.99),
@@ -8881,7 +9026,8 @@ elif section == "hypothesis_testing":
             - **Type II error (false negative)** - you miss a real effect.
               Rate = β; statistical **power** = 1−β.
             - Lowering α (stricter threshold) reduces Type I but increases Type II.
-            - Increasing sample size n reduces **both** - the primary way to increase power.
+            - Increasing sample size n reduces Type II errors (β) - the primary way to increase power.
+              The Type I rate stays at α whatever n is, because you set it.
             """)
         with col2:
             st.markdown("#### Interactive: trade-off between α and power")
@@ -8889,6 +9035,7 @@ elif section == "hypothesis_testing":
             n_power     = st.slider("Sample size n", 5, 200, 40, step=5, key="ht_n")
             alpha_p     = st.select_slider("α", options=[0.01, 0.05, 0.1], value=0.05, key="ht_ap")
 
+            st.caption("Power is computed with a z-test approximation - close to the t-test for n ≳ 30.")
             # Power of one-sample z-test
             se = 1 / np.sqrt(n_power)
             z_crit_p = scipy_stats.norm.ppf(1 - alpha_p/2)
@@ -8911,8 +9058,8 @@ elif section == "hypothesis_testing":
           Type II = rejecting a model that is better
         - **Feature selection** with statistical tests: Type I = including a useless feature;
           Type II = excluding a useful one
-        - **Multiple comparisons problem**: testing 20 features at α=0.05 → expect ~1 false positive
-          by chance → use Bonferroni correction (α/m) or FDR control
+        - **Multiple comparisons problem**: testing 20 features at α=0.05 → if none truly have an effect,
+          expect ~1 false positive by chance → use Bonferroni correction (α/m) or FDR control
         """)
         st.markdown('<div class="formula-box">'
             'Bonferroni correction: use α* = α / m<br>'
