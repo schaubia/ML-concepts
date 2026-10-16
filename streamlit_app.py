@@ -8349,12 +8349,20 @@ elif section == "cross_validation":
 
     with tab2:
         st.markdown("""
-        **k controls a tradeoff.** A small k (like 2) trains on less data each round, so
-        the estimate is *biased upward* - each model is trained on a smaller, weaker sample.
-        A large k - up to the extreme of **Leave-One-Out CV (LOOCV)**, where k = n - trains
-        on almost all the data each time, so bias drops, but the n training sets now overlap
-        almost completely, making the resulting folds highly *correlated* and the overall
-        estimate *higher variance*. **k = 5 or 10** is the standard compromise.
+        **Bias: small k is pessimistic.** A small k (like 2) trains each model on only part of
+        the data, so each one is weaker than the final model will be - the CV estimate is
+        *biased upward*. As k grows towards **Leave-One-Out CV (LOOCV)**, where k = n, each
+        model trains on almost all the data and the bias shrinks towards zero.
+
+        **Variance: it depends on the model.** The classic textbook argument is that LOOCV's n
+        training sets overlap almost completely, so the n trained *models* (and their errors)
+        are highly correlated, and averaging correlated errors gives a *higher-variance*
+        estimate. That does happen for **unstable** models (e.g. deep decision trees), but for
+        smooth, stable models like the polynomials here, LOOCV's variance is often just as low
+        as 10-fold's - research (Kohavi 1995; Bengio & Grandvalet 2004) found no universal rule.
+
+        **So why k = 5 or 10?** By k = 5-10 the bias is already small, it costs only 5-10 fits
+        instead of n, and it stays safe for unstable models where LOOCV can be noisy.
         """)
 
         st.markdown("#### LOOCV has a shortcut for linear models")
@@ -8393,7 +8401,39 @@ elif section == "cross_validation":
         st.caption("Same answer, computed two very different ways - one loop over n models, "
                    "one line of algebra on a single fit.")
 
-        st.markdown("#### Why k = 5–10 in practice")
+        st.markdown("#### Bias in action: CV estimate vs the true test error")
+
+        @st.cache_data(show_spinner="Simulating 200 datasets…")
+        def _cv_bias_sim(noise, n, reps=200, degree=3):
+            rng_b = np.random.default_rng(1)
+            ks = [2, 5, 10, n]
+            est = {kk: [] for kk in ks}
+            true_err = []
+            for rep in range(reps):
+                xs = np.sort(rng_b.uniform(-3, 3, n))
+                ys = np.sin(xs) + rng_b.normal(0, noise, n)
+                for kk in ks:
+                    est[kk].append(_cv_curve(xs, ys, kk, [degree], seed=rep)[0][0])
+                pf = np.poly1d(np.polyfit(xs, ys, degree))
+                xt = rng_b.uniform(-3, 3, 4000)
+                true_err.append(np.mean((pf(xt) - (np.sin(xt) + rng_b.normal(0, noise, 4000))) ** 2))
+            return ks, [float(np.median(est[kk])) for kk in ks], float(np.mean(true_err))
+
+        ks_b, med_est, true_mse = _cv_bias_sim(noise_cv, n_cv)
+        fig_b = go.Figure()
+        fig_b.add_trace(go.Bar(x=[f"k={kk}" if kk < n_cv else "LOOCV" for kk in ks_b], y=med_est,
+            marker_color=['#E24B4A', '#EF9F27', '#1D9E75', '#534AB7'], name="Typical CV estimate",
+            text=[f"{v:.3f}" for v in med_est], textposition="outside"))
+        fig_b.add_hline(y=true_mse, line=dict(color="#333", dash="dash"),
+            annotation_text=f"true test error {true_mse:.3f}", annotation_position="top right")
+        fig_b.update_layout(xaxis_title="Fold count", yaxis_title="CV estimate of MSE (degree 3)",
+            yaxis_range=[0, max(med_est + [true_mse]) * 1.3], height=300, showlegend=False)
+        st.plotly_chart(fig_b, width='stretch')
+        st.caption(f"Typical (median) CV estimate over 200 simulated datasets with the same noise and "
+                   f"size as tab 1 ({n_cv} points). Small k overestimates the error because each model "
+                   "trains on less data; by k = 5-10 the estimate is already close to the truth.")
+
+        st.markdown("#### Split-to-split variability")
         ks_demo = [2, 5, 10, n_cv]
         reps = 30
         variances = []
@@ -8406,12 +8446,15 @@ elif section == "cross_validation":
         fig3 = go.Figure()
         fig3.add_trace(go.Bar(x=[f"k={kk}" if kk < n_cv else "LOOCV" for kk in ks_demo],
             y=variances, marker_color=['#E24B4A', '#EF9F27', '#1D9E75', '#534AB7']))
+        fig3.add_annotation(x="LOOCV", y=0, text="0 - only one<br>possible split", showarrow=False,
+            yshift=22, font=dict(color="#534AB7", size=11))
         fig3.update_layout(xaxis_title="Fold count", yaxis_title="Std. dev. of CV score across random fold splits",
             height=280)
         st.plotly_chart(fig3, width='stretch')
-        st.caption("Fewer, larger folds (small k) give a CV score that swings more depending "
-                   "on how the data happened to be split - that's the variance cost of small k, "
-                   "on top of the bias cost from training on less data each round.")
+        st.caption("Same dataset, re-split into folds 30 different ways. Small k gives a score that swings "
+                   "depending on how the data happened to be split. LOOCV is exactly 0 because there is "
+                   "only one way to leave out each point in turn - this chart measures split randomness, "
+                   "not the variance across new datasets discussed above.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # COOK'S DISTANCE
