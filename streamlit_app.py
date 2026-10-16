@@ -17,6 +17,19 @@ def _vout(x):
     s = f"{x:.3f}".rstrip("0").rstrip(".")
     return "0" if s in ("-0", "") else s.replace("-", "−")
 
+def _parse_numbers(raw, default):
+    """Parse comma-separated numbers. Returns (array, error message or None); falls back to default on bad input."""
+    try:
+        arr = np.array([float(x.strip()) for x in raw.split(",") if x.strip()])
+    except ValueError:
+        return np.asarray(default, dtype=float), "Please enter valid numbers separated by commas. Showing the default data."
+    if len(arr) == 0:
+        return np.asarray(default, dtype=float), "No numbers entered. Showing the default data."
+    if not np.all(np.isfinite(arr)):
+        return np.asarray(default, dtype=float), ("'nan' and 'inf' are not real data values - please enter ordinary "
+                                                  "numbers. Showing the default data.")
+    return arr, None
+
 
 st.set_page_config(
     page_title="ML Concepts",
@@ -7677,48 +7690,55 @@ elif section == "dispersion":
             raw_d = st.text_area("Enter numbers (comma-separated)",
                 value="10, 12, 13, 14, 15, 16, 17, 18, 20, 50",
                 height=80, key="disp_raw")
-            try:
-                data_d = np.array([float(x.strip()) for x in raw_d.split(",") if x.strip()])
-            except ValueError:
-                st.error("Please enter valid numbers.")
-                data_d = np.array([10,12,13,14,15,16,17,18,20,50], dtype=float)
+            data_d, err_d = _parse_numbers(raw_d, [10,12,13,14,15,16,17,18,20,50])
+            if err_d:
+                st.error(err_d)
 
             n_d    = len(data_d)
             mean_d = np.mean(data_d)
             # Population vs sample
             pop_var  = np.var(data_d, ddof=0)
-            samp_var = np.var(data_d, ddof=1)
             pop_std  = np.std(data_d, ddof=0)
-            samp_std = np.std(data_d, ddof=1)
+            samp_var = np.var(data_d, ddof=1) if n_d >= 2 else np.nan   # ÷(n−1) needs at least 2 values
+            samp_std = np.std(data_d, ddof=1) if n_d >= 2 else np.nan
 
             kind = st.radio("Formula type", ["Population (÷n)", "Sample (÷n−1)"], horizontal=True, key="disp_kind")
             var_show = pop_var  if kind.startswith("Population") else samp_var
             std_show = pop_std  if kind.startswith("Population") else samp_std
             denom    = "n" if kind.startswith("Population") else "n−1"
+            v_sym, s_sym = ("σ²", "σ") if kind.startswith("Population") else ("s²", "s")
+            if np.isnan(var_show):
+                st.warning("The sample formula divides by n − 1, so it needs at least 2 values. "
+                           "Add more numbers or switch to Population.")
+                var_txt = std_txt = "undefined"
+            else:
+                var_txt, std_txt = f"{var_show:.3f}", f"{std_show:.3f}"
 
             st.markdown(f'<div class="formula-box">'
                 f'Mean x̄ = {mean_d:.3f}<br><br>'
-                f'Variance σ² = Σ(xᵢ − x̄)² / {denom} = {var_show:.3f}<br>'
-                f'Std Dev  σ  = √σ² = {std_show:.3f}'
+                f'Variance {v_sym} = Σ(xᵢ − x̄)² / {denom} = {var_txt}<br>'
+                f'Std Dev  {s_sym}  = √{v_sym} = {std_txt}'
                 f'</div>', unsafe_allow_html=True)
 
-            st.caption("Population formula (÷n) for the full dataset. "
-                       "Sample formula (÷n−1, Bessel's correction) when estimating from a sample - "
-                       "this makes the estimate unbiased.")
+            st.caption("Population formula (÷n, symbols σ², σ) for the full dataset. "
+                       "Sample formula (÷n−1, Bessel's correction, symbols s², s) when estimating from a sample - "
+                       "this makes the *variance* s² unbiased. The standard deviation s = √s² is still "
+                       "slightly biased low, because a square root of an unbiased estimate isn't unbiased.")
 
         with col2:
             # Show deviations from mean
             deviations = data_d - mean_d
-            colors_dev = ["#E24B4A" if d > 0 else "#1D9E75" for d in deviations]
+            colors_dev = ["#E24B4A" if d > 1e-12 else ("#1D9E75" if d < -1e-12 else "#888780") for d in deviations]
 
             fig = go.Figure()
             xs = list(range(n_d))
             fig.add_hline(y=mean_d, line=dict(color="#534AB7", width=2, dash="dash"),
                 annotation_text=f"Mean={mean_d:.2f}", annotation_position="right")
-            fig.add_hline(y=mean_d + std_show, line=dict(color="#EF9F27", width=1.5, dash="dot"),
-                annotation_text=f"+1σ={mean_d+std_show:.2f}", annotation_position="right")
-            fig.add_hline(y=mean_d - std_show, line=dict(color="#EF9F27", width=1.5, dash="dot"),
-                annotation_text=f"−1σ={mean_d-std_show:.2f}", annotation_position="right")
+            if not np.isnan(std_show):
+                fig.add_hline(y=mean_d + std_show, line=dict(color="#EF9F27", width=1.5, dash="dot"),
+                    annotation_text=f"+1{s_sym}={mean_d+std_show:.2f}", annotation_position="right")
+                fig.add_hline(y=mean_d - std_show, line=dict(color="#EF9F27", width=1.5, dash="dot"),
+                    annotation_text=f"−1{s_sym}={mean_d-std_show:.2f}", annotation_position="right")
 
             # Deviation bars
             for i, (x, y, dev, col) in enumerate(zip(xs, data_d, deviations, colors_dev)):
@@ -7732,7 +7752,7 @@ elif section == "dispersion":
                 xaxis_title="Index", yaxis_title="Value",
                 margin=dict(l=20, r=100, t=20, b=40))
             st.plotly_chart(fig, width='stretch')
-            st.caption("Red points are above the mean, green below. "
+            st.caption("Red points are above the mean, green below, grey exactly on it. "
                        "Vertical lines show each deviation (xᵢ − x̄). "
                        "Orange dashed lines mark ±1 standard deviation.")
 
@@ -7745,7 +7765,7 @@ elif section == "dispersion":
         })
         st.dataframe(dev_table, width='stretch', hide_index=True, height=200)
         st.markdown(f"Sum of (xᵢ − x̄)² = **{np.sum(deviations**2):.3f}**  "
-                    f"÷ {denom} → variance = **{var_show:.3f}** → std dev = **{std_show:.3f}**")
+                    f"÷ {denom} → variance = **{var_txt}** → std dev = **{std_txt}**")
 
     # ── TAB 2: Range, IQR & box plot ──────────────────────────────────────
     with tab2:
@@ -7756,10 +7776,9 @@ elif section == "dispersion":
             raw_b = st.text_area("Enter numbers",
                 value="3, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 45",
                 height=80, key="box_raw")
-            try:
-                data_b = np.array([float(x.strip()) for x in raw_b.split(",") if x.strip()])
-            except ValueError:
-                data_b = np.array([3,7,8,9,10,11,12,13,14,15,16,18,45], dtype=float)
+            data_b, err_b = _parse_numbers(raw_b, [3,7,8,9,10,11,12,13,14,15,16,18,45])
+            if err_b:
+                st.error(err_b)
 
             data_b_sorted = np.sort(data_b)
             q1  = np.percentile(data_b, 25)
@@ -7782,7 +7801,7 @@ elif section == "dispersion":
                 '</div>', unsafe_allow_html=True)
 
             if len(outliers_b) > 0:
-                st.warning(f"Outliers (beyond Q1−1.5×IQR or Q3+1.5×IQR): {outliers_b}")
+                st.warning(f"Outliers (beyond Q1−1.5×IQR or Q3+1.5×IQR): {', '.join(_vout(v) for v in outliers_b)}")
             else:
                 st.success("No outliers detected by the 1.5×IQR rule.")
 
@@ -7879,8 +7898,9 @@ elif section == "dispersion":
             legend=dict(orientation="h", y=1.1),
             margin=dict(l=20, r=20, t=40, b=40))
         st.plotly_chart(fig, width='stretch')
-        st.caption("Both distributions have mean = 10. A model predicting only the mean "
-                   "would be equally wrong about both - yet B's errors are far more severe.")
+        st.caption(f"Both distributions have mean = 10. A model that always predicts 10 is right "
+                   f"*on average* for both, but its typical error is about one standard deviation - "
+                   f"roughly {spread_a:g} for A versus {spread_b:g} for B.")
 
         import pandas as pd
         summary_df = pd.DataFrame({
