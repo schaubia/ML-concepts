@@ -8801,7 +8801,7 @@ elif section == "hypothesis_testing":
             A small p-value means the data would be very surprising under H₀ - evidence against it.
             """)
             st.markdown('<div class="formula-box">'
-                'p-value = P(data this extreme | H₀ true)<br><br>'
+                'p-value = P(data at least this extreme | H₀ true)<br><br>'
                 'Reject H₀ if  p < α<br>'
                 'Common choice: α = 0.05'
                 '</div>', unsafe_allow_html=True)
@@ -8814,7 +8814,7 @@ elif section == "hypothesis_testing":
 
             **What it IS:**
             - ✅ A tail probability under H₀
-            - ✅ A decision threshold: below α → reject H₀
+            - ✅ Compared against a threshold α you choose in advance: p < α → reject H₀
             - ✅ Heavily influenced by sample size - large n → tiny p even for tiny effects
             """)
             st.markdown('<div class="formula-box">'
@@ -8896,10 +8896,17 @@ elif section == "hypothesis_testing":
                 value="102, 108, 99, 105, 111, 103, 107, 98, 110, 106",
                 height=80, key="tt_raw")
             alpha_t = st.select_slider("α", options=[0.01, 0.05, 0.1], value=0.05, key="tt_alpha")
-            try:
-                sample = np.array([float(v.strip()) for v in raw_tt.split(",") if v.strip()])
-            except ValueError:
-                sample = np.array([102,108,99,105,111,103,107,98,110,106], dtype=float)
+            default_tt = np.array([102,108,99,105,111,103,107,98,110,106], dtype=float)
+            sample, err_tt = _parse_numbers(raw_tt, default_tt)
+            if err_tt:
+                st.error(err_tt)
+            elif len(sample) < 2:
+                st.error("A t-test needs at least 2 values (s divides by n − 1). Showing the default data.")
+                sample = default_tt
+            elif np.std(sample, ddof=1) == 0:
+                st.error("All values are identical, so s = 0 and t = (x̄ − μ₀) / (s/√n) is undefined. "
+                         "Showing the default data.")
+                sample = default_tt
 
             n_s    = len(sample)
             xbar   = np.mean(sample)
@@ -8934,10 +8941,6 @@ elif section == "hypothesis_testing":
                     line=dict(color="rgba(0,0,0,0)"), showlegend=False))
             fig.add_vline(x=t_stat, line=dict(color="#E24B4A", width=2.5),
                 annotation_text=f"t={t_stat:.2f}", annotation_font=dict(color="#E24B4A"))
-            # Sample distribution
-            fig.add_trace(go.Histogram(x=(sample-mu0)/(s/np.sqrt(n_s)),
-                nbinsx=8, histnorm="probability density", opacity=0.3,
-                marker_color="#1D9E75", name="Standardised sample"))
             fig.update_layout(height=320, plot_bgcolor="white",
                 xaxis_title="t statistic", yaxis_title="Density",
                 legend=dict(x=0.01, y=0.99),
@@ -8961,7 +8964,8 @@ elif section == "hypothesis_testing":
             - **Type II error (false negative)** - you miss a real effect.
               Rate = β; statistical **power** = 1−β.
             - Lowering α (stricter threshold) reduces Type I but increases Type II.
-            - Increasing sample size n reduces **both** - the primary way to increase power.
+            - Increasing sample size n reduces Type II errors (β) - the primary way to increase power.
+              The Type I rate stays at α whatever n is, because you set it.
             """)
         with col2:
             st.markdown("#### Interactive: trade-off between α and power")
@@ -8969,6 +8973,7 @@ elif section == "hypothesis_testing":
             n_power     = st.slider("Sample size n", 5, 200, 40, step=5, key="ht_n")
             alpha_p     = st.select_slider("α", options=[0.01, 0.05, 0.1], value=0.05, key="ht_ap")
 
+            st.caption("Power is computed with a z-test approximation - close to the t-test for n ≳ 30.")
             # Power of one-sample z-test
             se = 1 / np.sqrt(n_power)
             z_crit_p = scipy_stats.norm.ppf(1 - alpha_p/2)
@@ -8991,8 +8996,8 @@ elif section == "hypothesis_testing":
           Type II = rejecting a model that is better
         - **Feature selection** with statistical tests: Type I = including a useless feature;
           Type II = excluding a useful one
-        - **Multiple comparisons problem**: testing 20 features at α=0.05 → expect ~1 false positive
-          by chance → use Bonferroni correction (α/m) or FDR control
+        - **Multiple comparisons problem**: testing 20 features at α=0.05 → if none truly have an effect,
+          expect ~1 false positive by chance → use Bonferroni correction (α/m) or FDR control
         """)
         st.markdown('<div class="formula-box">'
             'Bonferroni correction: use α* = α / m<br>'
