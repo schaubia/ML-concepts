@@ -4657,14 +4657,23 @@ elif section == "naive_bayes":
         c1,c2,c3 = st.columns(3)
         c1.metric("Prior", f"{prior:.4f}")
         c2.metric("Posterior", f"{posterior:.4f}")
-        change = (posterior - prior) / (prior + 1e-12)
-        c3.metric("Belief change", f"{change:+.1f}×")
-        st.markdown(f"""
-        **Bayes formula applied:**
-        - P(disease | positive) = P(+|disease)·P(disease) / P(+) = {sensitivity:.2f}·{prior:.3f} / {p_pos:.4f} = **{posterior:.4f}**
-        """)
-        if prior < 0.01 and posterior < 0.3:
-            st.info("Even with a positive test, the posterior is low because the disease is rare - this is the **base rate fallacy**.")
+        c3.metric("Belief change", f"{posterior / prior:.2f}× the prior",
+                  help="Posterior ÷ prior: how many times more (or less) likely the disease is after the test.")
+        if test_result == "Positive ✅":
+            st.markdown(f"""
+            **Bayes formula applied:**
+            - P(disease | positive) = P(+|disease)·P(disease) / P(+) = {sensitivity:.2f}·{prior:.3f} / {p_pos:.4f} = **{posterior:.4f}**
+            """)
+        else:
+            st.markdown(f"""
+            **Bayes formula applied:**
+            - P(disease | negative) = P(−|disease)·P(disease) / P(−) = {1-sensitivity:.2f}·{prior:.3f} / {p_neg:.4f} = **{posterior:.4f}**
+            """)
+        if test_result == "Positive ✅" and prior <= 0.01 and posterior < 0.5:
+            st.info(f"Even after a positive test from a {sensitivity:.0%}-sensitive test, the chance of disease is only "
+                    f"{posterior:.1%} - because the disease is rare, most positives are false alarms. "
+                    f"The **base rate fallacy** is the mistake of ignoring this and assuming the answer is close to "
+                    f"{sensitivity:.0%}.")
 
     with tab2:
         st.markdown("### Gaussian Naive Bayes - 2D feature classifier")
@@ -4673,12 +4682,18 @@ elif section == "naive_bayes":
             n_nb = st.slider("Samples per class", 20, 80, 40, key="nb_n")
             sep_nb = st.slider("Class separation", 0.5, 3.0, 1.5, step=0.1, key="nb_sep")
             seed_nb = st.slider("Seed", 0, 10, 1, key="nb_seed")
+            rho_nb = st.slider("Feature correlation within each class", 0.0, 0.95, 0.0, step=0.05, key="nb_rho",
+                help="0 = features independent, exactly what Naive Bayes assumes. "
+                     "Raise it to break the 'naive' assumption and watch what goes wrong.")
             test_x1 = st.slider("Test point - feature 1", -4.0, 4.0, 0.5, step=0.1)
             test_x2 = st.slider("Test point - feature 2", -4.0, 4.0, 0.5, step=0.1)
 
         np.random.seed(seed_nb)
-        X_nb0 = np.random.randn(n_nb, 2) + np.array([-sep_nb/2, 0])
-        X_nb1 = np.random.randn(n_nb, 2) + np.array([sep_nb/2,  0])
+        cov_nb = np.array([[1.0, rho_nb], [rho_nb, 1.0]])      # same covariance in both classes
+        L_nb = np.linalg.cholesky(cov_nb)
+        mu0_true, mu1_true = np.array([-sep_nb/2, 0.0]), np.array([sep_nb/2, 0.0])
+        X_nb0 = np.random.randn(n_nb, 2) @ L_nb.T + mu0_true
+        X_nb1 = np.random.randn(n_nb, 2) @ L_nb.T + mu1_true
         X_nb  = np.vstack([X_nb0, X_nb1])
         y_nb  = np.array([0]*n_nb + [1]*n_nb)
 
@@ -4690,23 +4705,36 @@ elif section == "naive_bayes":
         def gauss_pdf(x, mu, sigma):
             return np.exp(-0.5*((x-mu)/sigma)**2) / (sigma*np.sqrt(2*np.pi) + 1e-9)
 
-        def nb_predict_proba(x):
-            log_probs = []
-            for c in [0,1]:
-                lp = np.log(priors_nb[c])
-                lp += np.sum(np.log(gauss_pdf(x, means[c], stds[c]) + 1e-12))
-                log_probs.append(lp)
-            log_probs = np.array(log_probs)
-            log_probs -= log_probs.max()
-            probs = np.exp(log_probs)
-            return probs / probs.sum()
+        def nb_predict_proba(X):
+            """Naive Bayes P(class | x) for an (m, 2) array of points - features treated as independent."""
+            X = np.atleast_2d(X)
+            lp = np.stack([np.log(priors_nb[c]) +
+                           np.sum(np.log(gauss_pdf(X, means[c], stds[c]) + 1e-12), axis=1) for c in [0, 1]], axis=1)
+            lp -= lp.max(axis=1, keepdims=True)
+            pr = np.exp(lp)
+            return pr / pr.sum(axis=1, keepdims=True)
+
+        # True Bayes-optimal rule (known means & full covariance, equal priors): linear in x
+        w_true = np.linalg.solve(cov_nb, mu1_true - mu0_true)
+        b_true = -0.5 * (mu1_true + mu0_true) @ w_true
+        def true_proba1(X):
+            return 1 / (1 + np.exp(-(np.atleast_2d(X) @ w_true + b_true)))
 
         # decision boundary grid
         xx_nb, yy_nb = np.meshgrid(np.linspace(-5,5,120), np.linspace(-5,5,120))
         grid_nb = np.c_[xx_nb.ravel(), yy_nb.ravel()]
-        Z_nb = np.array([nb_predict_proba(pt)[1] for pt in grid_nb]).reshape(xx_nb.shape)
+        Z_nb = nb_predict_proba(grid_nb)[:, 1].reshape(xx_nb.shape)
 
-        test_proba = nb_predict_proba(np.array([test_x1, test_x2]))
+        test_proba = nb_predict_proba(np.array([test_x1, test_x2]))[0]
+        test_true1 = float(true_proba1(np.array([test_x1, test_x2]))[0])
+
+        # accuracy on fresh data: Naive Bayes vs the best possible rule
+        rng_eval = np.random.default_rng(123)
+        Xe = np.vstack([rng_eval.standard_normal((2000, 2)) @ L_nb.T + mu0_true,
+                        rng_eval.standard_normal((2000, 2)) @ L_nb.T + mu1_true])
+        ye = np.r_[np.zeros(2000), np.ones(2000)]
+        acc_nb   = np.mean((nb_predict_proba(Xe)[:, 1] >= 0.5) == ye)
+        acc_true = np.mean((true_proba1(Xe) >= 0.5) == ye)
 
         with col2:
             fig = go.Figure()
@@ -4722,13 +4750,37 @@ elif section == "naive_bayes":
                 name=f'Test → Class {pred_cls}',
                 marker=dict(color=['#534AB7','#E24B4A'][pred_cls], size=14,
                     symbol='star', line=dict(color='black',width=1.5))))
-            fig.update_layout(xaxis=dict(range=[-5,5]), yaxis=dict(range=[-5,5]),
-                height=400, legend=dict(orientation='h', y=1.1))
+            # true optimal boundary: w·x + b = 0
+            if abs(w_true[1]) > 1e-9:
+                xb = np.linspace(-5, 5, 50)
+                yb = -(w_true[0] * xb + b_true) / w_true[1]
+            else:
+                xb = np.full(50, -b_true / w_true[0]); yb = np.linspace(-5, 5, 50)
+            fig.add_trace(go.Scatter(x=xb, y=yb, mode='lines', name='Best possible boundary',
+                line=dict(color='#1D9E75', width=2.5, dash='dash')))
+            fig.add_trace(go.Contour(x=np.linspace(-5,5,120), y=np.linspace(-5,5,120), z=Z_nb,
+                contours=dict(start=0.5, end=0.5, size=1, coloring='lines'),
+                line=dict(color='#333', width=2), showscale=False, name='Naive Bayes boundary',
+                showlegend=True, hoverinfo='skip'))
+            fig.update_layout(xaxis=dict(range=[-5,5]), yaxis=dict(range=[-5,5], scaleanchor='x'),
+                height=420, legend=dict(orientation='h', y=1.12))
             st.plotly_chart(fig, width='stretch')
 
-        c1, c2 = st.columns(2)
-        c1.metric("P(Class 0 | x)", f"{test_proba[0]:.4f}")
-        c2.metric("P(Class 1 | x)", f"{test_proba[1]:.4f}")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Naive Bayes P(Class 1 | x)", f"{test_proba[1]:.4f}")
+        c2.metric("True P(Class 1 | x)", f"{test_true1:.4f}",
+                  help="Using the real means and the full covariance (including the correlation).")
+        c3.metric("Accuracy on new data", f"NB {acc_nb:.1%}",
+                  delta=f"{(acc_nb - acc_true)*100:+.1f} pts vs best possible {acc_true:.1%}",
+                  delta_color="normal")
+        if rho_nb == 0:
+            st.caption("Correlation 0: the features really are independent within each class, so the 'naive' "
+                       "assumption holds - the Naive Bayes boundary (solid) lines up with the best possible one (dashed).")
+        else:
+            st.warning(f"Correlation {rho_nb:.2f}: the features move together within each class, but Naive Bayes "
+                       "multiplies their probabilities as if they were independent. Its boundary (solid) stays "
+                       "upright while the best boundary (dashed) tilts, and its probabilities become miscalibrated - "
+                       "compare the two P(Class 1 | x) values for the test point.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
