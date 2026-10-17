@@ -9109,7 +9109,7 @@ elif section == "sampling_estimation":
         with col2:
             st.markdown("""
             **Key intuitions:**
-            - SE shrinks as **√n** - doubling n halves SE, but quadrupling n is needed to halve SE again
+            - SE shrinks as **1/√n** - doubling n only cuts SE to about 71% (÷√2); you need **4× n** to halve it
             - SE is NOT the std dev of your data - it's how precisely you know the *mean*
             - Every statistic has its own SE: SE of proportion = √(p(1−p)/n), SE of regression coefficient = s/√(Σ(x−x̄)²)
             - SE is the denominator of every t-statistic: t = (x̄ − μ₀) / SE
@@ -9129,7 +9129,7 @@ elif section == "sampling_estimation":
 
             st.metric("Standard Error", f"{se_val:.3f}")
             st.markdown(f'<div class="formula-box">'
-                f'SE = {pop_std} / √{n_se} = {se_val:.3f}'
+                f'SE = {_vin(pop_std)} / √{n_se} = {se_val:.3f}'
                 f'</div>', unsafe_allow_html=True)
 
             st.markdown("**To halve SE, n must quadruple:**")
@@ -9173,7 +9173,12 @@ elif section == "sampling_estimation":
                 f'   = {se_acc:.4f}'
                 f'</div>', unsafe_allow_html=True)
             st.metric("±95% margin", f"±{1.96*se_acc:.3f}")
-            st.markdown(f"True accuracy is roughly **{acc-1.96*se_acc:.3f} – {acc+1.96*se_acc:.3f}** (95% CI)")
+            ci_lo_acc, ci_hi_acc = max(0.0, acc - 1.96*se_acc), min(1.0, acc + 1.96*se_acc)
+            st.markdown(f"True accuracy is roughly **{ci_lo_acc:.3f} – {ci_hi_acc:.3f}** (95% CI)")
+            if acc + 1.96*se_acc > 1:
+                st.caption(f"The simple formula gives an upper bound of {acc + 1.96*se_acc:.3f} - above 100%, so it "
+                           "is capped at 1. This 'Wald' interval is unreliable near 0% or 100%; the Wilson "
+                           "interval is the usual better choice there.")
         with col2:
             st.markdown(f"""
             At n={n_eval} examples, your reported accuracy of {acc:.0%} has SE = {se_acc:.4f}.
@@ -9181,13 +9186,17 @@ elif section == "sampling_estimation":
             This means two models reporting **{acc:.0%}** and **{acc+2*se_acc:.1%}** on the same
             test set may not actually be different - the gap is within noise.
 
-            **Rule of thumb:** to distinguish two models differing by Δ in accuracy,
+            **Rule of thumb:** to measure one model's accuracy to within **±Δ** (95% confidence),
             you need roughly n ≈ (1.96/Δ)² · p̂(1−p̂) test examples.
+
+            *Comparing two models* needs more: about twice as many for two independent test sets
+            (both estimates are noisy), and more again for good power. On the *same* test set, a paired
+            test such as McNemar's, which looks only at the examples where the models disagree, is more efficient.
             """)
             delta_needed = 0.01
             n_needed = int((1.96 / delta_needed)**2 * acc * (1 - acc))
             st.markdown(f'<div class="formula-box">'
-                f'To detect Δ=1% difference at p={acc:.0%}:<br>'
+                f'To measure accuracy to within ±1% at p={acc:.0%}:<br>'
                 f'n ≈ {n_needed:,} test examples needed'
                 f'</div>', unsafe_allow_html=True)
 
@@ -9195,14 +9204,16 @@ elif section == "sampling_estimation":
     with tab2:
         st.markdown("### Central Limit Theorem - why everything becomes normal")
         st.markdown("""
-        The **CLT** states: regardless of the shape of the population distribution,
-        the distribution of sample means approaches a **normal distribution** as n grows,
-        with mean μ and standard deviation SE = σ/√n.
+        The **CLT** states: regardless of the shape of the population distribution - as long as
+        its variance is finite - the distribution of sample means approaches a **normal distribution**
+        as n grows, with mean μ and standard deviation SE = σ/√n.
         """)
         st.markdown('<div class="formula-box">'
-            'x̄ ~ N(μ, σ²/n)  as n → ∞<br><br>'
-            'regardless of the shape of the population'
+            'x̄ ≈ N(μ, σ²/n)  for large n<br><br>'
+            'regardless of the shape of the population (if σ² is finite)'
             '</div>', unsafe_allow_html=True)
+        st.caption("Heavy-tailed distributions with infinite variance, like the Cauchy, never settle into a "
+                   "normal distribution - their sample mean stays as wild as a single observation.")
 
         col1, col2 = st.columns([1, 2])
         with col1:
@@ -9236,7 +9247,7 @@ elif section == "sampling_estimation":
 
         with col2:
             fig = go.Figure()
-            # Population histogram (small, on right axis)
+            # Population histogram (background, for comparison)
             fig.add_trace(go.Histogram(x=pop[:2000], nbinsx=50,
                 histnorm="probability density", opacity=0.3,
                 marker_color="#ccc", name="Population dist"))
@@ -9251,20 +9262,27 @@ elif section == "sampling_estimation":
             fig.add_trace(go.Scatter(x=x_norm, y=y_norm, mode="lines",
                 line=dict(color="#E24B4A", width=2.5),
                 name=f"N(μ={pop_mu:.2f}, SE={se_clt:.2f})"))
+            # zoom: keep the sample means fully visible, cut off the population's far tail
+            x_lo_c = min(sample_means.min(), np.percentile(pop, 0.5))
+            x_hi_c = max(sample_means.max(), np.percentile(pop, 97.5))
+            pad_c = 0.03 * (x_hi_c - x_lo_c)
             fig.update_layout(height=380, plot_bgcolor="white",
                 xaxis_title="Value", yaxis_title="Density",
+                xaxis=dict(range=[x_lo_c - pad_c, x_hi_c + pad_c]),
                 legend=dict(x=0.01, y=0.99),
                 margin=dict(l=40, r=20, t=20, b=40))
             st.plotly_chart(fig, width='stretch')
-            st.caption(f"Grey = population ({dist_type}). Blue = {n_sims} sample means of size n={n_clt}. "
-                       f"Red curve = theoretical N(μ, σ²/n). Increase n to watch the blue bars become more bell-shaped.")
+            st.caption(f"Grey = population ({dist_type}), shown up to its 97.5th percentile. Blue = {n_sims} sample "
+                       f"means of size n={n_clt}. Red curve = theoretical N(μ, σ²/n). Increase n to watch the blue "
+                       "bars become more bell-shaped.")
 
         st.markdown("""
         **Why the CLT matters in ML:**
         - Justifies using the normal distribution to build confidence intervals around any sample mean
         - Explains why train/val loss averages over mini-batches follow predictable distributions
-        - Underpins permutation tests and bootstrap resampling used to compare models
-        - Requires n ≳ 30 for most distributions; skewed distributions need larger n
+        - When the normal approximation is doubtful (small n, very skewed data), **bootstrap** and
+          **permutation tests** are the go-to alternatives - they don't rely on the CLT
+        - Rule of thumb: n ≳ 30 is enough for most distributions; strongly skewed ones need larger n
         """)
 
     # ── TAB 3: Confidence Intervals ───────────────────────────────────────
@@ -9275,9 +9293,9 @@ elif section == "sampling_estimation":
         sampling, contains the true population parameter a specified percentage of the time.
         """)
         st.markdown('<div class="formula-box">'
-            'CI = x̄  ±  z* · SE<br><br>'
-            '95% CI:  x̄  ±  1.96 · (s/√n)<br>'
-            '99% CI:  x̄  ±  2.576 · (s/√n)'
+            'CI = x̄  ±  t* · (s/√n)     t* from the t-distribution with n − 1 df<br><br>'
+            'Large n: t* → z* = 1.96 (95%) or 2.576 (99%)<br>'
+            'Small n: t* is bigger - e.g. 2.201 for 95% with n = 12'
             '</div>', unsafe_allow_html=True)
 
         st.markdown("""
@@ -9294,10 +9312,17 @@ elif section == "sampling_estimation":
                 height=80, key="ci_raw")
             conf_level = st.select_slider("Confidence level", 
                 options=[0.90, 0.95, 0.99], value=0.95, key="ci_conf")
-            try:
-                data_ci = np.array([float(v.strip()) for v in raw_ci.split(",") if v.strip()])
-            except ValueError:
-                data_ci = np.array([14,18,11,13,16,20,15,12,17,19,13,16], dtype=float)
+            default_ci = np.array([14,18,11,13,16,20,15,12,17,19,13,16], dtype=float)
+            data_ci, err_ci = _parse_numbers(raw_ci, default_ci)
+            if err_ci:
+                st.error(err_ci)
+            elif len(data_ci) < 2:
+                st.error("A confidence interval needs at least 2 values (s divides by n − 1). Showing the default data.")
+                data_ci = default_ci
+            elif np.std(data_ci, ddof=1) == 0:
+                st.error("All values are identical, so s = 0 and the interval has zero width - "
+                         "there's no spread to estimate. Showing the default data.")
+                data_ci = default_ci
 
             n_ci   = len(data_ci)
             mean_ci = np.mean(data_ci)

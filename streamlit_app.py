@@ -1450,7 +1450,8 @@ elif section == "bias_var":
     st.title("🎯 Bias-Variance Tradeoff")
     st.markdown("""
     <div class="concept-card">
-    Total prediction error = <b>Bias²</b> + <b>Variance</b> + <b>Irreducible noise</b>.<br>
+    Expected test error at a new point (averaged over possible training sets) =
+    <b>Bias²</b> + <b>Variance</b> + <b>Irreducible noise</b>.<br>
     A model that is too simple has high bias (underfits). A model that is too complex has
     high variance (overfits). The goal is to find the sweet spot.
     </div>
@@ -1462,32 +1463,36 @@ elif section == "bias_var":
         complexity = st.slider("Model complexity", 1, 15, 4,
             help="Higher = more flexible model (higher degree polynomial)")
         noise_bv = st.slider("Irreducible noise σ", 0.1, 2.0, 0.8, step=0.1)
-        n_datasets = st.slider("Number of datasets (for variance)", 5, 20, 10)
+        n_datasets = st.slider("Fits to draw", 5, 20, 10,
+            help="How many of the individual fits are drawn. The numbers below always use 300 "
+                 "simulated training sets, so they don't jump around with this slider.")
         seed_bv = st.slider("Seed", 0, 10, 0)
 
-    np.random.seed(seed_bv)
-    x_bv = np.linspace(-3, 3, 300)
-    true_fn = np.sin(x_bv)
-
     x_eval = np.linspace(-3, 3, 80)
-    all_preds = []
-    for i in range(n_datasets):
-        x_tr_bv = np.random.uniform(-3, 3, 25)
-        y_tr_bv = np.sin(x_tr_bv) + np.random.randn(25) * noise_bv
-        try:
-            coef = np.polyfit(x_tr_bv, y_tr_bv, complexity)
-            pred = np.polyval(coef, x_eval)
-            all_preds.append(np.clip(pred, -10, 10))
-        except Exception:
-            pass
-    all_preds = np.array(all_preds)
-    mean_pred = all_preds.mean(axis=0)
-    variance_curve = all_preds.var(axis=0)
     true_at_eval = np.sin(x_eval)
-    bias_sq_curve = (mean_pred - true_at_eval)**2
 
-    avg_bias_sq = float(bias_sq_curve.mean())
-    avg_variance = float(variance_curve.mean())
+    @st.cache_data(show_spinner=False)
+    def _bv_sim(noise, seed, n_sims=300, n_train=25, clip=15):
+        """Fit polynomials of degree 1-15 to n_sims independent training sets.
+        Bias² is corrected for the leftover noise in the average of finitely many fits (var/n_sims)."""
+        rng = np.random.default_rng(seed)
+        X = rng.uniform(-3, 3, (n_sims, n_train))
+        Y = np.sin(X) + rng.normal(0, noise, (n_sims, n_train))
+        preds, comps = {}, {}
+        for d in range(1, 16):
+            P = np.array([np.clip(np.polyval(np.polyfit(X[i], Y[i], d), x_eval), -clip, clip)
+                          for i in range(n_sims)])
+            var_x = P.var(axis=0, ddof=1)
+            bias2_x = (P.mean(axis=0) - true_at_eval) ** 2 - var_x / n_sims
+            preds[d] = P
+            comps[d] = (max(float(bias2_x.mean()), 0.0), float(var_x.mean()))
+        return preds, comps
+
+    preds_all, comps_all = _bv_sim(noise_bv, seed_bv)
+    all_preds = preds_all[complexity][:n_datasets]          # the fits drawn on the chart
+    mean_pred = preds_all[complexity].mean(axis=0)          # expected prediction (over 300 fits)
+
+    avg_bias_sq, avg_variance = comps_all[complexity]
     avg_noise    = float(noise_bv**2)
     total_err    = avg_bias_sq + avg_variance + avg_noise
 
@@ -1497,7 +1502,7 @@ elif section == "bias_var":
             fig.add_trace(go.Scatter(x=x_eval, y=pred, mode='lines',
                 line=dict(color='rgba(83,74,183,0.18)', width=1),
                 showlegend=(i == 0), name='Individual model'))
-        fig.add_trace(go.Scatter(x=x_eval, y=mean_pred, name='Mean prediction',
+        fig.add_trace(go.Scatter(x=x_eval, y=mean_pred, name='Mean prediction (300 fits)',
             line=dict(color='#534AB7', width=2.5)))
         fig.add_trace(go.Scatter(x=x_eval, y=true_at_eval, name='True function',
             line=dict(color='#1D9E75', width=2, dash='dash')))
@@ -1511,27 +1516,13 @@ elif section == "bias_var":
     c2.metric("Variance", f"{avg_variance:.3f}")
     c3.metric("Noise σ²", f"{avg_noise:.3f}")
     c4.metric("Total Error", f"{total_err:.3f}")
+    st.caption("Noise σ² is the floor no model can beat - it's randomness in the data itself. "
+               "All components are estimated from 300 simulated training sets of 25 points each.")
 
     st.markdown("### How each component changes with model complexity")
     complexities = list(range(1, 16))
-    bias_vals, var_vals = [], []
-    for c_val in complexities:
-        preds_c = []
-        for i in range(n_datasets):
-            np.random.seed(i + seed_bv * 100)
-            x_tr_c = np.random.uniform(-3, 3, 25)
-            y_tr_c = np.sin(x_tr_c) + np.random.randn(25) * noise_bv
-            try:
-                coef = np.polyfit(x_tr_c, y_tr_c, c_val)
-                preds_c.append(np.clip(np.polyval(coef, x_eval), -15, 15))
-            except Exception:
-                pass
-        if preds_c:
-            ap = np.array(preds_c)
-            bias_vals.append(float(((ap.mean(axis=0) - true_at_eval)**2).mean()))
-            var_vals.append(float(ap.var(axis=0).mean()))
-        else:
-            bias_vals.append(None); var_vals.append(None)
+    bias_vals = [comps_all[c][0] for c in complexities]
+    var_vals  = [comps_all[c][1] for c in complexities]
 
     noise_line = [noise_bv**2] * len(complexities)
     total_line = [b + v + noise_bv**2 if b is not None else None
@@ -1552,6 +1543,10 @@ elif section == "bias_var":
         yaxis_range=[0, min(max(bias_vals + var_vals + [2]), 8)],
         height=320, legend=dict(orientation='h', y=1.12))
     st.plotly_chart(fig2, width='stretch')
+    st.caption("As complexity grows, Bias² falls towards zero and stays there, while Variance keeps rising - "
+               "the total error is U-shaped, with the sweet spot at the bottom. Very complex fits explode near "
+               "the edges, where training points are sparse, so predictions are clipped at ±15 to keep the chart "
+               "readable: the variance shown at high complexity is a lower bound.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
