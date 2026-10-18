@@ -1379,14 +1379,16 @@ elif section == "confusion":
     FN = np.sum((preds == 0) & (labels == 1))
     TN = np.sum((preds == 0) & (labels == 0))
 
+    no_pos_pred = (TP + FP) == 0                      # nothing predicted positive → precision is 0/0
     precision = TP / (TP + FP + 1e-9)
     recall    = TP / (TP + FN + 1e-9)
     f1        = 2 * precision * recall / (precision + recall + 1e-9)
     accuracy  = (TP + TN) / n_conf
 
     with col2:
-        cm = np.array([[TP, FP], [FN, TN]])
-        labels_cm = [["TP", "FP"], ["FN", "TN"]]
+        # rows = actual class, columns = predicted class
+        cm = np.array([[TP, FN], [FP, TN]])
+        labels_cm = [["TP", "FN"], ["FP", "TN"]]
         text = [[f"<b>{labels_cm[i][j]}</b><br>{cm[i,j]}" for j in range(2)] for i in range(2)]
 
         fig = go.Figure(go.Heatmap(
@@ -1395,14 +1397,29 @@ elif section == "confusion":
             colorscale=[[0,'#f0effe'],[0.5,'#AFA9EC'],[1,'#534AB7']],
             text=text, texttemplate="%{text}", textfont=dict(size=18),
             showscale=False))
-        fig.update_layout(height=320, xaxis_title="Predicted", yaxis_title="Actual")
+        fig.update_layout(height=320, xaxis_title="Predicted", yaxis_title="Actual",
+            yaxis=dict(autorange='reversed'))      # Actual Positive on top, standard layout
         st.plotly_chart(fig, width='stretch')
+        st.caption(f"Each row adds up to the true class size: Actual Positive = TP + FN = {TP} + {FN} = {n_pos}; "
+                   f"Actual Negative = FP + TN = {FP} + {TN} = {n_neg}.")
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Precision", f"{precision:.3f}", help="TP / (TP+FP) - of all positive predictions, how many were correct?")
+    c1.metric("Precision", "undefined" if no_pos_pred else f"{precision:.3f}",
+              help="TP / (TP+FP) - of all positive predictions, how many were correct?")
     c2.metric("Recall", f"{recall:.3f}", help="TP / (TP+FN) - of all actual positives, how many did we catch?")
-    c3.metric("F1 Score", f"{f1:.3f}", help="Harmonic mean of precision and recall")
+    c3.metric("F1 Score", "undefined" if no_pos_pred else f"{f1:.3f}", help="Harmonic mean of precision and recall")
     c4.metric("Accuracy", f"{accuracy:.3f}", help="(TP+TN) / total")
+    if no_pos_pred:
+        st.warning("At this threshold the model predicts no positives at all, so precision = 0/0 is undefined.")
+
+    baseline_acc = n_neg / n_conf
+    b1, b2 = st.columns([1, 3])
+    b1.metric("All-negative baseline accuracy", f"{baseline_acc:.3f}",
+              help="Accuracy of a 'model' that always predicts Negative.")
+    b2.caption(f"**The accuracy trap:** with {imbalance}% positives, a useless model that always says "
+               f"'negative' already scores {baseline_acc:.1%} accuracy while catching zero positives "
+               "(recall = 0). On imbalanced data, accuracy alone is misleading - look at precision, recall "
+               "and F1 instead. Try the imbalance slider at 5%.")
 
     st.markdown("### Precision–Recall tradeoff across thresholds")
     thresholds = np.linspace(0.01, 0.99, 200)
@@ -1412,10 +1429,10 @@ elif section == "confusion":
         tp_ = np.sum((p_==1) & (labels==1))
         fp_ = np.sum((p_==1) & (labels==0))
         fn_ = np.sum((p_==0) & (labels==1))
-        pr = tp_ / (tp_ + fp_ + 1e-9)
+        pr = tp_ / (tp_ + fp_) if (tp_ + fp_) > 0 else np.nan    # undefined when nothing is predicted positive
         rc = tp_ / (tp_ + fn_ + 1e-9)
         precs.append(pr); recs.append(rc)
-        f1s.append(2*pr*rc/(pr+rc+1e-9))
+        f1s.append(2*pr*rc/(pr+rc+1e-9) if not np.isnan(pr) else np.nan)
 
     fig2 = make_subplots(rows=1, cols=2,
         subplot_titles=["Precision & Recall vs Threshold", "Precision-Recall curve"])
@@ -1441,6 +1458,8 @@ elif section == "confusion":
     fig2.update_yaxes(title_text="Precision", row=1, col=2)
     fig2.update_layout(height=340, legend=dict(orientation='h', y=1.12))
     st.plotly_chart(fig2, width='stretch')
+    st.caption("Precision and F1 stop at the highest score in the data: above it nothing is predicted "
+               "positive, so precision is undefined (0/0) and those points are left out.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
