@@ -4348,8 +4348,9 @@ elif section == "decision_tree":
     st.markdown("""
     <div class="concept-card">
     A decision tree repeatedly <b>splits the data</b> on the feature and threshold that best
-    separates the classes. Each split is chosen to maximise <b>information gain</b>
-    (or minimise Gini impurity). The result is a set of human-readable if/else rules.
+    separates the classes. Each split is chosen to give the biggest drop in <b>impurity</b>
+    (Gini, or entropy - where the drop is called <b>information gain</b>). The result is a set
+    of human-readable if/else rules.
     </div>
     """, unsafe_allow_html=True)
 
@@ -4380,6 +4381,25 @@ elif section == "decision_tree":
         clf_dt.fit(X_dt, y_dt)
         train_acc = clf_dt.score(X_dt, y_dt)
 
+        # fresh test data from the same distribution - what the tree has never seen
+        rng_te = np.random.RandomState(1000 + seed_dt)
+        n_te = 1000
+        if n_classes_dt == 2:
+            X_te = np.vstack([rng_te.randn(n_te,2)+[-sep_dt/2,0], rng_te.randn(n_te,2)+[sep_dt/2,0]])
+        else:
+            X_te = np.vstack([rng_te.randn(n_te,2)+[-sep_dt,0], rng_te.randn(n_te,2)+[sep_dt,0],
+                              rng_te.randn(n_te,2)+[0,sep_dt]])
+        y_te = np.repeat(np.arange(n_classes_dt), n_te)
+        test_acc = clf_dt.score(X_te, y_te)
+
+        depths_dt = list(range(1, 7))
+        tr_curve, te_curve = [], []
+        for d_ in depths_dt:
+            m_ = DecisionTreeClassifier(max_depth=d_, random_state=42).fit(X_dt, y_dt)
+            tr_curve.append(m_.score(X_dt, y_dt)); te_curve.append(m_.score(X_te, y_te))
+        best_depth = depths_dt[int(np.argmax(te_curve))]
+        best_test = max(te_curve)
+
         xx_dt, yy_dt = np.meshgrid(np.linspace(-5,5,150), np.linspace(-5,5,150))
         Z_dt = clf_dt.predict(np.c_[xx_dt.ravel(), yy_dt.ravel()]).reshape(xx_dt.shape)
 
@@ -4405,29 +4425,52 @@ elif section == "decision_tree":
                 height=420, legend=dict(orientation='h', y=1.1))
             st.plotly_chart(fig, width='stretch')
 
-        c1,c2,c3 = st.columns(3)
-        c1.metric("Max depth", max_depth)
-        c2.metric("Train accuracy", f"{train_acc:.1%}")
+        st.caption("Trees split on one feature at a time (\"is x₁ < 0.3?\"), so every boundary is made of "
+                   "horizontal and vertical segments - that's why the regions look boxy.")
+        c1,c2,c3,c4 = st.columns(4)
+        c1.metric("Train accuracy", f"{train_acc:.1%}")
+        c2.metric("Test accuracy", f"{test_acc:.1%}", delta=f"{(test_acc-train_acc)*100:+.1f} pts vs train",
+                  help="Accuracy on 1,000 fresh points per class from the same distribution.")
         c3.metric("Leaf nodes", clf_dt.get_n_leaves())
+        c4.metric("Best depth on test data", best_depth)
 
-        if max_depth >= 5:
-            st.warning("Deep tree - likely overfitting. The jagged boundaries memorise training noise.")
-        elif max_depth <= 2:
-            st.info("Shallow tree - may underfit complex patterns, but generalises well.")
+        gap = train_acc - test_acc
+        if max_depth > best_depth and test_acc < best_test - 0.01:
+            st.warning(f"Overfitting: depth {max_depth} scores {train_acc:.1%} on training data but only "
+                       f"{test_acc:.1%} on new data. Depth {best_depth} does better on new data ({best_test:.1%}) - "
+                       "the extra splits are memorising training noise.")
+        elif max_depth < best_depth and test_acc < best_test - 0.01:
+            st.info(f"Underfitting: depth {best_depth} reaches {best_test:.1%} on new data versus {test_acc:.1%} "
+                    "here - this tree is too simple to capture the pattern.")
         else:
-            st.success("Moderate depth - good balance of expressiveness and generalisability.")
+            st.success(f"Good fit: test accuracy ({test_acc:.1%}) is at or within 1 point of the best any depth "
+                       f"achieves on this data (train-test gap {gap*100:.1f} pts).")
+
+        fig_dc = go.Figure()
+        fig_dc.add_trace(go.Scatter(x=depths_dt, y=tr_curve, mode='lines+markers', name='Train accuracy',
+            line=dict(color='#888780', width=2, dash='dot')))
+        fig_dc.add_trace(go.Scatter(x=depths_dt, y=te_curve, mode='lines+markers', name='Test accuracy',
+            line=dict(color='#534AB7', width=2.5)))
+        fig_dc.add_vline(x=max_depth, line=dict(color='#EF9F27', dash='dash'),
+            annotation_text=f"depth {max_depth}")
+        fig_dc.update_layout(xaxis_title="Max depth", yaxis_title="Accuracy", yaxis_tickformat=".0%",
+            height=260, legend=dict(orientation='h', y=1.18))
+        st.plotly_chart(fig_dc, width='stretch')
+        st.caption("Training accuracy always rises with depth; test accuracy is what matters. "
+                   "Here the classes are separated by simple straight lines, so shallow trees are often best.")
 
     with tab2:
         st.markdown("### Gini impurity - the split criterion")
         st.markdown('<div class="formula-box">Gini = 1 − Σ pᵢ²</div>', unsafe_allow_html=True)
-        st.markdown("Gini = 0 means a pure node (all one class). Gini = 0.5 means perfectly mixed (2 classes).")
+        st.markdown("Gini = 0 means a pure node (all one class). Its maximum is 1 − 1/k for k classes: "
+                    "0.5 for a perfectly mixed 2-class node, 0.667 for 3 classes.")
 
         col1, col2 = st.columns([1, 2])
         with col1:
             p_cls1 = st.slider("Fraction of class A in node", 0.0, 1.0, 0.5, step=0.01)
             p_cls2 = 1.0 - p_cls1
             gini = 1 - (p_cls1**2 + p_cls2**2)
-            entropy = -(p_cls1*np.log2(p_cls1+1e-9) + p_cls2*np.log2(p_cls2+1e-9))
+            entropy = max(0.0, -(p_cls1*np.log2(p_cls1+1e-9) + p_cls2*np.log2(p_cls2+1e-9)))   # avoid −0.0000
             st.metric("Gini impurity", f"{gini:.4f}")
             st.metric("Entropy", f"{entropy:.4f}")
             if gini < 0.1:   st.success("Very pure node - good split!")
@@ -4450,13 +4493,15 @@ elif section == "decision_tree":
                 legend=dict(orientation='h', y=1.12))
             st.plotly_chart(fig, width='stretch')
 
-        st.markdown("### Information gain - how a split is chosen")
+        st.markdown("### Gini gain - how a split is chosen")
         st.markdown("""
         At each node the tree tries every feature and every threshold.
         It picks the one that maximises:
         """)
-        st.markdown('<div class="formula-box">IG = Gini(parent) − [n_L/n · Gini(left) + n_R/n · Gini(right)]</div>',
+        st.markdown('<div class="formula-box">Gini gain = Gini(parent) − [n_L/n · Gini(left) + n_R/n · Gini(right)]</div>',
             unsafe_allow_html=True)
+        st.caption("This is the impurity decrease measured with Gini. The same formula with entropy instead of "
+                   "Gini is called **information gain** - both usually pick very similar splits.")
         col1, col2 = st.columns([1, 2])
         with col1:
             n_left  = st.slider("Left child samples", 5, 50, 20)
@@ -4475,7 +4520,7 @@ Parent gini  = {gini_parent:.4f}  (p_A = {p_parent:.2f})
 Left gini    = {gini_left:.4f}   (p_A = {p_left:.2f}, n={n_left})
 Right gini   = {gini_right:.4f}  (p_A = {p_right:.2f}, n={n_right})
 
-Information gain = {gini_parent:.4f} − ({n_left}/{n_total}·{gini_left:.4f} + {n_right}/{n_total}·{gini_right:.4f})
+Gini gain        = {gini_parent:.4f} − ({n_left}/{n_total}·{gini_left:.4f} + {n_right}/{n_total}·{gini_right:.4f})
                  = {ig:.4f}
 """, language="text")
             if ig > 0.15: st.success("Excellent split - large reduction in impurity")
