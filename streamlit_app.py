@@ -4572,7 +4572,10 @@ elif section == "ensemble_trees":
             noise_et = st.slider("Dataset noise", 0.1, 0.5, 0.25, step=0.05, key="et_noise")
 
         X_et, y_et = make_moons(n_samples=220, noise=noise_et, random_state=7)
-        Xtr, Xte, ytr, yte = train_test_split(X_et, y_et, test_size=0.3, random_state=7)
+        Xtr, _, ytr, _ = train_test_split(X_et, y_et, test_size=0.3, random_state=7)
+        # Score on 2,000 fresh points from the same distribution - a 66-point test set is too noisy
+        # to compare methods (one point = 1.5% accuracy). Only a sample is drawn on the plot.
+        Xte, yte = make_moons(n_samples=2000, noise=noise_et, random_state=1234)
 
         clf_et = _make_ensemble(method_et, n_est_et, depth_et)
         clf_et.fit(Xtr, ytr)
@@ -4591,8 +4594,8 @@ elif section == "ensemble_trees":
                 name='Class 0 (train)', marker=dict(color='#534AB7', size=7)))
             fig.add_trace(go.Scatter(x=Xtr[ytr==1,0], y=Xtr[ytr==1,1], mode='markers',
                 name='Class 1 (train)', marker=dict(color='#E24B4A', size=7)))
-            fig.add_trace(go.Scatter(x=Xte[:,0], y=Xte[:,1], mode='markers',
-                name='Test points', marker=dict(color='#1D9E75', size=8, symbol='x')))
+            fig.add_trace(go.Scatter(x=Xte[:80,0], y=Xte[:80,1], mode='markers',
+                name='Test points (80 of 2,000 shown)', marker=dict(color='#1D9E75', size=8, symbol='x')))
             fig.update_layout(height=400, legend=dict(orientation='h', y=1.12))
             st.plotly_chart(fig, width='stretch')
 
@@ -4600,6 +4603,11 @@ elif section == "ensemble_trees":
         c1.metric("Train accuracy", f"{train_acc_et:.1%}")
         c2.metric("Test accuracy", f"{test_acc_et:.1%}")
         c3.metric("Gap (overfitting signal)", f"{train_acc_et - test_acc_et:+.1%}")
+        st.caption("Trained on 154 points; test accuracy is measured on 2,000 fresh points, so differences "
+                   "of about 1-2 points between methods are real, not luck.")
+        if method_et == "Boosting" and depth_et > 3:
+            st.info(f"Boosting uses trees of depth at most 3 here, even with the slider at {depth_et}: boosting "
+                    "works by adding many *shallow* trees, and deep trees make it overfit quickly.")
 
         st.markdown("### All four methods, same settings")
         rows = []
@@ -4616,7 +4624,7 @@ elif section == "ensemble_trees":
             height=320, legend=dict(orientation='h', y=1.14))
         st.plotly_chart(fig_bar, width='stretch')
         st.caption("The single tree usually shows the widest train/test gap - that gap is "
-                   "exactly the variance the ensembles are cancelling out.")
+                   "exactly the variance the ensembles are cancelling out. Boosting is capped at depth 3.")
 
     with tab2:
         st.markdown("""
@@ -4626,7 +4634,8 @@ elif section == "ensemble_trees":
 
         st.markdown("""
         **Bagging** (Bootstrap AGGregatING)
-        - Draws *n* bootstrap samples (random samples with replacement) from the training data
+        - Draws one bootstrap sample per tree - a random sample of the training data, the same size
+          as the training set, drawn *with replacement* (so some points repeat and others are left out)
         - Fits one full tree per sample, then **averages** the predictions (or majority-votes)
         - Reduces variance - but trees trained on similar data with all features available
           tend to look alike, so the variance reduction has a ceiling
@@ -4639,8 +4648,13 @@ elif section == "ensemble_trees":
 
         **Boosting**
         - Trees are built **sequentially**, not independently
-        - Each new tree focuses on the training examples the previous trees got wrong (or,
-          for regression, fits the residual errors left over)
+        - **Gradient boosting** (used on this page): each new tree is fitted to the errors the current
+          ensemble still makes - the residuals for regression, or more generally the gradient of the
+          loss, which works the same way for classification. Its prediction is added in, scaled down
+          by the learning rate
+        - **AdaBoost**, the original variant, instead re-weights the training points so the next tree
+          concentrates on the examples the previous trees got wrong
+        - Uses shallow trees (depth 1-3 is typical) - each one only needs to make a small correction
         - Reduces **bias** rather than variance - but with too many rounds or too high a
           learning rate, it can start fitting noise
         """)
@@ -4651,23 +4665,28 @@ elif section == "ensemble_trees":
             depth_tab2 = st.slider("Max tree depth", 1, 6, 3, key="et2_depth")
             noise_tab2 = st.slider("Dataset noise", 0.1, 0.5, 0.3, step=0.05, key="et2_noise")
 
-        X2, y2 = make_moons(n_samples=220, noise=noise_tab2, random_state=7)
-        Xtr2, Xte2, ytr2, yte2 = train_test_split(X2, y2, test_size=0.3, random_state=7)
         est_range = [1, 3, 5, 10, 20, 40, 70, 100, 150]
-        bag_err, rf_err, boost_err = [], [], []
-        for ne in est_range:
-            b = BaggingClassifier(estimator=DecisionTreeClassifier(max_depth=depth_tab2),
-                n_estimators=ne, random_state=42).fit(Xtr2, ytr2)
-            r = RandomForestClassifier(n_estimators=ne, max_depth=depth_tab2,
-                random_state=42).fit(Xtr2, ytr2)
-            g = GradientBoostingClassifier(n_estimators=ne, max_depth=min(depth_tab2, 3),
-                learning_rate=0.15, random_state=42).fit(Xtr2, ytr2)
-            bag_err.append(1 - b.score(Xte2, yte2))
-            rf_err.append(1 - r.score(Xte2, yte2))
-            boost_err.append(1 - g.score(Xte2, yte2))
 
-        single_err = 1 - DecisionTreeClassifier(max_depth=depth_tab2, random_state=42
-            ).fit(Xtr2, ytr2).score(Xte2, yte2)
+        @st.cache_data(show_spinner="Training ~1,200 trees…")
+        def _et_curves(depth, noise):
+            X2, y2 = make_moons(n_samples=220, noise=noise, random_state=7)
+            Xtr2, _, ytr2, _ = train_test_split(X2, y2, test_size=0.3, random_state=7)
+            Xte2, yte2 = make_moons(n_samples=2000, noise=noise, random_state=1234)   # large fresh test set
+            bag, rf, boost = [], [], []
+            for ne in est_range:
+                b = BaggingClassifier(estimator=DecisionTreeClassifier(max_depth=depth),
+                    n_estimators=ne, random_state=42).fit(Xtr2, ytr2)
+                r = RandomForestClassifier(n_estimators=ne, max_depth=depth,
+                    random_state=42).fit(Xtr2, ytr2)
+                g = GradientBoostingClassifier(n_estimators=ne, max_depth=min(depth, 3),
+                    learning_rate=0.15, random_state=42).fit(Xtr2, ytr2)
+                bag.append(1 - b.score(Xte2, yte2))
+                rf.append(1 - r.score(Xte2, yte2))
+                boost.append(1 - g.score(Xte2, yte2))
+            single = 1 - DecisionTreeClassifier(max_depth=depth, random_state=42).fit(Xtr2, ytr2).score(Xte2, yte2)
+            return bag, rf, boost, single
+
+        bag_err, rf_err, boost_err, single_err = _et_curves(depth_tab2, noise_tab2)
 
         fig2 = go.Figure()
         fig2.add_hline(y=single_err, line=dict(color='#888780', dash='dot'),
@@ -4686,7 +4705,8 @@ elif section == "ensemble_trees":
                    "longer since each round targets the remaining errors directly, which is "
                    "also why it needs its **learning rate** and tree count tuned together to "
                    "avoid eventually overfitting - see **Regularization** and "
-                   "**Cross-Validation** for how that tuning is usually done.")
+                   "**Cross-Validation** for how that tuning is usually done. Error is measured on "
+                   "2,000 fresh test points; boosting trees are capped at depth 3.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # NAIVE BAYES
