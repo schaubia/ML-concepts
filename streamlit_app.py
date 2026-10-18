@@ -343,7 +343,9 @@ elif section == "gradient":
             if loss_type == "Parabola x²":
                 return lambda x: x**2, lambda x: 2*x
             elif loss_type == "Asymmetric":
-                return lambda x: 0.5*x**2 + 0.3*x**3 * (x < 0), lambda x: x + 0.9*x**2 * (x < 0)
+                # gentle bowl on the right (0.5x²), steep on the left (2x²) - bounded below, minimum at 0
+                return (lambda x: np.where(x >= 0, 0.5*x**2, 2*x**2),
+                        lambda x: np.where(x >= 0, x, 4*x))
             else:
                 return (lambda x: x**2 + 2*np.sin(2*x),
                         lambda x: 2*x + 4*np.cos(2*x))
@@ -351,11 +353,18 @@ elif section == "gradient":
         loss_fn, grad_fn = get_loss_and_grad(loss_type)
 
         xs_hist = [start_x]
-        for _ in range(n_steps):
-            g = grad_fn(xs_hist[-1])
-            xs_hist.append(xs_hist[-1] - lr * g)
-            if abs(g) < 1e-5:
+        conv_step, diverged = None, False
+        for k in range(n_steps):
+            g = float(grad_fn(xs_hist[-1]))
+            if abs(g) < 1e-3:                     # gradient ~ 0 → converged
+                conv_step = k
                 break
+            xs_hist.append(xs_hist[-1] - lr * g)
+            if abs(xs_hist[-1]) > 50:             # running away - stop before the plot explodes
+                diverged = True
+                break
+        if conv_step is None and not diverged and abs(float(grad_fn(xs_hist[-1]))) < 1e-3:
+            conv_step = len(xs_hist) - 1
 
         with col2:
             x_range = np.linspace(-5, 5, 400)
@@ -378,21 +387,51 @@ elif section == "gradient":
             fig.add_scatter(x=[xs_hist[-1]], y=[ys_hist[-1]], mode='markers',
                 marker=dict(color='#1D9E75', size=14, symbol='star'),
                 name='End', showlegend=True)
+            y_lo, y_hi = float(y_range.min()), float(y_range.max())
             fig.update_layout(xaxis_title="x (parameter)", yaxis_title="Loss",
+                xaxis=dict(range=[-5.2, 5.2]),
+                yaxis=dict(range=[y_lo - 0.05*(y_hi-y_lo), y_hi + 0.05*(y_hi-y_lo)]),
                 height=400, legend=dict(orientation='h', y=1.12))
             st.plotly_chart(fig, width='stretch')
 
+        steps_run = len(xs_hist) - 1
         c1, c2, c3 = st.columns(3)
         c1.metric("Starting x", f"{xs_hist[0]:.3f}")
-        c2.metric("Final x", f"{xs_hist[-1]:.3f}")
-        c3.metric("Steps to converge", len(xs_hist) - 1)
+        c2.metric("Final x", "diverged" if diverged else f"{xs_hist[-1]:.3f}")
+        c3.metric("Steps to converge", f"{conv_step}" if conv_step is not None else f"not converged in {steps_run}",
+                  help="Steps until the gradient is below 0.001.")
 
-        if lr >= 1.0:
-            st.warning("Large learning rate - the model may overshoot the minimum and diverge.")
-        elif lr <= 0.05:
-            st.info("Small learning rate - convergence is stable but slow.")
+        # Describe what the run actually did, from its path
+        deltas = np.diff(xs_hist)
+        flips = int(np.sum(np.sign(deltas[1:]) != np.sign(deltas[:-1]))) if len(deltas) > 1 else 0
+        g_first, g_last = abs(float(grad_fn(xs_hist[0]))), abs(float(grad_fn(xs_hist[-1])))
+        if diverged:
+            st.error(f"Diverged: learning rate {lr} is too large - each step overshoots further than the last, "
+                     "so x runs away (stopped once |x| > 50).")
+        elif conv_step is not None:
+            if flips >= max(3, conv_step // 2):
+                st.success(f"Converged in {conv_step} steps, but by zig-zagging across the minimum - "
+                           "the learning rate is near the upper limit for this curve.")
+            elif conv_step > 0.8 * n_steps:
+                st.info(f"Converged, but slowly ({conv_step} steps) - a larger learning rate would get there faster.")
+            else:
+                st.success(f"Converged smoothly in {conv_step} step{'s' if conv_step != 1 else ''}.")
+        elif flips >= max(3, steps_run // 2) and g_last > 0.8 * g_first:
+            st.warning("Stuck bouncing: each step overshoots by about as much as the last, so x jumps back and "
+                       "forth across the minimum without getting closer. Lower the learning rate.")
+        elif flips >= max(3, steps_run // 2):
+            st.warning(f"Oscillating: x zig-zags across the minimum and hasn't settled within {steps_run} steps. "
+                       "A smaller learning rate would descend more smoothly.")
         else:
-            st.success("Good learning rate - fast and stable descent.")
+            st.info(f"Still descending: not converged within {steps_run} steps - the learning rate is small "
+                    "(or add more steps).")
+
+        if loss_type == "With local minimum" and not diverged:
+            x_glob = float(x_range[np.argmin(y_range)])
+            if conv_step is not None and abs(xs_hist[-1] - x_glob) > 0.3:
+                st.warning(f"Stuck in a **local** minimum at x ≈ {xs_hist[-1]:.2f}. The global minimum is at "
+                           f"x ≈ {x_glob:.2f} - gradient descent only sees the local slope, so where it ends up "
+                           "depends on where it starts.")
 
     with tab2:
         st.markdown("Loss surface with two parameters (w₁, w₂):")
@@ -410,6 +449,59 @@ elif section == "gradient":
             height=480, margin=dict(l=0, r=0, b=0, t=20))
         st.plotly_chart(fig, width='stretch')
         st.caption("Drag to rotate. The goal is to find the valley - the minimum loss.")
+
+        st.markdown("### Gradient descent on this surface")
+        def grad2(w):
+            return np.array([2*w[0] + 1.5*np.cos(3*w[0])*w[1],
+                             4*w[1] + 0.5*np.sin(3*w[0])])
+        def loss2(w):
+            return w[0]**2 + 2*w[1]**2 + 0.5*np.sin(3*w[0])*w[1]
+        c2a, c2b = st.columns([1, 2])
+        with c2a:
+            lr2 = st.select_slider("Learning rate", [0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.45, 0.5, 0.55],
+                                   value=0.1, key="gd2_lr")
+            w1_0 = st.slider("Start w₁", -3.0, 3.0, 2.5, step=0.1, key="gd2_w1")
+            w2_0 = st.slider("Start w₂", -3.0, 3.0, 2.0, step=0.1, key="gd2_w2")
+            steps2 = st.slider("Steps", 5, 80, 30, key="gd2_steps")
+        path = [np.array([w1_0, w2_0])]
+        div2 = False
+        for _ in range(steps2):
+            g2 = grad2(path[-1])
+            if np.linalg.norm(g2) < 1e-3:
+                break
+            path.append(path[-1] - lr2 * g2)
+            if np.linalg.norm(path[-1]) > 20:
+                div2 = True
+                break
+        path = np.array(path)
+        with c2b:
+            figc = go.Figure()
+            figc.add_trace(go.Contour(x=w1, y=w2, z=Z, colorscale='RdPu', showscale=False,
+                contours=dict(coloring='lines'), line=dict(width=1), hoverinfo='skip'))
+            figc.add_trace(go.Scatter(x=np.clip(path[:, 0], -3.2, 3.2), y=np.clip(path[:, 1], -3.2, 3.2),
+                mode='lines+markers', name='Descent path',
+                line=dict(color='#EF9F27', width=2), marker=dict(size=6, color='#EF9F27')))
+            figc.add_trace(go.Scatter(x=[w1_0], y=[w2_0], mode='markers', name='Start',
+                marker=dict(color='#E24B4A', size=13)))
+            if not div2:
+                figc.add_trace(go.Scatter(x=[path[-1, 0]], y=[path[-1, 1]], mode='markers', name='End',
+                    marker=dict(color='#1D9E75', size=15, symbol='star')))
+            figc.update_layout(xaxis=dict(title='w₁', range=[-3, 3]),
+                yaxis=dict(title='w₂', range=[-3, 3], scaleanchor='x'),
+                height=420, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(figc, width='stretch')
+        d2 = np.diff(path[:, 1])
+        flips2 = int(np.sum(np.sign(d2[1:]) != np.sign(d2[:-1]))) if len(d2) > 1 else 0
+        if div2:
+            st.error(f"Diverged: learning rate {lr2} is too large for the steep w₂ direction - the path flies off "
+                     "(roughly, anything above 0.5 overshoots in w₂, whose curvature is twice that of w₁).")
+        elif flips2 >= max(3, (len(path) - 1) // 2):
+            st.warning(f"Zig-zag: the valley is about twice as steep in w₂ as in w₁, so a learning rate of {lr2} "
+                       "overshoots back and forth across the narrow direction while creeping along the long one. "
+                       "This is exactly the problem that momentum and Adam were designed to fix.")
+        else:
+            st.success(f"Smooth descent: loss {loss2(path[0]):.2f} → {loss2(path[-1]):.3f} in {len(path)-1} steps.")
+        st.caption("Try learning rate 0.4-0.45 to see the classic zig-zag, and 0.55 to see it diverge.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # BACKPROPAGATION
