@@ -4195,6 +4195,7 @@ elif section == "clustering":
     from sklearn.cluster import KMeans
     from sklearn.datasets import make_blobs
     from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
+    from sklearn.metrics import silhouette_score
 
     palette = ['#534AB7', '#E24B4A', '#1D9E75', '#EF9F27', '#888780', '#3AACC9', '#B24BE2', '#E2B24B']
 
@@ -4229,19 +4230,34 @@ elif section == "clustering":
 
         st.markdown("### Elbow method - choosing k")
         ks = list(range(1, 9))
-        inertias = [KMeans(n_clusters=kk, n_init=10, random_state=42).fit(X_km).inertia_ for kk in ks]
+        fits_k = {kk: KMeans(n_clusters=kk, n_init=10, random_state=42).fit(X_km) for kk in ks}
+        inertias = [fits_k[kk].inertia_ for kk in ks]
+        ks_sil = ks[1:]                                   # silhouette needs at least 2 clusters
+        sils = [silhouette_score(X_km, fits_k[kk].labels_) for kk in ks_sil]
+        best_sil_k = ks_sil[int(np.argmax(sils))]
         fig2 = go.Figure()
-        fig2.add_trace(go.Scatter(x=ks, y=inertias, mode='lines+markers',
+        fig2.add_trace(go.Scatter(x=ks, y=inertias, mode='lines+markers', name='Inertia (left axis)',
             line=dict(color='#534AB7', width=2.5)))
+        fig2.add_trace(go.Scatter(x=ks_sil, y=sils, mode='lines+markers', name='Silhouette (right axis)',
+            line=dict(color='#1D9E75', width=2.5, dash='dash'), yaxis='y2'))
+        fig2.add_trace(go.Scatter(x=[best_sil_k], y=[max(sils)], mode='markers', yaxis='y2',
+            marker=dict(color='#1D9E75', size=14, symbol='star'), name=f'Best silhouette (k={best_sil_k})'))
         fig2.add_vline(x=chosen_k, line=dict(color='#EF9F27', dash='dash'),
             annotation_text=f"Selected k={chosen_k}")
-        fig2.update_layout(xaxis_title="k", yaxis_title="Inertia", height=280)
+        fig2.update_layout(xaxis_title="k", yaxis_title="Inertia (lower = tighter)", height=300,
+            yaxis2=dict(title="Silhouette (higher = better)", overlaying='y', side='right', range=[0, 1]),
+            legend=dict(orientation='h', y=1.2))
         st.plotly_chart(fig2, width='stretch')
-        st.caption("The 'elbow' - where adding another cluster stops giving a big drop in "
-                   "inertia - is a common heuristic for picking k. There's no ground truth to "
-                   "check against in real unsupervised problems, so this is a judgment call, "
-                   "not something **Cross-Validation** can pick for you the way it does for "
-                   "supervised models.")
+        st.caption(f"The 'elbow' - where adding another cluster stops giving a big drop in inertia - is a "
+                   f"common heuristic for picking k, but it's a judgement call. The **silhouette score** gives "
+                   f"a number to go with it: for each point it compares the distance to its own cluster with "
+                   f"the distance to the nearest other cluster (−1 to 1, higher is better). Here it peaks at "
+                   f"k = {best_sil_k}. There's no ground truth in real unsupervised problems, so neither is "
+                   "something **Cross-Validation** can settle the way it does for supervised models.")
+        st.caption("**K-Means assumptions:** it works best for roughly round clusters of similar size and "
+                   "spread, it is sensitive to feature scaling (standardise features first), and it can get "
+                   "stuck in a poor solution depending on the starting centroids - which is why it is run "
+                   "several times (`n_init=10` here) and the best result kept.")
 
     with tab2:
         col1, col2 = st.columns([1, 2])
@@ -4261,16 +4277,26 @@ elif section == "clustering":
         labels_h = fcluster(Z, cut_height, criterion='distance')
         n_found = len(set(labels_h))
 
-        dn = dendrogram(Z, no_plot=True)
-        color_map = {'C0': '#534AB7', 'C1': '#E24B4A', 'C2': '#1D9E75', 'C3': '#EF9F27'}
+        # Colour each branch by the cluster it belongs to AT THE USER'S CUT, using the scatter's colours;
+        # branches that join different clusters (above the cut) are grey.
+        lab_order = sorted(set(labels_h))
+        lab_color = {lab: palette[i % len(palette)] for i, lab in enumerate(lab_order)}
+        n_leaves = len(X_h)
+        leaves_of = {i: {i} for i in range(n_leaves)}
+        for j, (a_, b_, _, _) in enumerate(Z):
+            leaves_of[n_leaves + j] = leaves_of[int(a_)] | leaves_of[int(b_)]
+        def _link_color(node_id):
+            labs = {labels_h[leaf] for leaf in leaves_of[node_id]}
+            return lab_color[labs.pop()] if len(labs) == 1 else '#BBBBBB'
+        dn = dendrogram(Z, no_plot=True, link_color_func=_link_color)
         with col2:
             fig_dendro = go.Figure()
             for xs, ys, c in zip(dn['icoord'], dn['dcoord'], dn['color_list']):
                 fig_dendro.add_trace(go.Scatter(x=xs, y=ys, mode='lines',
-                    line=dict(color=color_map.get(c, '#888780'), width=1.5),
+                    line=dict(color=c, width=1.5),
                     showlegend=False, hoverinfo='skip'))
             fig_dendro.add_hline(y=cut_height, line=dict(color='#EF9F27', dash='dash'),
-                annotation_text=f"Cut → {n_found} clusters")
+                annotation_text=f"Cut → {n_found} clusters (colours match the scatter below)")
             fig_dendro.update_layout(xaxis=dict(showticklabels=False, title="Points"),
                 yaxis_title="Linkage distance", height=380)
             st.plotly_chart(fig_dendro, width='stretch')
