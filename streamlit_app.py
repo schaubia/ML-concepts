@@ -1232,7 +1232,12 @@ elif section == "knn":
     neighbor_idx = np.argsort(dists)[:k]
     neighbor_labels = y_all[neighbor_idx]
     votes = np.bincount(neighbor_labels, minlength=3)
-    prediction = np.argmax(votes)
+    tied_classes = [c for c in range(3) if votes[c] == votes.max()]
+    if len(tied_classes) > 1:
+        # standard tie-break: among the tied classes, pick the one whose neighbour is closest
+        prediction = next(int(lbl) for lbl in neighbor_labels if lbl in tied_classes)
+    else:
+        prediction = int(np.argmax(votes))
 
     with col2:
         fig = go.Figure()
@@ -1263,6 +1268,7 @@ elif section == "knn":
                 symbol='star', line=dict(color='black', width=1.5))))
 
         fig.update_layout(xaxis_title="X", yaxis_title="Y", height=420,
+            yaxis=dict(scaleanchor='x', scaleratio=1),      # equal scale, so the circle is a circle
             legend=dict(orientation='h', y=1.12))
         st.plotly_chart(fig, width='stretch')
 
@@ -1273,6 +1279,16 @@ elif section == "knn":
 
     pred_col = class_colors[prediction]
     st.markdown(f"**Prediction: {class_names[prediction]}** ({votes[prediction]}/{k} votes)")
+    if len(tied_classes) > 1:
+        _tn = [class_names[c] for c in tied_classes]
+        tied_names = ", ".join(_tn[:-1]) + " and " + _tn[-1]
+        st.info(f"Tie: {tied_names} each have {votes.max()} vote{'s' if votes.max() != 1 else ''}. "
+                f"Broken in favour of the tied class with the closest neighbour - {class_names[prediction]}.")
+    st.caption("K moves in odd steps, which prevents ties only with **two** classes. With three classes, "
+               "K = 3 can split 1-1-1 and K = 5 can split 2-2-1.")
+    st.caption("**Scale your features first.** KNN relies entirely on distance, so a feature measured in "
+               "thousands (e.g. income) swamps one measured in single digits (e.g. age). Standardise each "
+               "feature (mean 0, std 1) before using KNN - here both axes are already on the same scale.")
 
     st.markdown("### Decision boundaries - how K changes the border")
     st.markdown("Low K → jagged boundaries (high variance). High K → smooth boundaries (high bias).")
@@ -1297,8 +1313,37 @@ elif section == "knn":
             fig2.add_trace(go.Scatter(x=X_all[mask,0], y=X_all[mask,1],
                 mode='markers', marker=dict(color=c, size=6),
                 showlegend=False), row=1, col=col_idx+1)
+    for ax_i in (1, 2, 3):
+        fig2.update_yaxes(scaleanchor=f"x{'' if ax_i == 1 else ax_i}", scaleratio=1, row=1, col=ax_i)
     fig2.update_layout(height=320)
     st.plotly_chart(fig2, width='stretch')
+
+    st.markdown("### Which K works best? Train vs test accuracy")
+    rng_kt = np.random.RandomState(1000 + seed_knn)          # fresh points from the same three blobs
+    n_kt = 300
+    X_kt = np.vstack([rng_kt.randn(n_kt, 2) + [-1.2, 0.8], rng_kt.randn(n_kt, 2) + [1.2, -0.8],
+                      rng_kt.randn(n_kt, 2) + [0.0, -1.8]])
+    y_kt = np.repeat([0, 1, 2], n_kt)
+    ks_curve = [kk for kk in range(1, 26, 2) if kk <= len(X_all)]
+    tr_k, te_k = [], []
+    for kk in ks_curve:
+        m_k = KNeighborsClassifier(n_neighbors=kk).fit(X_all, y_all)
+        tr_k.append(m_k.score(X_all, y_all)); te_k.append(m_k.score(X_kt, y_kt))
+    best_k = ks_curve[int(np.argmax(te_k))]
+    fig3 = go.Figure()
+    fig3.add_trace(go.Scatter(x=ks_curve, y=tr_k, mode='lines+markers', name='Train accuracy',
+        line=dict(color='#888780', width=2, dash='dot')))
+    fig3.add_trace(go.Scatter(x=ks_curve, y=te_k, mode='lines+markers', name='Test accuracy (900 new points)',
+        line=dict(color='#534AB7', width=2.5)))
+    fig3.add_vline(x=k, line=dict(color='#EF9F27', dash='dash'), annotation_text=f"K={k}")
+    fig3.add_trace(go.Scatter(x=[best_k], y=[max(te_k)], mode='markers', name=f'Best test K = {best_k}',
+        marker=dict(color='#1D9E75', size=14, symbol='star')))
+    fig3.update_layout(xaxis_title="K", yaxis_title="Accuracy", yaxis_tickformat=".0%", height=280,
+        legend=dict(orientation='h', y=1.2))
+    st.plotly_chart(fig3, width='stretch')
+    st.caption(f"With K = 1 every training point is its own nearest neighbour, so training accuracy is 100% - "
+               f"pure memorisation. Test accuracy peaks at K = {best_k} for this data; much larger K starts "
+               "to blur the boundaries (high bias).")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
