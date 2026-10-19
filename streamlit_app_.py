@@ -343,7 +343,9 @@ elif section == "gradient":
             if loss_type == "Parabola x²":
                 return lambda x: x**2, lambda x: 2*x
             elif loss_type == "Asymmetric":
-                return lambda x: 0.5*x**2 + 0.3*x**3 * (x < 0), lambda x: x + 0.9*x**2 * (x < 0)
+                # gentle bowl on the right (0.5x²), steep on the left (2x²) - bounded below, minimum at 0
+                return (lambda x: np.where(x >= 0, 0.5*x**2, 2*x**2),
+                        lambda x: np.where(x >= 0, x, 4*x))
             else:
                 return (lambda x: x**2 + 2*np.sin(2*x),
                         lambda x: 2*x + 4*np.cos(2*x))
@@ -351,11 +353,18 @@ elif section == "gradient":
         loss_fn, grad_fn = get_loss_and_grad(loss_type)
 
         xs_hist = [start_x]
-        for _ in range(n_steps):
-            g = grad_fn(xs_hist[-1])
-            xs_hist.append(xs_hist[-1] - lr * g)
-            if abs(g) < 1e-5:
+        conv_step, diverged = None, False
+        for k in range(n_steps):
+            g = float(grad_fn(xs_hist[-1]))
+            if abs(g) < 1e-3:                     # gradient ~ 0 → converged
+                conv_step = k
                 break
+            xs_hist.append(xs_hist[-1] - lr * g)
+            if abs(xs_hist[-1]) > 50:             # running away - stop before the plot explodes
+                diverged = True
+                break
+        if conv_step is None and not diverged and abs(float(grad_fn(xs_hist[-1]))) < 1e-3:
+            conv_step = len(xs_hist) - 1
 
         with col2:
             x_range = np.linspace(-5, 5, 400)
@@ -378,21 +387,51 @@ elif section == "gradient":
             fig.add_scatter(x=[xs_hist[-1]], y=[ys_hist[-1]], mode='markers',
                 marker=dict(color='#1D9E75', size=14, symbol='star'),
                 name='End', showlegend=True)
+            y_lo, y_hi = float(y_range.min()), float(y_range.max())
             fig.update_layout(xaxis_title="x (parameter)", yaxis_title="Loss",
+                xaxis=dict(range=[-5.2, 5.2]),
+                yaxis=dict(range=[y_lo - 0.05*(y_hi-y_lo), y_hi + 0.05*(y_hi-y_lo)]),
                 height=400, legend=dict(orientation='h', y=1.12))
             st.plotly_chart(fig, width='stretch')
 
+        steps_run = len(xs_hist) - 1
         c1, c2, c3 = st.columns(3)
         c1.metric("Starting x", f"{xs_hist[0]:.3f}")
-        c2.metric("Final x", f"{xs_hist[-1]:.3f}")
-        c3.metric("Steps to converge", len(xs_hist) - 1)
+        c2.metric("Final x", "diverged" if diverged else f"{xs_hist[-1]:.3f}")
+        c3.metric("Steps to converge", f"{conv_step}" if conv_step is not None else f"not converged in {steps_run}",
+                  help="Steps until the gradient is below 0.001.")
 
-        if lr >= 1.0:
-            st.warning("Large learning rate - the model may overshoot the minimum and diverge.")
-        elif lr <= 0.05:
-            st.info("Small learning rate - convergence is stable but slow.")
+        # Describe what the run actually did, from its path
+        deltas = np.diff(xs_hist)
+        flips = int(np.sum(np.sign(deltas[1:]) != np.sign(deltas[:-1]))) if len(deltas) > 1 else 0
+        g_first, g_last = abs(float(grad_fn(xs_hist[0]))), abs(float(grad_fn(xs_hist[-1])))
+        if diverged:
+            st.error(f"Diverged: learning rate {lr} is too large - each step overshoots further than the last, "
+                     "so x runs away (stopped once |x| > 50).")
+        elif conv_step is not None:
+            if flips >= max(3, conv_step // 2):
+                st.success(f"Converged in {conv_step} steps, but by zig-zagging across the minimum - "
+                           "the learning rate is near the upper limit for this curve.")
+            elif conv_step > 0.8 * n_steps:
+                st.info(f"Converged, but slowly ({conv_step} steps) - a larger learning rate would get there faster.")
+            else:
+                st.success(f"Converged smoothly in {conv_step} step{'s' if conv_step != 1 else ''}.")
+        elif flips >= max(3, steps_run // 2) and g_last > 0.8 * g_first:
+            st.warning("Stuck bouncing: each step overshoots by about as much as the last, so x jumps back and "
+                       "forth across the minimum without getting closer. Lower the learning rate.")
+        elif flips >= max(3, steps_run // 2):
+            st.warning(f"Oscillating: x zig-zags across the minimum and hasn't settled within {steps_run} steps. "
+                       "A smaller learning rate would descend more smoothly.")
         else:
-            st.success("Good learning rate - fast and stable descent.")
+            st.info(f"Still descending: not converged within {steps_run} steps - the learning rate is small "
+                    "(or add more steps).")
+
+        if loss_type == "With local minimum" and not diverged:
+            x_glob = float(x_range[np.argmin(y_range)])
+            if conv_step is not None and abs(xs_hist[-1] - x_glob) > 0.3:
+                st.warning(f"Stuck in a **local** minimum at x ≈ {xs_hist[-1]:.2f}. The global minimum is at "
+                           f"x ≈ {x_glob:.2f} - gradient descent only sees the local slope, so where it ends up "
+                           "depends on where it starts.")
 
     with tab2:
         st.markdown("Loss surface with two parameters (w₁, w₂):")
@@ -410,6 +449,59 @@ elif section == "gradient":
             height=480, margin=dict(l=0, r=0, b=0, t=20))
         st.plotly_chart(fig, width='stretch')
         st.caption("Drag to rotate. The goal is to find the valley - the minimum loss.")
+
+        st.markdown("### Gradient descent on this surface")
+        def grad2(w):
+            return np.array([2*w[0] + 1.5*np.cos(3*w[0])*w[1],
+                             4*w[1] + 0.5*np.sin(3*w[0])])
+        def loss2(w):
+            return w[0]**2 + 2*w[1]**2 + 0.5*np.sin(3*w[0])*w[1]
+        c2a, c2b = st.columns([1, 2])
+        with c2a:
+            lr2 = st.select_slider("Learning rate", [0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.45, 0.5, 0.55],
+                                   value=0.1, key="gd2_lr")
+            w1_0 = st.slider("Start w₁", -3.0, 3.0, 2.5, step=0.1, key="gd2_w1")
+            w2_0 = st.slider("Start w₂", -3.0, 3.0, 2.0, step=0.1, key="gd2_w2")
+            steps2 = st.slider("Steps", 5, 80, 30, key="gd2_steps")
+        path = [np.array([w1_0, w2_0])]
+        div2 = False
+        for _ in range(steps2):
+            g2 = grad2(path[-1])
+            if np.linalg.norm(g2) < 1e-3:
+                break
+            path.append(path[-1] - lr2 * g2)
+            if np.linalg.norm(path[-1]) > 20:
+                div2 = True
+                break
+        path = np.array(path)
+        with c2b:
+            figc = go.Figure()
+            figc.add_trace(go.Contour(x=w1, y=w2, z=Z, colorscale='RdPu', showscale=False,
+                contours=dict(coloring='lines'), line=dict(width=1), hoverinfo='skip'))
+            figc.add_trace(go.Scatter(x=np.clip(path[:, 0], -3.2, 3.2), y=np.clip(path[:, 1], -3.2, 3.2),
+                mode='lines+markers', name='Descent path',
+                line=dict(color='#EF9F27', width=2), marker=dict(size=6, color='#EF9F27')))
+            figc.add_trace(go.Scatter(x=[w1_0], y=[w2_0], mode='markers', name='Start',
+                marker=dict(color='#E24B4A', size=13)))
+            if not div2:
+                figc.add_trace(go.Scatter(x=[path[-1, 0]], y=[path[-1, 1]], mode='markers', name='End',
+                    marker=dict(color='#1D9E75', size=15, symbol='star')))
+            figc.update_layout(xaxis=dict(title='w₁', range=[-3, 3]),
+                yaxis=dict(title='w₂', range=[-3, 3], scaleanchor='x'),
+                height=420, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(figc, width='stretch')
+        d2 = np.diff(path[:, 1])
+        flips2 = int(np.sum(np.sign(d2[1:]) != np.sign(d2[:-1]))) if len(d2) > 1 else 0
+        if div2:
+            st.error(f"Diverged: learning rate {lr2} is too large for the steep w₂ direction - the path flies off "
+                     "(roughly, anything above 0.5 overshoots in w₂, whose curvature is twice that of w₁).")
+        elif flips2 >= max(3, (len(path) - 1) // 2):
+            st.warning(f"Zig-zag: the valley is about twice as steep in w₂ as in w₁, so a learning rate of {lr2} "
+                       "overshoots back and forth across the narrow direction while creeping along the long one. "
+                       "This is exactly the problem that momentum and Adam were designed to fix.")
+        else:
+            st.success(f"Smooth descent: loss {loss2(path[0]):.2f} → {loss2(path[-1]):.3f} in {len(path)-1} steps.")
+        st.caption("Try learning rate 0.4-0.45 to see the classic zig-zag, and 0.55 to see it diverge.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # BACKPROPAGATION
@@ -1140,7 +1232,12 @@ elif section == "knn":
     neighbor_idx = np.argsort(dists)[:k]
     neighbor_labels = y_all[neighbor_idx]
     votes = np.bincount(neighbor_labels, minlength=3)
-    prediction = np.argmax(votes)
+    tied_classes = [c for c in range(3) if votes[c] == votes.max()]
+    if len(tied_classes) > 1:
+        # standard tie-break: among the tied classes, pick the one whose neighbour is closest
+        prediction = next(int(lbl) for lbl in neighbor_labels if lbl in tied_classes)
+    else:
+        prediction = int(np.argmax(votes))
 
     with col2:
         fig = go.Figure()
@@ -1171,6 +1268,7 @@ elif section == "knn":
                 symbol='star', line=dict(color='black', width=1.5))))
 
         fig.update_layout(xaxis_title="X", yaxis_title="Y", height=420,
+            yaxis=dict(scaleanchor='x', scaleratio=1),      # equal scale, so the circle is a circle
             legend=dict(orientation='h', y=1.12))
         st.plotly_chart(fig, width='stretch')
 
@@ -1181,6 +1279,16 @@ elif section == "knn":
 
     pred_col = class_colors[prediction]
     st.markdown(f"**Prediction: {class_names[prediction]}** ({votes[prediction]}/{k} votes)")
+    if len(tied_classes) > 1:
+        _tn = [class_names[c] for c in tied_classes]
+        tied_names = ", ".join(_tn[:-1]) + " and " + _tn[-1]
+        st.info(f"Tie: {tied_names} each have {votes.max()} vote{'s' if votes.max() != 1 else ''}. "
+                f"Broken in favour of the tied class with the closest neighbour - {class_names[prediction]}.")
+    st.caption("K moves in odd steps, which prevents ties only with **two** classes. With three classes, "
+               "K = 3 can split 1-1-1 and K = 5 can split 2-2-1.")
+    st.caption("**Scale your features first.** KNN relies entirely on distance, so a feature measured in "
+               "thousands (e.g. income) swamps one measured in single digits (e.g. age). Standardise each "
+               "feature (mean 0, std 1) before using KNN - here both axes are already on the same scale.")
 
     st.markdown("### Decision boundaries - how K changes the border")
     st.markdown("Low K → jagged boundaries (high variance). High K → smooth boundaries (high bias).")
@@ -1205,8 +1313,37 @@ elif section == "knn":
             fig2.add_trace(go.Scatter(x=X_all[mask,0], y=X_all[mask,1],
                 mode='markers', marker=dict(color=c, size=6),
                 showlegend=False), row=1, col=col_idx+1)
+    for ax_i in (1, 2, 3):
+        fig2.update_yaxes(scaleanchor=f"x{'' if ax_i == 1 else ax_i}", scaleratio=1, row=1, col=ax_i)
     fig2.update_layout(height=320)
     st.plotly_chart(fig2, width='stretch')
+
+    st.markdown("### Which K works best? Train vs test accuracy")
+    rng_kt = np.random.RandomState(1000 + seed_knn)          # fresh points from the same three blobs
+    n_kt = 300
+    X_kt = np.vstack([rng_kt.randn(n_kt, 2) + [-1.2, 0.8], rng_kt.randn(n_kt, 2) + [1.2, -0.8],
+                      rng_kt.randn(n_kt, 2) + [0.0, -1.8]])
+    y_kt = np.repeat([0, 1, 2], n_kt)
+    ks_curve = [kk for kk in range(1, 26, 2) if kk <= len(X_all)]
+    tr_k, te_k = [], []
+    for kk in ks_curve:
+        m_k = KNeighborsClassifier(n_neighbors=kk).fit(X_all, y_all)
+        tr_k.append(m_k.score(X_all, y_all)); te_k.append(m_k.score(X_kt, y_kt))
+    best_k = ks_curve[int(np.argmax(te_k))]
+    fig3 = go.Figure()
+    fig3.add_trace(go.Scatter(x=ks_curve, y=tr_k, mode='lines+markers', name='Train accuracy',
+        line=dict(color='#888780', width=2, dash='dot')))
+    fig3.add_trace(go.Scatter(x=ks_curve, y=te_k, mode='lines+markers', name='Test accuracy (900 new points)',
+        line=dict(color='#534AB7', width=2.5)))
+    fig3.add_vline(x=k, line=dict(color='#EF9F27', dash='dash'), annotation_text=f"K={k}")
+    fig3.add_trace(go.Scatter(x=[best_k], y=[max(te_k)], mode='markers', name=f'Best test K = {best_k}',
+        marker=dict(color='#1D9E75', size=14, symbol='star')))
+    fig3.update_layout(xaxis_title="K", yaxis_title="Accuracy", yaxis_tickformat=".0%", height=280,
+        legend=dict(orientation='h', y=1.2))
+    st.plotly_chart(fig3, width='stretch')
+    st.caption(f"With K = 1 every training point is its own nearest neighbour, so training accuracy is 100% - "
+               f"pure memorisation. Test accuracy peaks at K = {best_k} for this data; much larger K starts "
+               "to blur the boundaries (high bias).")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1379,14 +1516,16 @@ elif section == "confusion":
     FN = np.sum((preds == 0) & (labels == 1))
     TN = np.sum((preds == 0) & (labels == 0))
 
+    no_pos_pred = (TP + FP) == 0                      # nothing predicted positive → precision is 0/0
     precision = TP / (TP + FP + 1e-9)
     recall    = TP / (TP + FN + 1e-9)
     f1        = 2 * precision * recall / (precision + recall + 1e-9)
     accuracy  = (TP + TN) / n_conf
 
     with col2:
-        cm = np.array([[TP, FP], [FN, TN]])
-        labels_cm = [["TP", "FP"], ["FN", "TN"]]
+        # rows = actual class, columns = predicted class
+        cm = np.array([[TP, FN], [FP, TN]])
+        labels_cm = [["TP", "FN"], ["FP", "TN"]]
         text = [[f"<b>{labels_cm[i][j]}</b><br>{cm[i,j]}" for j in range(2)] for i in range(2)]
 
         fig = go.Figure(go.Heatmap(
@@ -1395,14 +1534,29 @@ elif section == "confusion":
             colorscale=[[0,'#f0effe'],[0.5,'#AFA9EC'],[1,'#534AB7']],
             text=text, texttemplate="%{text}", textfont=dict(size=18),
             showscale=False))
-        fig.update_layout(height=320, xaxis_title="Predicted", yaxis_title="Actual")
+        fig.update_layout(height=320, xaxis_title="Predicted", yaxis_title="Actual",
+            yaxis=dict(autorange='reversed'))      # Actual Positive on top, standard layout
         st.plotly_chart(fig, width='stretch')
+        st.caption(f"Each row adds up to the true class size: Actual Positive = TP + FN = {TP} + {FN} = {n_pos}; "
+                   f"Actual Negative = FP + TN = {FP} + {TN} = {n_neg}.")
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Precision", f"{precision:.3f}", help="TP / (TP+FP) - of all positive predictions, how many were correct?")
+    c1.metric("Precision", "undefined" if no_pos_pred else f"{precision:.3f}",
+              help="TP / (TP+FP) - of all positive predictions, how many were correct?")
     c2.metric("Recall", f"{recall:.3f}", help="TP / (TP+FN) - of all actual positives, how many did we catch?")
-    c3.metric("F1 Score", f"{f1:.3f}", help="Harmonic mean of precision and recall")
+    c3.metric("F1 Score", "undefined" if no_pos_pred else f"{f1:.3f}", help="Harmonic mean of precision and recall")
     c4.metric("Accuracy", f"{accuracy:.3f}", help="(TP+TN) / total")
+    if no_pos_pred:
+        st.warning("At this threshold the model predicts no positives at all, so precision = 0/0 is undefined.")
+
+    baseline_acc = n_neg / n_conf
+    b1, b2 = st.columns([1, 3])
+    b1.metric("All-negative baseline accuracy", f"{baseline_acc:.3f}",
+              help="Accuracy of a 'model' that always predicts Negative.")
+    b2.caption(f"**The accuracy trap:** with {imbalance}% positives, a useless model that always says "
+               f"'negative' already scores {baseline_acc:.1%} accuracy while catching zero positives "
+               "(recall = 0). On imbalanced data, accuracy alone is misleading - look at precision, recall "
+               "and F1 instead. Try the imbalance slider at 5%.")
 
     st.markdown("### Precision–Recall tradeoff across thresholds")
     thresholds = np.linspace(0.01, 0.99, 200)
@@ -1412,10 +1566,10 @@ elif section == "confusion":
         tp_ = np.sum((p_==1) & (labels==1))
         fp_ = np.sum((p_==1) & (labels==0))
         fn_ = np.sum((p_==0) & (labels==1))
-        pr = tp_ / (tp_ + fp_ + 1e-9)
+        pr = tp_ / (tp_ + fp_) if (tp_ + fp_) > 0 else np.nan    # undefined when nothing is predicted positive
         rc = tp_ / (tp_ + fn_ + 1e-9)
         precs.append(pr); recs.append(rc)
-        f1s.append(2*pr*rc/(pr+rc+1e-9))
+        f1s.append(2*pr*rc/(pr+rc+1e-9) if not np.isnan(pr) else np.nan)
 
     fig2 = make_subplots(rows=1, cols=2,
         subplot_titles=["Precision & Recall vs Threshold", "Precision-Recall curve"])
@@ -1441,6 +1595,8 @@ elif section == "confusion":
     fig2.update_yaxes(title_text="Precision", row=1, col=2)
     fig2.update_layout(height=340, legend=dict(orientation='h', y=1.12))
     st.plotly_chart(fig2, width='stretch')
+    st.caption("Precision and F1 stop at the highest score in the data: above it nothing is predicted "
+               "positive, so precision is undefined (0/0) and those points are left out.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1450,7 +1606,8 @@ elif section == "bias_var":
     st.title("🎯 Bias-Variance Tradeoff")
     st.markdown("""
     <div class="concept-card">
-    Total prediction error = <b>Bias²</b> + <b>Variance</b> + <b>Irreducible noise</b>.<br>
+    Expected test error at a new point (averaged over possible training sets) =
+    <b>Bias²</b> + <b>Variance</b> + <b>Irreducible noise</b>.<br>
     A model that is too simple has high bias (underfits). A model that is too complex has
     high variance (overfits). The goal is to find the sweet spot.
     </div>
@@ -1462,32 +1619,36 @@ elif section == "bias_var":
         complexity = st.slider("Model complexity", 1, 15, 4,
             help="Higher = more flexible model (higher degree polynomial)")
         noise_bv = st.slider("Irreducible noise σ", 0.1, 2.0, 0.8, step=0.1)
-        n_datasets = st.slider("Number of datasets (for variance)", 5, 20, 10)
+        n_datasets = st.slider("Fits to draw", 5, 20, 10,
+            help="How many of the individual fits are drawn. The numbers below always use 300 "
+                 "simulated training sets, so they don't jump around with this slider.")
         seed_bv = st.slider("Seed", 0, 10, 0)
 
-    np.random.seed(seed_bv)
-    x_bv = np.linspace(-3, 3, 300)
-    true_fn = np.sin(x_bv)
-
     x_eval = np.linspace(-3, 3, 80)
-    all_preds = []
-    for i in range(n_datasets):
-        x_tr_bv = np.random.uniform(-3, 3, 25)
-        y_tr_bv = np.sin(x_tr_bv) + np.random.randn(25) * noise_bv
-        try:
-            coef = np.polyfit(x_tr_bv, y_tr_bv, complexity)
-            pred = np.polyval(coef, x_eval)
-            all_preds.append(np.clip(pred, -10, 10))
-        except Exception:
-            pass
-    all_preds = np.array(all_preds)
-    mean_pred = all_preds.mean(axis=0)
-    variance_curve = all_preds.var(axis=0)
     true_at_eval = np.sin(x_eval)
-    bias_sq_curve = (mean_pred - true_at_eval)**2
 
-    avg_bias_sq = float(bias_sq_curve.mean())
-    avg_variance = float(variance_curve.mean())
+    @st.cache_data(show_spinner=False)
+    def _bv_sim(noise, seed, n_sims=300, n_train=25, clip=15):
+        """Fit polynomials of degree 1-15 to n_sims independent training sets.
+        Bias² is corrected for the leftover noise in the average of finitely many fits (var/n_sims)."""
+        rng = np.random.default_rng(seed)
+        X = rng.uniform(-3, 3, (n_sims, n_train))
+        Y = np.sin(X) + rng.normal(0, noise, (n_sims, n_train))
+        preds, comps = {}, {}
+        for d in range(1, 16):
+            P = np.array([np.clip(np.polyval(np.polyfit(X[i], Y[i], d), x_eval), -clip, clip)
+                          for i in range(n_sims)])
+            var_x = P.var(axis=0, ddof=1)
+            bias2_x = (P.mean(axis=0) - true_at_eval) ** 2 - var_x / n_sims
+            preds[d] = P
+            comps[d] = (max(float(bias2_x.mean()), 0.0), float(var_x.mean()))
+        return preds, comps
+
+    preds_all, comps_all = _bv_sim(noise_bv, seed_bv)
+    all_preds = preds_all[complexity][:n_datasets]          # the fits drawn on the chart
+    mean_pred = preds_all[complexity].mean(axis=0)          # expected prediction (over 300 fits)
+
+    avg_bias_sq, avg_variance = comps_all[complexity]
     avg_noise    = float(noise_bv**2)
     total_err    = avg_bias_sq + avg_variance + avg_noise
 
@@ -1497,7 +1658,7 @@ elif section == "bias_var":
             fig.add_trace(go.Scatter(x=x_eval, y=pred, mode='lines',
                 line=dict(color='rgba(83,74,183,0.18)', width=1),
                 showlegend=(i == 0), name='Individual model'))
-        fig.add_trace(go.Scatter(x=x_eval, y=mean_pred, name='Mean prediction',
+        fig.add_trace(go.Scatter(x=x_eval, y=mean_pred, name='Mean prediction (300 fits)',
             line=dict(color='#534AB7', width=2.5)))
         fig.add_trace(go.Scatter(x=x_eval, y=true_at_eval, name='True function',
             line=dict(color='#1D9E75', width=2, dash='dash')))
@@ -1511,27 +1672,13 @@ elif section == "bias_var":
     c2.metric("Variance", f"{avg_variance:.3f}")
     c3.metric("Noise σ²", f"{avg_noise:.3f}")
     c4.metric("Total Error", f"{total_err:.3f}")
+    st.caption("Noise σ² is the floor no model can beat - it's randomness in the data itself. "
+               "All components are estimated from 300 simulated training sets of 25 points each.")
 
     st.markdown("### How each component changes with model complexity")
     complexities = list(range(1, 16))
-    bias_vals, var_vals = [], []
-    for c_val in complexities:
-        preds_c = []
-        for i in range(n_datasets):
-            np.random.seed(i + seed_bv * 100)
-            x_tr_c = np.random.uniform(-3, 3, 25)
-            y_tr_c = np.sin(x_tr_c) + np.random.randn(25) * noise_bv
-            try:
-                coef = np.polyfit(x_tr_c, y_tr_c, c_val)
-                preds_c.append(np.clip(np.polyval(coef, x_eval), -15, 15))
-            except Exception:
-                pass
-        if preds_c:
-            ap = np.array(preds_c)
-            bias_vals.append(float(((ap.mean(axis=0) - true_at_eval)**2).mean()))
-            var_vals.append(float(ap.var(axis=0).mean()))
-        else:
-            bias_vals.append(None); var_vals.append(None)
+    bias_vals = [comps_all[c][0] for c in complexities]
+    var_vals  = [comps_all[c][1] for c in complexities]
 
     noise_line = [noise_bv**2] * len(complexities)
     total_line = [b + v + noise_bv**2 if b is not None else None
@@ -1552,6 +1699,10 @@ elif section == "bias_var":
         yaxis_range=[0, min(max(bias_vals + var_vals + [2]), 8)],
         height=320, legend=dict(orientation='h', y=1.12))
     st.plotly_chart(fig2, width='stretch')
+    st.caption("As complexity grows, Bias² falls towards zero and stays there, while Variance keeps rising - "
+               "the total error is U-shaped, with the sweet spot at the bottom. Very complex fits explode near "
+               "the edges, where training points are sparse, so predictions are clipped at ±15 to keep the chart "
+               "readable: the variance shown at high complexity is a lower bound.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -4200,6 +4351,7 @@ elif section == "clustering":
     from sklearn.cluster import KMeans
     from sklearn.datasets import make_blobs
     from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
+    from sklearn.metrics import silhouette_score
 
     palette = ['#534AB7', '#E24B4A', '#1D9E75', '#EF9F27', '#888780', '#3AACC9', '#B24BE2', '#E2B24B']
 
@@ -4234,19 +4386,34 @@ elif section == "clustering":
 
         st.markdown("### Elbow method - choosing k")
         ks = list(range(1, 9))
-        inertias = [KMeans(n_clusters=kk, n_init=10, random_state=42).fit(X_km).inertia_ for kk in ks]
+        fits_k = {kk: KMeans(n_clusters=kk, n_init=10, random_state=42).fit(X_km) for kk in ks}
+        inertias = [fits_k[kk].inertia_ for kk in ks]
+        ks_sil = ks[1:]                                   # silhouette needs at least 2 clusters
+        sils = [silhouette_score(X_km, fits_k[kk].labels_) for kk in ks_sil]
+        best_sil_k = ks_sil[int(np.argmax(sils))]
         fig2 = go.Figure()
-        fig2.add_trace(go.Scatter(x=ks, y=inertias, mode='lines+markers',
+        fig2.add_trace(go.Scatter(x=ks, y=inertias, mode='lines+markers', name='Inertia (left axis)',
             line=dict(color='#534AB7', width=2.5)))
+        fig2.add_trace(go.Scatter(x=ks_sil, y=sils, mode='lines+markers', name='Silhouette (right axis)',
+            line=dict(color='#1D9E75', width=2.5, dash='dash'), yaxis='y2'))
+        fig2.add_trace(go.Scatter(x=[best_sil_k], y=[max(sils)], mode='markers', yaxis='y2',
+            marker=dict(color='#1D9E75', size=14, symbol='star'), name=f'Best silhouette (k={best_sil_k})'))
         fig2.add_vline(x=chosen_k, line=dict(color='#EF9F27', dash='dash'),
             annotation_text=f"Selected k={chosen_k}")
-        fig2.update_layout(xaxis_title="k", yaxis_title="Inertia", height=280)
+        fig2.update_layout(xaxis_title="k", yaxis_title="Inertia (lower = tighter)", height=300,
+            yaxis2=dict(title="Silhouette (higher = better)", overlaying='y', side='right', range=[0, 1]),
+            legend=dict(orientation='h', y=1.2))
         st.plotly_chart(fig2, width='stretch')
-        st.caption("The 'elbow' - where adding another cluster stops giving a big drop in "
-                   "inertia - is a common heuristic for picking k. There's no ground truth to "
-                   "check against in real unsupervised problems, so this is a judgment call, "
-                   "not something **Cross-Validation** can pick for you the way it does for "
-                   "supervised models.")
+        st.caption(f"The 'elbow' - where adding another cluster stops giving a big drop in inertia - is a "
+                   f"common heuristic for picking k, but it's a judgement call. The **silhouette score** gives "
+                   f"a number to go with it: for each point it compares the distance to its own cluster with "
+                   f"the distance to the nearest other cluster (−1 to 1, higher is better). Here it peaks at "
+                   f"k = {best_sil_k}. There's no ground truth in real unsupervised problems, so neither is "
+                   "something **Cross-Validation** can settle the way it does for supervised models.")
+        st.caption("**K-Means assumptions:** it works best for roughly round clusters of similar size and "
+                   "spread, it is sensitive to feature scaling (standardise features first), and it can get "
+                   "stuck in a poor solution depending on the starting centroids - which is why it is run "
+                   "several times (`n_init=10` here) and the best result kept.")
 
     with tab2:
         col1, col2 = st.columns([1, 2])
@@ -4266,16 +4433,26 @@ elif section == "clustering":
         labels_h = fcluster(Z, cut_height, criterion='distance')
         n_found = len(set(labels_h))
 
-        dn = dendrogram(Z, no_plot=True)
-        color_map = {'C0': '#534AB7', 'C1': '#E24B4A', 'C2': '#1D9E75', 'C3': '#EF9F27'}
+        # Colour each branch by the cluster it belongs to AT THE USER'S CUT, using the scatter's colours;
+        # branches that join different clusters (above the cut) are grey.
+        lab_order = sorted(set(labels_h))
+        lab_color = {lab: palette[i % len(palette)] for i, lab in enumerate(lab_order)}
+        n_leaves = len(X_h)
+        leaves_of = {i: {i} for i in range(n_leaves)}
+        for j, (a_, b_, _, _) in enumerate(Z):
+            leaves_of[n_leaves + j] = leaves_of[int(a_)] | leaves_of[int(b_)]
+        def _link_color(node_id):
+            labs = {labels_h[leaf] for leaf in leaves_of[node_id]}
+            return lab_color[labs.pop()] if len(labs) == 1 else '#BBBBBB'
+        dn = dendrogram(Z, no_plot=True, link_color_func=_link_color)
         with col2:
             fig_dendro = go.Figure()
             for xs, ys, c in zip(dn['icoord'], dn['dcoord'], dn['color_list']):
                 fig_dendro.add_trace(go.Scatter(x=xs, y=ys, mode='lines',
-                    line=dict(color=color_map.get(c, '#888780'), width=1.5),
+                    line=dict(color=c, width=1.5),
                     showlegend=False, hoverinfo='skip'))
             fig_dendro.add_hline(y=cut_height, line=dict(color='#EF9F27', dash='dash'),
-                annotation_text=f"Cut → {n_found} clusters")
+                annotation_text=f"Cut → {n_found} clusters (colours match the scatter below)")
             fig_dendro.update_layout(xaxis=dict(showticklabels=False, title="Points"),
                 yaxis_title="Linkage distance", height=380)
             st.plotly_chart(fig_dendro, width='stretch')
@@ -4308,8 +4485,9 @@ elif section == "decision_tree":
     st.markdown("""
     <div class="concept-card">
     A decision tree repeatedly <b>splits the data</b> on the feature and threshold that best
-    separates the classes. Each split is chosen to maximise <b>information gain</b>
-    (or minimise Gini impurity). The result is a set of human-readable if/else rules.
+    separates the classes. Each split is chosen to give the biggest drop in <b>impurity</b>
+    (Gini, or entropy - where the drop is called <b>information gain</b>). The result is a set
+    of human-readable if/else rules.
     </div>
     """, unsafe_allow_html=True)
 
@@ -4340,6 +4518,25 @@ elif section == "decision_tree":
         clf_dt.fit(X_dt, y_dt)
         train_acc = clf_dt.score(X_dt, y_dt)
 
+        # fresh test data from the same distribution - what the tree has never seen
+        rng_te = np.random.RandomState(1000 + seed_dt)
+        n_te = 1000
+        if n_classes_dt == 2:
+            X_te = np.vstack([rng_te.randn(n_te,2)+[-sep_dt/2,0], rng_te.randn(n_te,2)+[sep_dt/2,0]])
+        else:
+            X_te = np.vstack([rng_te.randn(n_te,2)+[-sep_dt,0], rng_te.randn(n_te,2)+[sep_dt,0],
+                              rng_te.randn(n_te,2)+[0,sep_dt]])
+        y_te = np.repeat(np.arange(n_classes_dt), n_te)
+        test_acc = clf_dt.score(X_te, y_te)
+
+        depths_dt = list(range(1, 7))
+        tr_curve, te_curve = [], []
+        for d_ in depths_dt:
+            m_ = DecisionTreeClassifier(max_depth=d_, random_state=42).fit(X_dt, y_dt)
+            tr_curve.append(m_.score(X_dt, y_dt)); te_curve.append(m_.score(X_te, y_te))
+        best_depth = depths_dt[int(np.argmax(te_curve))]
+        best_test = max(te_curve)
+
         xx_dt, yy_dt = np.meshgrid(np.linspace(-5,5,150), np.linspace(-5,5,150))
         Z_dt = clf_dt.predict(np.c_[xx_dt.ravel(), yy_dt.ravel()]).reshape(xx_dt.shape)
 
@@ -4365,29 +4562,52 @@ elif section == "decision_tree":
                 height=420, legend=dict(orientation='h', y=1.1))
             st.plotly_chart(fig, width='stretch')
 
-        c1,c2,c3 = st.columns(3)
-        c1.metric("Max depth", max_depth)
-        c2.metric("Train accuracy", f"{train_acc:.1%}")
+        st.caption("Trees split on one feature at a time (\"is x₁ < 0.3?\"), so every boundary is made of "
+                   "horizontal and vertical segments - that's why the regions look boxy.")
+        c1,c2,c3,c4 = st.columns(4)
+        c1.metric("Train accuracy", f"{train_acc:.1%}")
+        c2.metric("Test accuracy", f"{test_acc:.1%}", delta=f"{(test_acc-train_acc)*100:+.1f} pts vs train",
+                  help="Accuracy on 1,000 fresh points per class from the same distribution.")
         c3.metric("Leaf nodes", clf_dt.get_n_leaves())
+        c4.metric("Best depth on test data", best_depth)
 
-        if max_depth >= 5:
-            st.warning("Deep tree - likely overfitting. The jagged boundaries memorise training noise.")
-        elif max_depth <= 2:
-            st.info("Shallow tree - may underfit complex patterns, but generalises well.")
+        gap = train_acc - test_acc
+        if max_depth > best_depth and test_acc < best_test - 0.01:
+            st.warning(f"Overfitting: depth {max_depth} scores {train_acc:.1%} on training data but only "
+                       f"{test_acc:.1%} on new data. Depth {best_depth} does better on new data ({best_test:.1%}) - "
+                       "the extra splits are memorising training noise.")
+        elif max_depth < best_depth and test_acc < best_test - 0.01:
+            st.info(f"Underfitting: depth {best_depth} reaches {best_test:.1%} on new data versus {test_acc:.1%} "
+                    "here - this tree is too simple to capture the pattern.")
         else:
-            st.success("Moderate depth - good balance of expressiveness and generalisability.")
+            st.success(f"Good fit: test accuracy ({test_acc:.1%}) is at or within 1 point of the best any depth "
+                       f"achieves on this data (train-test gap {gap*100:.1f} pts).")
+
+        fig_dc = go.Figure()
+        fig_dc.add_trace(go.Scatter(x=depths_dt, y=tr_curve, mode='lines+markers', name='Train accuracy',
+            line=dict(color='#888780', width=2, dash='dot')))
+        fig_dc.add_trace(go.Scatter(x=depths_dt, y=te_curve, mode='lines+markers', name='Test accuracy',
+            line=dict(color='#534AB7', width=2.5)))
+        fig_dc.add_vline(x=max_depth, line=dict(color='#EF9F27', dash='dash'),
+            annotation_text=f"depth {max_depth}")
+        fig_dc.update_layout(xaxis_title="Max depth", yaxis_title="Accuracy", yaxis_tickformat=".0%",
+            height=260, legend=dict(orientation='h', y=1.18))
+        st.plotly_chart(fig_dc, width='stretch')
+        st.caption("Training accuracy always rises with depth; test accuracy is what matters. "
+                   "Here the classes are separated by simple straight lines, so shallow trees are often best.")
 
     with tab2:
         st.markdown("### Gini impurity - the split criterion")
         st.markdown('<div class="formula-box">Gini = 1 − Σ pᵢ²</div>', unsafe_allow_html=True)
-        st.markdown("Gini = 0 means a pure node (all one class). Gini = 0.5 means perfectly mixed (2 classes).")
+        st.markdown("Gini = 0 means a pure node (all one class). Its maximum is 1 − 1/k for k classes: "
+                    "0.5 for a perfectly mixed 2-class node, 0.667 for 3 classes.")
 
         col1, col2 = st.columns([1, 2])
         with col1:
             p_cls1 = st.slider("Fraction of class A in node", 0.0, 1.0, 0.5, step=0.01)
             p_cls2 = 1.0 - p_cls1
             gini = 1 - (p_cls1**2 + p_cls2**2)
-            entropy = -(p_cls1*np.log2(p_cls1+1e-9) + p_cls2*np.log2(p_cls2+1e-9))
+            entropy = max(0.0, -(p_cls1*np.log2(p_cls1+1e-9) + p_cls2*np.log2(p_cls2+1e-9)))   # avoid −0.0000
             st.metric("Gini impurity", f"{gini:.4f}")
             st.metric("Entropy", f"{entropy:.4f}")
             if gini < 0.1:   st.success("Very pure node - good split!")
@@ -4410,13 +4630,15 @@ elif section == "decision_tree":
                 legend=dict(orientation='h', y=1.12))
             st.plotly_chart(fig, width='stretch')
 
-        st.markdown("### Information gain - how a split is chosen")
+        st.markdown("### Gini gain - how a split is chosen")
         st.markdown("""
         At each node the tree tries every feature and every threshold.
         It picks the one that maximises:
         """)
-        st.markdown('<div class="formula-box">IG = Gini(parent) − [n_L/n · Gini(left) + n_R/n · Gini(right)]</div>',
+        st.markdown('<div class="formula-box">Gini gain = Gini(parent) − [n_L/n · Gini(left) + n_R/n · Gini(right)]</div>',
             unsafe_allow_html=True)
+        st.caption("This is the impurity decrease measured with Gini. The same formula with entropy instead of "
+                   "Gini is called **information gain** - both usually pick very similar splits.")
         col1, col2 = st.columns([1, 2])
         with col1:
             n_left  = st.slider("Left child samples", 5, 50, 20)
@@ -4435,7 +4657,7 @@ Parent gini  = {gini_parent:.4f}  (p_A = {p_parent:.2f})
 Left gini    = {gini_left:.4f}   (p_A = {p_left:.2f}, n={n_left})
 Right gini   = {gini_right:.4f}  (p_A = {p_right:.2f}, n={n_right})
 
-Information gain = {gini_parent:.4f} − ({n_left}/{n_total}·{gini_left:.4f} + {n_right}/{n_total}·{gini_right:.4f})
+Gini gain        = {gini_parent:.4f} − ({n_left}/{n_total}·{gini_left:.4f} + {n_right}/{n_total}·{gini_right:.4f})
                  = {ig:.4f}
 """, language="text")
             if ig > 0.15: st.success("Excellent split - large reduction in impurity")
@@ -4487,7 +4709,10 @@ elif section == "ensemble_trees":
             noise_et = st.slider("Dataset noise", 0.1, 0.5, 0.25, step=0.05, key="et_noise")
 
         X_et, y_et = make_moons(n_samples=220, noise=noise_et, random_state=7)
-        Xtr, Xte, ytr, yte = train_test_split(X_et, y_et, test_size=0.3, random_state=7)
+        Xtr, _, ytr, _ = train_test_split(X_et, y_et, test_size=0.3, random_state=7)
+        # Score on 2,000 fresh points from the same distribution - a 66-point test set is too noisy
+        # to compare methods (one point = 1.5% accuracy). Only a sample is drawn on the plot.
+        Xte, yte = make_moons(n_samples=2000, noise=noise_et, random_state=1234)
 
         clf_et = _make_ensemble(method_et, n_est_et, depth_et)
         clf_et.fit(Xtr, ytr)
@@ -4506,8 +4731,8 @@ elif section == "ensemble_trees":
                 name='Class 0 (train)', marker=dict(color='#534AB7', size=7)))
             fig.add_trace(go.Scatter(x=Xtr[ytr==1,0], y=Xtr[ytr==1,1], mode='markers',
                 name='Class 1 (train)', marker=dict(color='#E24B4A', size=7)))
-            fig.add_trace(go.Scatter(x=Xte[:,0], y=Xte[:,1], mode='markers',
-                name='Test points', marker=dict(color='#1D9E75', size=8, symbol='x')))
+            fig.add_trace(go.Scatter(x=Xte[:80,0], y=Xte[:80,1], mode='markers',
+                name='Test points (80 of 2,000 shown)', marker=dict(color='#1D9E75', size=8, symbol='x')))
             fig.update_layout(height=400, legend=dict(orientation='h', y=1.12))
             st.plotly_chart(fig, width='stretch')
 
@@ -4515,6 +4740,11 @@ elif section == "ensemble_trees":
         c1.metric("Train accuracy", f"{train_acc_et:.1%}")
         c2.metric("Test accuracy", f"{test_acc_et:.1%}")
         c3.metric("Gap (overfitting signal)", f"{train_acc_et - test_acc_et:+.1%}")
+        st.caption("Trained on 154 points; test accuracy is measured on 2,000 fresh points, so differences "
+                   "of about 1-2 points between methods are real, not luck.")
+        if method_et == "Boosting" and depth_et > 3:
+            st.info(f"Boosting uses trees of depth at most 3 here, even with the slider at {depth_et}: boosting "
+                    "works by adding many *shallow* trees, and deep trees make it overfit quickly.")
 
         st.markdown("### All four methods, same settings")
         rows = []
@@ -4531,7 +4761,7 @@ elif section == "ensemble_trees":
             height=320, legend=dict(orientation='h', y=1.14))
         st.plotly_chart(fig_bar, width='stretch')
         st.caption("The single tree usually shows the widest train/test gap - that gap is "
-                   "exactly the variance the ensembles are cancelling out.")
+                   "exactly the variance the ensembles are cancelling out. Boosting is capped at depth 3.")
 
     with tab2:
         st.markdown("""
@@ -4541,7 +4771,8 @@ elif section == "ensemble_trees":
 
         st.markdown("""
         **Bagging** (Bootstrap AGGregatING)
-        - Draws *n* bootstrap samples (random samples with replacement) from the training data
+        - Draws one bootstrap sample per tree - a random sample of the training data, the same size
+          as the training set, drawn *with replacement* (so some points repeat and others are left out)
         - Fits one full tree per sample, then **averages** the predictions (or majority-votes)
         - Reduces variance - but trees trained on similar data with all features available
           tend to look alike, so the variance reduction has a ceiling
@@ -4554,8 +4785,13 @@ elif section == "ensemble_trees":
 
         **Boosting**
         - Trees are built **sequentially**, not independently
-        - Each new tree focuses on the training examples the previous trees got wrong (or,
-          for regression, fits the residual errors left over)
+        - **Gradient boosting** (used on this page): each new tree is fitted to the errors the current
+          ensemble still makes - the residuals for regression, or more generally the gradient of the
+          loss, which works the same way for classification. Its prediction is added in, scaled down
+          by the learning rate
+        - **AdaBoost**, the original variant, instead re-weights the training points so the next tree
+          concentrates on the examples the previous trees got wrong
+        - Uses shallow trees (depth 1-3 is typical) - each one only needs to make a small correction
         - Reduces **bias** rather than variance - but with too many rounds or too high a
           learning rate, it can start fitting noise
         """)
@@ -4566,23 +4802,28 @@ elif section == "ensemble_trees":
             depth_tab2 = st.slider("Max tree depth", 1, 6, 3, key="et2_depth")
             noise_tab2 = st.slider("Dataset noise", 0.1, 0.5, 0.3, step=0.05, key="et2_noise")
 
-        X2, y2 = make_moons(n_samples=220, noise=noise_tab2, random_state=7)
-        Xtr2, Xte2, ytr2, yte2 = train_test_split(X2, y2, test_size=0.3, random_state=7)
         est_range = [1, 3, 5, 10, 20, 40, 70, 100, 150]
-        bag_err, rf_err, boost_err = [], [], []
-        for ne in est_range:
-            b = BaggingClassifier(estimator=DecisionTreeClassifier(max_depth=depth_tab2),
-                n_estimators=ne, random_state=42).fit(Xtr2, ytr2)
-            r = RandomForestClassifier(n_estimators=ne, max_depth=depth_tab2,
-                random_state=42).fit(Xtr2, ytr2)
-            g = GradientBoostingClassifier(n_estimators=ne, max_depth=min(depth_tab2, 3),
-                learning_rate=0.15, random_state=42).fit(Xtr2, ytr2)
-            bag_err.append(1 - b.score(Xte2, yte2))
-            rf_err.append(1 - r.score(Xte2, yte2))
-            boost_err.append(1 - g.score(Xte2, yte2))
 
-        single_err = 1 - DecisionTreeClassifier(max_depth=depth_tab2, random_state=42
-            ).fit(Xtr2, ytr2).score(Xte2, yte2)
+        @st.cache_data(show_spinner="Training ~1,200 trees…")
+        def _et_curves(depth, noise):
+            X2, y2 = make_moons(n_samples=220, noise=noise, random_state=7)
+            Xtr2, _, ytr2, _ = train_test_split(X2, y2, test_size=0.3, random_state=7)
+            Xte2, yte2 = make_moons(n_samples=2000, noise=noise, random_state=1234)   # large fresh test set
+            bag, rf, boost = [], [], []
+            for ne in est_range:
+                b = BaggingClassifier(estimator=DecisionTreeClassifier(max_depth=depth),
+                    n_estimators=ne, random_state=42).fit(Xtr2, ytr2)
+                r = RandomForestClassifier(n_estimators=ne, max_depth=depth,
+                    random_state=42).fit(Xtr2, ytr2)
+                g = GradientBoostingClassifier(n_estimators=ne, max_depth=min(depth, 3),
+                    learning_rate=0.15, random_state=42).fit(Xtr2, ytr2)
+                bag.append(1 - b.score(Xte2, yte2))
+                rf.append(1 - r.score(Xte2, yte2))
+                boost.append(1 - g.score(Xte2, yte2))
+            single = 1 - DecisionTreeClassifier(max_depth=depth, random_state=42).fit(Xtr2, ytr2).score(Xte2, yte2)
+            return bag, rf, boost, single
+
+        bag_err, rf_err, boost_err, single_err = _et_curves(depth_tab2, noise_tab2)
 
         fig2 = go.Figure()
         fig2.add_hline(y=single_err, line=dict(color='#888780', dash='dot'),
@@ -4601,7 +4842,8 @@ elif section == "ensemble_trees":
                    "longer since each round targets the remaining errors directly, which is "
                    "also why it needs its **learning rate** and tree count tuned together to "
                    "avoid eventually overfitting - see **Regularization** and "
-                   "**Cross-Validation** for how that tuning is usually done.")
+                   "**Cross-Validation** for how that tuning is usually done. Error is measured on "
+                   "2,000 fresh test points; boosting trees are capped at depth 3.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # NAIVE BAYES

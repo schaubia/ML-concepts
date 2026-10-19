@@ -2136,18 +2136,32 @@ elif section == "lda_qda":
                 fig.add_trace(go.Scatter(x=X_lq[m,0], y=X_lq[m,1], mode='markers',
                     name=f'Class {cls}', marker=dict(color=c, size=7)))
             fig.update_layout(height=400, legend=dict(orientation='h', y=1.12),
+                yaxis=dict(scaleanchor='x', scaleratio=1),     # equal scale - the blob shapes matter here
                 title=f"{method_lq} decision boundary")
             st.plotly_chart(fig, width='stretch')
 
         st.markdown("### All three methods, same data")
-        rows = [(name, m.score(X_lq, y_lq)) for name, m in models.items()]
-        fig_bar = go.Figure(go.Bar(x=[r[0] for r in rows], y=[r[1] for r in rows],
-            marker_color=['#534AB7','#E24B4A','#1D9E75']))
-        fig_bar.update_layout(yaxis_title="Training accuracy", yaxis_range=[0,1], height=260)
+        X_lq_te, y_lq_te = _gen_two_class(1000, cov_diff_lq, sep_lq, seed=1234)   # 2,000 fresh points
+        names_lq = list(models.keys())
+        tr_lq = [models[nm].score(X_lq, y_lq) for nm in names_lq]
+        te_lq = [models[nm].score(X_lq_te, y_lq_te) for nm in names_lq]
+        fig_bar = go.Figure()
+        fig_bar.add_trace(go.Bar(x=names_lq, y=tr_lq, name='Train accuracy', marker_color='#888780'))
+        fig_bar.add_trace(go.Bar(x=names_lq, y=te_lq, name='Test accuracy (2,000 new points)',
+            marker_color=['#534AB7','#E24B4A','#1D9E75'], text=[f"{v:.3f}" for v in te_lq],
+            textposition='outside'))
+        fig_bar.update_layout(barmode='group', yaxis_title="Accuracy", yaxis_range=[0, 1.08], height=280,
+            legend=dict(orientation='h', y=1.18))
         st.plotly_chart(fig_bar, width='stretch')
-        st.caption("Push the covariance-difference slider up and QDA's curved boundary "
-                   "should pull ahead - that gap is exactly what QDA's extra flexibility "
-                   "buys you when the classes really do have different shapes.")
+        st.caption("Judge the methods by **test** accuracy - training accuracy can rank them the wrong way round. "
+                   "With covariance difference 0 all three tie; push it up and QDA's curved boundary pulls ahead "
+                   "on new data - that gap is what QDA's extra flexibility buys when the classes really do have "
+                   "different shapes.")
+        st.caption("**Logistic Regression vs LDA:** both draw a straight-line boundary, but they get there "
+                   "differently. LDA is *generative* - it assumes each class is a Gaussian blob with a shared "
+                   "covariance and derives the line from that. Logistic regression is *discriminative* - it fits "
+                   "the line directly, with no assumption about the class shapes. LDA is slightly more efficient "
+                   "when the Gaussian assumption holds; logistic regression is more robust when it doesn't.")
 
     with tab2:
         st.markdown("Both methods classify using Bayes' rule on Gaussian class densities, "
@@ -2171,17 +2185,29 @@ elif section == "lda_qda":
         estimated poorly, and QDA's flexibility works against it.
         """)
 
-        Xtest_lq, ytest_lq = _gen_two_class(500, cov_diff=0.9, sep=1.0, seed=999)
+        cov_diff_lc = st.slider("How different are the class covariances? (this chart)", 0.0, 1.0, 0.2,
+            step=0.1, key="lq_lc_covdiff",
+            help="0 = identical shapes, so LDA's assumption is exactly right. Higher = more different shapes.")
         n_range = [3, 4, 6, 10, 20, 35, 50, 80]
-        lda_curve, qda_curve = [], []
-        for n_pc in n_range:
-            lda_scores, qda_scores = [], []
-            for rep in range(25):
-                Xtr, ytr = _gen_two_class(n_pc, cov_diff=0.9, sep=1.0, seed=rep)
-                lda_scores.append(LinearDiscriminantAnalysis().fit(Xtr, ytr).score(Xtest_lq, ytest_lq))
-                qda_scores.append(QuadraticDiscriminantAnalysis().fit(Xtr, ytr).score(Xtest_lq, ytest_lq))
-            lda_curve.append(np.mean(lda_scores))
-            qda_curve.append(np.mean(qda_scores))
+
+        @st.cache_data(show_spinner=False)
+        def _lq_learning_curve(cov_diff):
+            import warnings
+            Xtest_lq, ytest_lq = _gen_two_class(500, cov_diff=cov_diff, sep=1.0, seed=999)
+            lda_c, qda_c = [], []
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")      # QDA warns about near-singular covariances at tiny n
+                for n_pc in n_range:
+                    ls, qs = [], []
+                    for rep in range(25):
+                        Xtr, ytr = _gen_two_class(n_pc, cov_diff=cov_diff, sep=1.0, seed=rep)
+                        ls.append(LinearDiscriminantAnalysis().fit(Xtr, ytr).score(Xtest_lq, ytest_lq))
+                        qs.append(QuadraticDiscriminantAnalysis().fit(Xtr, ytr).score(Xtest_lq, ytest_lq))
+                    lda_c.append(float(np.mean(ls))); qda_c.append(float(np.mean(qs)))
+            return lda_c, qda_c
+
+        lda_curve, qda_curve = _lq_learning_curve(cov_diff_lc)
+        qda_ahead = [n for n, l_, q_ in zip(n_range, lda_curve, qda_curve) if q_ > l_ + 0.002]
 
         fig2 = go.Figure()
         fig2.add_trace(go.Scatter(x=n_range, y=lda_curve, name='LDA', mode='lines+markers',
@@ -2191,12 +2217,19 @@ elif section == "lda_qda":
         fig2.update_layout(xaxis_title="Training points per class", yaxis_title="Test accuracy",
             xaxis_type='log', height=320, legend=dict(orientation='h', y=1.14))
         st.plotly_chart(fig2, width='stretch')
-        st.caption("With only a handful of points per class, LDA's single shared covariance "
-                   "(fewer parameters, lower variance) can beat QDA even though the true "
-                   "class shapes really are different - QDA only pulls ahead once there's "
-                   "enough data to estimate its extra parameters reliably. The same bias-"
-                   "variance logic as **Regularization** and **Cross-Validation**, just "
-                   "applied to model *assumptions* instead of model *complexity*.")
+        if not qda_ahead:
+            verdict_lc = ("LDA wins (or ties) at every sample size: the shapes are the same, so QDA's extra "
+                          "covariance parameters only add noise.")
+        elif qda_ahead[0] <= 4:
+            verdict_lc = ("QDA pulls ahead almost immediately: the shapes are so different that LDA's "
+                          "shared-covariance assumption costs more than QDA's extra parameters.")
+        else:
+            verdict_lc = (f"The crossover: LDA wins with few points, but QDA pulls ahead from about "
+                          f"{qda_ahead[0]} points per class, once there's enough data to estimate its extra "
+                          "parameters reliably.")
+        st.caption(f"{verdict_lc} Average test accuracy over 25 training sets per size. The same bias-variance "
+                   "logic as **Regularization** and **Cross-Validation**, applied to model *assumptions* instead "
+                   "of model *complexity*. Try 0, 0.2 and 0.9.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
