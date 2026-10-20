@@ -4389,8 +4389,13 @@ elif section == "pca":
         c1, c2, c3 = st.columns(3)
         c1.metric("PC1 variance explained", f"{var_exp[0]:.1%}")
         c2.metric("PC2 variance explained", f"{var_exp[1]:.1%}")
-        c3.metric("PC1 direction", f"[{pc1[0]:.3f}, {pc1[1]:.3f}]")
+        c3.metric("PC1 direction", f"[{pc1[0]:.3f}, {pc1[1]:.3f}]",
+                  help="The sign is arbitrary: [a, b] and [−a, −b] describe the same line.")
         st.info("Orange lines show the reconstruction error - information lost by projecting onto PC1 only.")
+        if var_exp[0] < 0.55:
+            st.warning(f"PC1 explains only {var_exp[0]:.1%} - the cloud is nearly round, so no direction has much "
+                       "more variance than another. PC1's direction here is mostly determined by noise and can "
+                       "swing a lot between seeds; reducing to 1D would throw away almost half the information.")
 
     with tab2:
         st.markdown("PCA on a higher-dimensional dataset, projected to 2D for visualisation.")
@@ -4428,6 +4433,14 @@ elif section == "pca":
 
         st.markdown(f"Original: **{n_feats}D** → PCA projection: **2D** "
                     f"(retaining {var_ratio[0]+var_ratio[1]:.1%} of variance)")
+        st.caption("**PCA never sees the class labels** - the colours are added afterwards. It finds directions of "
+                   "maximum *variance*, which often separate the groups (as here) but aren't guaranteed to: if the "
+                   "classes differ along a low-variance direction, PCA can blur them together. For a projection "
+                   "that uses the labels to separate classes, see **LDA**.")
+        st.caption("**Standardise features first.** PCA chases variance, so a feature measured in large units "
+                   "dominates: two correlated features where one is in thousands give PC1 ≈ [1.000, 0.001] - "
+                   "essentially just the big feature. Scaling each feature to mean 0, std 1 puts them on equal "
+                   "footing. (All features here are already on the same scale.)")
 
     with tab3:
         st.markdown("### Scree plot - how many components to keep?")
@@ -4462,7 +4475,7 @@ elif section == "pca":
                 name='Cumulative'), row=1, col=2)
             fig.add_hline(y=threshold, line_dash='dash', line_color='#EF9F27',
                 annotation_text=f"{threshold:.0%}", row=1, col=2)
-            fig.add_vline(x=n_keep, line_dash='dot', line_color='#E24B4A',
+            fig.add_vline(x=n_keep + 0.5, line_dash='dot', line_color='#E24B4A',
                 annotation_text=f"keep {n_keep}", row=1, col=1)
             fig.update_xaxes(title_text="Component")
             fig.update_yaxes(title_text="Variance explained")
@@ -4472,6 +4485,10 @@ elif section == "pca":
         st.metric(f"Components needed for {threshold:.0%} variance",
                   f"{n_keep} out of {n_feat_s}",
                   f"{n_feat_s - n_keep} dimensions removed")
+        st.caption(f"This data was generated from **{true_dims} hidden factors** plus a little noise. Look for the "
+                   f"'elbow' in the scree plot: the first {true_dims} components carry the real signal, and from "
+                   f"component {true_dims + 1} onwards the bars drop to small, roughly equal noise-level values. "
+                   "A variance threshold and the elbow are two common ways to choose - they don't always agree.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
