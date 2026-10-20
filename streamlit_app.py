@@ -1984,8 +1984,8 @@ elif section == "logistic_reg":
     st.markdown("""
     <div class="concept-card">
     Logistic regression predicts a <b>probability</b> between 0 and 1 by passing a linear
-    combination of inputs through the <b>sigmoid function</b>. It is the simplest classifier
-    and the building block of neural network output layers.
+    combination of inputs through the <b>sigmoid function</b>. It is one of the simplest
+    classifiers and the building block of neural network output layers.
     </div>
     """, unsafe_allow_html=True)
 
@@ -1998,9 +1998,18 @@ elif section == "logistic_reg":
             w_lg = st.slider("Weight w", -5.0, 5.0, 2.0, step=0.1, key="lg_w")
             b_lg = st.slider("Bias b", -5.0, 5.0, 0.0, step=0.1, key="lg_b")
             threshold_lg = st.slider("Decision threshold", 0.1, 0.9, 0.5, step=0.05)
-            decision_boundary = -b_lg / (w_lg + 1e-9)
-            st.metric("Decision boundary x*", f"{decision_boundary:.2f}")
-            st.info("The boundary is where p = threshold, i.e. w·x + b = 0 (for threshold 0.5).")
+            logit_t = np.log(threshold_lg / (1 - threshold_lg))       # σ⁻¹(threshold)
+            no_boundary = abs(w_lg) < 1e-9
+            decision_boundary = None if no_boundary else (logit_t - b_lg) / w_lg
+            st.metric("Decision boundary x*", "none" if no_boundary else f"{decision_boundary:.2f}")
+            if no_boundary:
+                st.warning(f"w = 0: p = σ(b) = {1/(1+np.exp(-b_lg)):.3f} for every x - a flat line, so "
+                           "there is no boundary. Every point gets the same prediction.")
+            else:
+                st.markdown(f'<div class="formula-box">p = threshold  ⟺  w·x + b = logit(t) = ln(t/(1−t))<br>'
+                            f'x* = (logit(t) − b) / w = ({logit_t:.3f} − {_vout(b_lg)}) / {_vout(w_lg)} '
+                            f'= {decision_boundary:.2f}</div>', unsafe_allow_html=True)
+                st.caption("For threshold 0.5, logit(0.5) = 0, so this reduces to the familiar x* = −b/w.")
 
         with col2:
             x_lg = np.linspace(-6, 6, 300)
@@ -2010,8 +2019,9 @@ elif section == "logistic_reg":
                 line=dict(color='#534AB7', width=2.5)))
             fig.add_hline(y=threshold_lg, line_dash='dash', line_color='#EF9F27',
                 annotation_text=f"threshold={threshold_lg}")
-            fig.add_vline(x=decision_boundary, line_dash='dot', line_color='#E24B4A',
-                annotation_text=f"x*={decision_boundary:.2f}")
+            if not no_boundary:
+                fig.add_vline(x=decision_boundary, line_dash='dot', line_color='#E24B4A',
+                    annotation_text=f"x*={decision_boundary:.2f}")
             fig.add_hrect(y0=threshold_lg, y1=1.05, fillcolor='rgba(29,158,117,0.08)', line_width=0)
             fig.add_hrect(y0=-0.05, y1=threshold_lg, fillcolor='rgba(226,75,74,0.08)', line_width=0)
             fig.update_layout(xaxis_title="x", yaxis_title="Predicted probability p",
@@ -2075,6 +2085,9 @@ elif section == "logistic_reg":
         c2.metric("Final b", f"{b_t:.3f}")
         final_acc = np.mean(((sigmoid(w_t * X_lg + b_t) >= 0.5).astype(float)) == y_lg)
         c3.metric("Accuracy", f"{final_acc:.1%}")
+        st.caption("When the two classes can be split perfectly (try a large separation), the loss can always be "
+                   "pushed a little lower by making w bigger - so with enough epochs the weights grow without "
+                   "limit and the curve becomes a step. In practice this is prevented with **regularization**.")
 
     with tab3:
         st.markdown("Decision boundary with **two features** - a line in 2D space.")
@@ -2120,7 +2133,7 @@ elif section == "logistic_reg":
                 fig.add_trace(go.Scatter(x=x_bd[mask], y=y_bd[mask],
                     name='Decision boundary', line=dict(color='#1D9E75', width=2.5)))
             fig.update_layout(xaxis_title="Feature 1", yaxis_title="Feature 2",
-                xaxis_range=[-4,4], yaxis_range=[-4,4],
+                xaxis_range=[-4,4], yaxis=dict(range=[-4,4], scaleanchor='x', scaleratio=1),
                 height=400, legend=dict(orientation='h', y=1.12))
             st.plotly_chart(fig, width='stretch')
 
