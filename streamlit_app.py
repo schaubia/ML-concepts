@@ -246,15 +246,28 @@ elif section == "loss":
             n_pts = st.slider("Number of points", 5, 30, 10, key="mse_n")
             noise = st.slider("Data noise", 0.1, 3.0, 1.0, key="mse_noise")
             pred_offset = st.slider("Prediction offset", -3.0, 3.0, 1.0, key="mse_off", step=0.1)
+            add_outlier = st.checkbox("Add an outlier", value=False, key="mse_outlier",
+                help="Moves one point 12 units above the line.")
             np.random.seed(42)
             x_data = np.linspace(0, 10, n_pts)
             y_true = 2 * x_data + 1 + np.random.normal(0, noise, n_pts)
             y_pred = 2 * x_data + 1 + pred_offset
+            mse_clean = np.mean((y_true - y_pred) ** 2)
+            mae_clean = np.mean(np.abs(y_true - y_pred))
+            if add_outlier:
+                y_true = y_true.copy()
+                y_true[n_pts // 2] += 12.0
             mse_val = np.mean((y_true - y_pred) ** 2)
             mae_val = np.mean(np.abs(y_true - y_pred))
-            st.metric("MSE", f"{mse_val:.3f}")
-            st.metric("MAE", f"{mae_val:.3f}")
-            st.info("MSE penalises large errors more heavily because of the square.")
+            st.metric("MSE", f"{mse_val:.3f}",
+                      delta=f"×{mse_val / mse_clean:.1f} from the outlier" if add_outlier else None, delta_color="off")
+            st.metric("MAE", f"{mae_val:.3f}",
+                      delta=f"×{mae_val / mae_clean:.1f} from the outlier" if add_outlier else None, delta_color="off")
+            if add_outlier:
+                st.warning(f"One bad point multiplied MSE by {mse_val / mse_clean:.1f} but MAE only by "
+                           f"{mae_val / mae_clean:.1f} - squaring makes a single large error dominate the average.")
+            else:
+                st.info("MSE penalises large errors more heavily because of the square. Tick 'Add an outlier' to see it.")
         with col2:
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=x_data, y=y_true, mode='markers',
@@ -278,12 +291,19 @@ elif section == "loss":
             line=dict(color='#534AB7', width=2.5)))
         fig.add_trace(go.Scatter(x=errors, y=errors, name='MAE contribution (|e|)',
             line=dict(color='#1D9E75', width=2.5)))
+        fig.add_trace(go.Scatter(x=[1], y=[1], mode='markers', name='Cross at |e| = 1',
+            marker=dict(color='#EF9F27', size=12, symbol='circle')))
         fig.update_layout(xaxis_title="Error e", yaxis_title="Contribution to loss",
             height=360, legend=dict(orientation='h', y=1.1))
         st.plotly_chart(fig, width='stretch')
         st.markdown("""
         - **MSE** grows quadratically → strongly penalises outliers
         - **MAE** grows linearly → more robust to outliers
+        - The curves cross at **|e| = 1**: below it, squaring makes errors *smaller* (0.5² = 0.25), so MSE
+          penalises small errors **less** than MAE - and large errors far more
+        - **Which single value does each loss prefer?** If a model predicts one constant for everything,
+          MSE is minimised by the **mean** of the data and MAE by the **median** - which is exactly why MAE
+          is robust: the median ignores how far away outliers are. (See **Central Tendency**.)
         """)
 
     with tab3:
@@ -293,7 +313,9 @@ elif section == "loss":
             true_label = st.radio("True class (y)", [1, 0], key="bce_y")
             pred_prob = st.slider("Predicted probability (p)", 0.01, 0.99, 0.7, step=0.01, key="bce_p")
             bce = -(true_label * np.log(pred_prob) + (1 - true_label) * np.log(1 - pred_prob))
-            st.metric("BCE Loss", f"{bce:.4f}")
+            st.metric("BCE Loss (this example)", f"{bce:.4f}")
+            st.caption("This is the loss for one example. In training, BCE is averaged over all examples - "
+                       "(1/n)·Σ - just like MSE and MAE.")
             if bce < 0.3:
                 st.success("Very good prediction!")
             elif bce < 1.0:
