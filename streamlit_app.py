@@ -1056,37 +1056,73 @@ elif section == "linear_reg":
         params = np.linalg.lstsq(X_mat, y_lr, rcond=None)[0]
         w_hat, b_hat = params
 
+        def _line_label(w, b, fmt=".2f"):
+            """'y = 1.63x − 0.28' - proper sign instead of '+ -0.28'."""
+            return f"y = {format(w, fmt).replace('-', '−')}x {'+' if b >= 0 else '−'} {format(abs(b), fmt)}"
+
         with col2:
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=x_lr, y=y_lr, mode='markers',
                 name='Data', marker=dict(color='#534AB7', size=7)))
             x_fit = np.linspace(-4.5, 4.5, 100)
             fig.add_trace(go.Scatter(x=x_fit, y=w_hat*x_fit + b_hat,
-                name=f'Fitted: y={w_hat:.2f}x + {b_hat:.2f}',
+                name=f'Fitted: {_line_label(w_hat, b_hat)}',
                 line=dict(color='#E24B4A', width=2.5)))
             fig.add_trace(go.Scatter(x=x_fit, y=true_w*x_fit + true_b,
-                name=f'True: y={true_w}x + {true_b}',
+                name=f'True: {_line_label(true_w, true_b, "g")}',
                 line=dict(color='#1D9E75', width=1.5, dash='dash')))
             fig.update_layout(xaxis_title="x", yaxis_title="y",
                 height=360, legend=dict(orientation='h', y=1.12))
             st.plotly_chart(fig, width='stretch')
 
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Fitted w", f"{w_hat:.3f}", f"{w_hat - true_w:+.3f}")
-        c2.metric("Fitted b", f"{b_hat:.3f}", f"{b_hat - true_b:+.3f}")
+        c1.metric("Fitted w", f"{w_hat:.3f}", f"{w_hat - true_w:+.3f} vs true", delta_color="off")
+        c2.metric("Fitted b", f"{b_hat:.3f}", f"{b_hat - true_b:+.3f} vs true", delta_color="off")
         c3.metric("Train MSE", f"{np.mean((w_hat*x_lr+b_hat - y_lr)**2):.3f}")
         c4.metric("R²", f"{1 - np.var(y_lr - (w_hat*x_lr+b_hat))/np.var(y_lr):.4f}")
 
+        st.markdown("**The closed-form (analytical) solution** - no iterations needed:")
+        x_bar, y_bar = x_lr.mean(), y_lr.mean()
+        st.markdown(f'<div class="formula-box">'
+            f'w = Σ(xᵢ − x̄)(yᵢ − ȳ) / Σ(xᵢ − x̄)²  = {w_hat:.3f}<br>'
+            f'b = ȳ − w·x̄  = {_vout(y_bar)} − ({_vout(w_hat)})·({_vout(x_bar)})  = {_vout(b_hat)}<br><br>'
+            f'Matrix form (any number of features):  θ = (XᵀX)⁻¹ Xᵀy'
+            f'</div>', unsafe_allow_html=True)
+        st.caption("Gradient descent reaches the same answer step by step - see the second tab. The closed form is "
+                   "exact and instant for small problems; gradient descent scales better to huge datasets and is "
+                   "what's used for models without a closed form, like neural networks.")
+
     with tab2:
-        st.markdown("Loss surface over parameters **w** and **b**:")
-        ws = np.linspace(-3, 3, 60)
-        bs = np.linspace(-3, 3, 60)
+        st.markdown("Loss surface over parameters **w** and **b**, and gradient descent walking down it:")
+        gc1, gc2 = st.columns([1, 2])
+        with gc1:
+            lr_gd = st.select_slider("Learning rate", [0.001, 0.005, 0.01, 0.03, 0.05, 0.1, 0.15, 0.2],
+                                     value=0.03, key="linreg_gd_lr")
+            w0_gd = st.slider("Start w", -6.0, 6.0, -2.5, step=0.5, key="linreg_gd_w0")
+            b0_gd = st.slider("Start b", -6.0, 6.0, 4.0, step=0.5, key="linreg_gd_b0")
+            steps_gd = st.slider("Steps", 5, 300, 60, key="linreg_gd_steps")
+
+        # gradient of MSE: ∂/∂w = 2·mean((wx+b−y)·x), ∂/∂b = 2·mean(wx+b−y)
+        path_gd = [(w0_gd, b0_gd)]
+        div_gd, conv_gd = False, None
+        for k_gd in range(steps_gd):
+            w_c, b_c = path_gd[-1]
+            r_c = w_c * x_lr + b_c - y_lr
+            gw, gb = 2 * np.mean(r_c * x_lr), 2 * np.mean(r_c)
+            if np.hypot(gw, gb) < 1e-3:
+                conv_gd = k_gd; break
+            path_gd.append((w_c - lr_gd * gw, b_c - lr_gd * gb))
+            if max(abs(path_gd[-1][0]), abs(path_gd[-1][1])) > 50:
+                div_gd = True; break
+        path_gd = np.array(path_gd)
+
+        # window centred on the optimum, wide enough to include the start point
+        w_lo, w_hi = min(w_hat, w0_gd) - 2, max(w_hat, w0_gd) + 2
+        b_lo, b_hi = min(b_hat, b0_gd) - 2, max(b_hat, b0_gd) + 2
+        ws = np.linspace(w_lo, w_hi, 80)
+        bs = np.linspace(b_lo, b_hi, 80)
         WW, BB = np.meshgrid(ws, bs)
-        ZZ = np.zeros_like(WW)
-        for i in range(len(ws)):
-            for j in range(len(bs)):
-                preds = WW[j, i] * x_lr + BB[j, i]
-                ZZ[j, i] = np.mean((preds - y_lr) ** 2)
+        ZZ = np.mean((WW[..., None] * x_lr + BB[..., None] - y_lr) ** 2, axis=-1)   # vectorised MSE grid
 
         fig3 = go.Figure(data=[go.Contour(
             z=ZZ, x=ws, y=bs,
@@ -1096,11 +1132,31 @@ elif section == "linear_reg":
         )])
         fig3.add_scatter(x=[w_hat], y=[b_hat], mode='markers',
             marker=dict(color='#1D9E75', size=14, symbol='star'),
-            name='Found minimum')
-        fig3.update_layout(xaxis_title='w', yaxis_title='b',
-            height=400, legend=dict(orientation='h', y=1.1))
-        st.plotly_chart(fig3, width='stretch')
-        st.caption("The green star is the MSE minimum - the optimal w and b.")
+            name='Closed-form minimum')
+        fig3.add_scatter(x=np.clip(path_gd[:, 0], w_lo, w_hi), y=np.clip(path_gd[:, 1], b_lo, b_hi),
+            mode='lines+markers', name='Gradient descent path',
+            line=dict(color='#EF9F27', width=2), marker=dict(size=5, color='#EF9F27'))
+        fig3.add_scatter(x=[w0_gd], y=[b0_gd], mode='markers', name='Start',
+            marker=dict(color='#E24B4A', size=12))
+        fig3.update_layout(xaxis_title='w', yaxis_title='b', xaxis=dict(range=[w_lo, w_hi]),
+            yaxis=dict(range=[b_lo, b_hi]), height=420, legend=dict(orientation='h', y=1.12))
+        with gc2:
+            st.plotly_chart(fig3, width='stretch')
+
+        w_end, b_end = path_gd[-1]
+        if div_gd:
+            st.error(f"Diverged: learning rate {lr_gd} is too large - the steps overshoot further each time "
+                     "(stopped once a parameter passed 50). Here the limit is about 0.19.")
+        elif conv_gd is not None:
+            st.success(f"Converged in {conv_gd} steps to w = {w_end:.3f}, b = {b_end:.3f} - the same point the "
+                       f"closed-form formula gives instantly (w = {w_hat:.3f}, b = {b_hat:.3f}).")
+        else:
+            st.info(f"After {len(path_gd)-1} steps: w = {w_end:.3f}, b = {b_end:.3f}, still heading towards the "
+                    f"minimum (w = {w_hat:.3f}, b = {b_hat:.3f}). Add steps or raise the learning rate.")
+        st.caption("The bowl is stretched: MSE changes faster with w (because x ranges over ±4) than with b, so "
+                   "the path tends to drop quickly onto the valley floor and then slide slowly along it. "
+                   "Near the stability limit (about 0.19 here) the steps overshoot back and forth across the "
+                   "valley; at 0.2 they diverge.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # REGULARIZATION
