@@ -629,11 +629,16 @@ elif section == "overfit":
     np.random.seed(7)
     x_tr = np.sort(np.random.uniform(-3, 3, n_train))
     y_tr = np.sin(x_tr) + np.random.normal(0, noise_of, n_train)
-    x_test = np.sort(np.random.uniform(-3, 3, 40))
-    y_test = np.sin(x_test) + np.random.normal(0, noise_of, 40)
+    rng_of = np.random.RandomState(1007)              # separate stream: 200 fresh test points
+    x_test = np.sort(rng_of.uniform(-3, 3, 200))
+    y_test = np.sin(x_test) + rng_of.normal(0, noise_of, 200)
 
-    coeffs = np.polyfit(x_tr, y_tr, degree)
-    p = np.poly1d(coeffs)
+    import warnings
+    def _fit_poly(d):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")           # degree ≥ n gives an underdetermined fit - expected here
+            return np.poly1d(np.polyfit(x_tr, y_tr, d))
+    p = _fit_poly(degree)
     x_line = np.linspace(-3.5, 3.5, 300)
     y_line = p(x_line)
     train_mse = np.mean((p(x_tr) - y_tr) ** 2)
@@ -643,8 +648,8 @@ elif section == "overfit":
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=x_tr, y=y_tr, mode='markers',
             name='Training data', marker=dict(color='#534AB7', size=9)))
-        fig.add_trace(go.Scatter(x=x_test, y=y_test, mode='markers',
-            name='Test data', marker=dict(color='#1D9E75', size=7, symbol='x')))
+        fig.add_trace(go.Scatter(x=x_test[::5], y=y_test[::5], mode='markers',
+            name='Test data (40 of 200 shown)', marker=dict(color='#1D9E75', size=7, symbol='x')))
         fig.add_trace(go.Scatter(x=x_line, y=np.sin(x_line),
             name='True function', line=dict(color='#888780', dash='dash', width=1.5)))
         clip = np.clip(y_line, -4, 4)
@@ -654,30 +659,41 @@ elif section == "overfit":
             yaxis_range=[-3, 3], height=380, legend=dict(orientation='h', y=1.12))
         st.plotly_chart(fig, width='stretch')
 
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Train MSE", f"{train_mse:.4f}")
-    c2.metric("Test MSE", f"{test_mse:.4f}")
-    ratio = test_mse / (train_mse + 1e-9)
-    c3.metric("Test / Train ratio", f"{ratio:.2f}")
+    degrees = list(range(1, 16))
+    tr_mses_raw, te_mses_raw = [], []
+    for d in degrees:
+        pp = _fit_poly(d)
+        tr_mses_raw.append(float(np.mean((pp(x_tr) - y_tr) ** 2)))
+        te_mses_raw.append(float(np.mean((pp(x_test) - y_test) ** 2)))
+    best_deg = degrees[int(np.argmin(te_mses_raw))]
+    best_te = min(te_mses_raw)
 
-    if degree <= 2:
-        st.warning("**Underfitting** - the model is too simple to capture the sine curve.")
-    elif degree >= 9:
-        st.error('**Overfitting** - the model bends too much and memorises the noise.')
+    def _fmt_mse(v):
+        return f"{v:.4f}" if v < 1000 else f"{v:.3g}"
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Train MSE", _fmt_mse(train_mse))
+    c2.metric("Test MSE", _fmt_mse(test_mse))
+    ratio = test_mse / (train_mse + 1e-9)
+    c3.metric("Test / Train ratio", f"{ratio:.2f}" if ratio < 1000 else f"{ratio:.3g}")
+    c4.metric("Best degree on test data", best_deg)
+
+    if degree > best_deg and test_mse > 1.25 * best_te:
+        st.error(f"**Overfitting** - degree {degree} bends to fit the noise: test MSE {_fmt_mse(test_mse)} versus "
+                 f"{best_te:.4f} at degree {best_deg}. It does better on training data and worse on new data.")
+    elif degree < best_deg and test_mse > 1.25 * best_te:
+        st.warning(f"**Underfitting** - degree {degree} is too simple to capture the sine curve: test MSE "
+                   f"{_fmt_mse(test_mse)} versus {best_te:.4f} at degree {best_deg}.")
     else:
-        st.success("**Good balance** - the model captures the structure without memorising noise.")
+        st.success(f"**Good fit** - test MSE {_fmt_mse(test_mse)} is within 25% of the best any degree achieves "
+                   f"on this data ({best_te:.4f} at degree {best_deg}).")
+    if degree >= n_train - 1:
+        st.info(f"Degree {degree} with only {n_train} training points: a polynomial of degree n − 1 can pass "
+                "**exactly through every training point** (train MSE ≈ 0). That's pure memorisation - and "
+                "above degree n − 1 there are more coefficients than points, so the fit isn't even unique.")
 
     st.markdown("### How MSE depends on model complexity")
-    degrees = list(range(1, 14))
-    tr_mses, te_mses = [], []
-    for d in degrees:
-        try:
-            c = np.polyfit(x_tr, y_tr, d)
-            pp = np.poly1d(c)
-            tr_mses.append(np.mean((pp(x_tr) - y_tr) ** 2))
-            te_mses.append(min(np.mean((pp(x_test) - y_test) ** 2), 20))
-        except Exception:
-            tr_mses.append(None); te_mses.append(None)
+    tr_mses = tr_mses_raw
+    te_mses = [min(v, 20) for v in te_mses_raw]
 
     fig2 = go.Figure()
     fig2.add_trace(go.Scatter(x=degrees, y=tr_mses, name='Train MSE',
@@ -690,6 +706,9 @@ elif section == "overfit":
         yaxis_title="MSE", yaxis_range=[0, 5], height=300,
         legend=dict(orientation='h', y=1.12))
     st.plotly_chart(fig2, width='stretch')
+    st.caption(f"Train MSE only ever falls as the degree grows; test MSE is U-shaped with its minimum at degree "
+               f"{best_deg} here. Very large test errors are capped at the top of the chart. Fewer training points "
+               "make the right-hand side blow up sooner - try 8 points.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SPLINES & GAMs
