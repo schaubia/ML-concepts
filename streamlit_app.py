@@ -743,6 +743,19 @@ elif section == "splines_gam":
         beta, *_ = np.linalg.lstsq(basis_at(x), y, rcond=None)
         return lambda xq: basis_at(xq) @ beta, knots_internal
 
+    def _natural_spline_predict_fn(x, y, n_internal_knots):
+        """Natural cubic spline regression: cubic between the knots, but forced to have zero curvature at
+        the boundary knots - so it continues as a straight line outside the data. Basis from Hastie,
+        Tibshirani & Friedman, *Elements of Statistical Learning*, eq. 5.4-5.5."""
+        xi = np.quantile(x, np.linspace(0, 1, n_internal_knots + 2))      # boundary + internal knots
+        K = len(xi)
+        def basis_at(xq):
+            def d(k):
+                return (np.maximum(xq - xi[k], 0)**3 - np.maximum(xq - xi[K-1], 0)**3) / (xi[K-1] - xi[k])
+            return np.column_stack([np.ones_like(xq), xq] + [d(k) - d(K-2) for k in range(K-2)])
+        beta, *_ = np.linalg.lstsq(basis_at(x), y, rcond=None)
+        return lambda xq: basis_at(xq) @ beta, xi[1:-1]
+
     with tab1:
         col1, col2 = st.columns([1, 2])
         with col1:
@@ -750,12 +763,17 @@ elif section == "splines_gam":
             noise_sp = st.slider("Noise", 0.1, 1.0, 0.4, step=0.1, key="sp_noise")
             n_sp = st.slider("Data points", 20, 80, 40, key="sp_n")
             show_poly = st.checkbox("Compare with polynomial of similar flexibility", True, key="sp_showpoly")
+            spline_kind = st.radio("Spline type", ["Cubic spline", "Natural spline"], key="sp_kind",
+                help="A natural spline is forced to be a straight line beyond the outermost knots.")
 
         np.random.seed(7)
         x_sp = np.sort(np.random.uniform(-3, 3, n_sp))
         y_sp = x_sp * np.sin(x_sp) * 0.6 + np.random.normal(0, noise_sp, n_sp)
 
-        spline_fn, internal_knots = _spline_predict_fn(x_sp, y_sp, n_knots)
+        if spline_kind == "Natural spline":
+            spline_fn, internal_knots = _natural_spline_predict_fn(x_sp, y_sp, n_knots)
+        else:
+            spline_fn, internal_knots = _spline_predict_fn(x_sp, y_sp, n_knots)
         x_plot = np.linspace(-4, 4, 300)  # extends past the data range on purpose
 
         with col2:
@@ -765,7 +783,7 @@ elif section == "splines_gam":
             fig.add_vrect(x0=-4, x1=x_sp.min(), fillcolor='rgba(226,75,74,0.06)', line_width=0)
             fig.add_vrect(x0=x_sp.max(), x1=4, fillcolor='rgba(226,75,74,0.06)', line_width=0)
             fig.add_trace(go.Scatter(x=x_plot, y=np.clip(spline_fn(x_plot), -8, 8),
-                name=f'Regression spline ({n_knots} knots)', line=dict(color='#1D9E75', width=2.5)))
+                name=f'{spline_kind} ({n_knots} knots)', line=dict(color='#1D9E75', width=2.5)))
             if show_poly:
                 poly_degree = n_knots + 3  # roughly matching parameter count
                 c_poly = np.polyfit(x_sp, y_sp, poly_degree)
@@ -778,10 +796,12 @@ elif section == "splines_gam":
                 height=400, legend=dict(orientation='h', y=1.14))
             st.plotly_chart(fig, width='stretch')
 
-        st.caption("Shaded bands are outside the training data (extrapolation). Dotted grey "
-                   "lines mark the knots. Try raising both the knot count and 'noise', and "
-                   "watch the polynomial swing wildly in the shaded bands while the spline "
-                   "stays comparatively tame - each spline piece only has local influence.")
+        st.caption("Shaded bands are outside the training data (extrapolation); dotted grey lines mark the knots. "
+                   "**Inside** the data, splines beat the polynomial because each piece only has local influence - "
+                   "no global wobble. **Outside**, an ordinary cubic spline just continues its last cubic piece and "
+                   "can also shoot off (raise knots and noise to see it). A **natural spline** is forced to be a "
+                   "straight line beyond the outermost knots, which is usually far safer - but any prediction "
+                   "outside the data is a guess.")
 
     with tab2:
         st.markdown("### Smoothing splines: a knot at every point, controlled by a penalty")
@@ -793,18 +813,20 @@ elif section == "splines_gam":
         st.markdown('<div class="formula-box">minimize  Σᵢ(yᵢ − f(xᵢ))² + λ∫f″(t)² dt</div>',
             unsafe_allow_html=True)
         st.markdown("λ controls the tradeoff - λ = 0 interpolates every point exactly; "
-                    "λ → ∞ forces f toward a straight line.")
+                    "λ → ∞ forces f toward a straight line (the only curves with f″ = 0).")
 
         col1, col2 = st.columns([1, 2])
         with col1:
-            smooth_s = st.select_slider("Smoothing (higher = smoother)",
-                options=[0.01, 0.1, 1, 5, 20, 100], value=1, key="sp_smooths")
+            lam_ss = st.select_slider("Penalty λ (higher = smoother)",
+                options=[1e-5, 1e-4, 1e-3, 0.01, 0.1, 1, 10, 100, 1000], value=0.1, key="sp_lam",
+                format_func=lambda v: f"{v:g}")
 
+        from scipy.interpolate import make_smoothing_spline
         np.random.seed(7)
         n_ss = 50
         x_ss = np.sort(np.random.uniform(-3, 3, n_ss))
         y_ss = np.sin(x_ss) + np.random.normal(0, 0.3, n_ss)
-        spl = UnivariateSpline(x_ss, y_ss, k=3, s=smooth_s * n_ss * 0.05)
+        spl = make_smoothing_spline(x_ss, y_ss, lam=lam_ss)     # minimises exactly the formula above
         x_ssplot = np.linspace(-3, 3, 300)
 
         with col2:
@@ -812,13 +834,25 @@ elif section == "splines_gam":
             fig2.add_trace(go.Scatter(x=x_ss, y=y_ss, mode='markers',
                 marker=dict(color='#534AB7', size=6), name='Data'))
             fig2.add_trace(go.Scatter(x=x_ssplot, y=spl(x_ssplot),
-                line=dict(color='#1D9E75', width=2.5), name='Smoothing spline'))
+                line=dict(color='#1D9E75', width=2.5), name=f'Smoothing spline (λ = {lam_ss:g})'))
+            fig2.add_trace(go.Scatter(x=x_ssplot, y=np.sin(x_ssplot), name='True function',
+                line=dict(color='#888780', width=1.5, dash='dash')))
             fig2.update_layout(height=330, legend=dict(orientation='h', y=1.14))
             st.plotly_chart(fig2, width='stretch')
-        if smooth_s <= 0.1:
-            st.warning("Very low smoothing - the curve is chasing individual noisy points.")
-        elif smooth_s >= 20:
-            st.info("Very high smoothing - pushed nearly to a straight line.")
+        rmse_train = float(np.sqrt(np.mean((spl(x_ss) - y_ss) ** 2)))
+        rmse_true = float(np.sqrt(np.mean((spl(x_ssplot) - np.sin(x_ssplot)) ** 2)))
+        m1, m2 = st.columns(2)
+        m1.metric("Error on the data points (RMSE)", f"{rmse_train:.3f}")
+        m2.metric("Error vs the true curve (RMSE)", f"{rmse_true:.3f}",
+                  help="How far the fitted curve is from sin(x), the curve the data came from.")
+        if lam_ss <= 1e-4:
+            st.warning("Tiny λ - almost no penalty, so the curve chases individual noisy points: "
+                       "low error on the data, but far from the true curve.")
+        elif lam_ss >= 100:
+            st.info("Huge λ - any bending is so expensive that the curve is essentially a straight line.")
+        else:
+            st.caption("The error on the data always rises with λ; the error against the true curve is lowest "
+                       "somewhere in the middle (around λ = 0.1 here) - the same bias-variance balance again.")
 
         st.markdown("### A 2-feature GAM, fit by backfitting")
         st.markdown("""
