@@ -936,14 +936,32 @@ elif section == "subset_selection":
             n_true = st.slider("Number that actually matter", 1, p_total, 3, key="ss_ntrue")
             n_obs = st.slider("Training points", 30, 200, 80, key="ss_n")
             noise_ss = st.slider("Noise", 0.2, 2.0, 0.8, step=0.1, key="ss_noise")
+            decoy = st.checkbox("Decoy predictor trap", value=False, key="ss_decoy",
+                help="y depends on x0 and x1 only; x2 is a noisy copy of their average - the single best "
+                     "predictor on its own, but not part of the true model.")
 
-        np.random.seed(7)
-        X_ss = np.random.randn(n_obs, p_total)
+        def _gen_ss(n, rng):
+            X = rng.randn(n, p_total)
+            if decoy:
+                X[:, 2] = (X[:, 0] + X[:, 1]) / np.sqrt(2) + 0.5 * rng.randn(n)   # the decoy
+            return X
+
+        rng_ss = np.random.RandomState(7)
+        X_ss = _gen_ss(n_obs, rng_ss)
         true_beta = np.zeros(p_total)
-        true_beta[:n_true] = np.random.uniform(1.5, 3.0, n_true)
-        np.random.shuffle(true_beta)
-        y_ss = X_ss @ true_beta + np.random.normal(0, noise_ss, n_obs)
+        if decoy:
+            true_beta[[0, 1]] = 2.0
+            n_true_eff = 2
+        else:
+            true_beta[:n_true] = rng_ss.uniform(1.5, 3.0, n_true)
+            rng_ss.shuffle(true_beta)
+            n_true_eff = n_true
+        y_ss = X_ss @ true_beta + rng_ss.normal(0, noise_ss, n_obs)
         true_cols = set(np.where(true_beta != 0)[0])
+        # fresh test data from the same process, for tab 2
+        rng_te_ss = np.random.RandomState(99)
+        X_ss_te = _gen_ss(2000, rng_te_ss)
+        y_ss_te = X_ss_te @ true_beta + rng_te_ss.normal(0, noise_ss, 2000)
 
         # best subset: exhaustively check all sizes up to a practical cap
         max_size_bs = min(p_total, 8)
@@ -983,9 +1001,21 @@ elif section == "subset_selection":
                 height=380, legend=dict(orientation='h', y=1.14))
             st.plotly_chart(fig, width='stretch')
 
-        st.caption(f"True predictors that matter: {sorted(true_cols)}. "
-                   f"Best subset at that size picked: {sorted(best_subset_by_size.get(n_true,((),0))[0])}. "
-                   f"Forward stepwise at that size picked: {sorted(fwd_by_size.get(n_true,((),0))[0])}.")
+        bs_pick = sorted(best_subset_by_size.get(n_true_eff, ((), 0))[0])
+        fw_pick = sorted(fwd_by_size.get(n_true_eff, ((), 0))[0])
+        st.caption(f"True predictors that matter: {sorted(int(c) for c in true_cols)}. "
+                   f"Best subset at that size picked: {[int(c) for c in bs_pick]}. "
+                   f"Forward stepwise at that size picked: {[int(c) for c in fw_pick]}.")
+        if decoy:
+            first_fwd = fwd_by_size[1][0]
+            st.warning(f"**The trap:** on its own, the decoy x2 explains y best, so forward stepwise grabs "
+                       f"{'x2' if 2 in first_fwd else 'x' + str(first_fwd[0])} first. At size 2, best subset finds "
+                       f"{[int(c) for c in bs_pick]} with RSS {best_subset_by_size[2][1]:.1f}, while forward "
+                       f"stepwise is stuck with {[int(c) for c in fw_pick]} (RSS {fwd_by_size[2][1]:.1f}) - it can "
+                       "never drop x2 again. With independent predictors (the default data) this rarely happens.")
+        elif bs_pick != fw_pick:
+            st.warning("Here forward stepwise and best subset disagree at the true size - an early greedy choice "
+                       "couldn't be undone.")
         st.info("Both curves always go down as you add predictors - training RSS can never "
                 "get worse with more variables. That's exactly why picking model size needs "
                 "something other than training error (see the next tab). Forward stepwise "
@@ -995,7 +1025,8 @@ elif section == "subset_selection":
     with tab2:
         st.markdown("""
         Training RSS always improves with more predictors, so it can't tell you when to
-        stop. The usual fixes:
+        stop. The usual fixes (the chart below also shows the **test error on 2,000 fresh points** -
+        the ground truth these methods are trying to estimate):
         - **AIC / BIC / adjusted R²** - score each size with a complexity penalty (see
           **AIC / BIC**) and pick the best-scoring size
         - **Cross-validation** - hold out data and pick the size with the best validation
@@ -1005,7 +1036,7 @@ elif section == "subset_selection":
 
         n_boot = min(p_total, 8)
         sizes2 = list(range(0, n_boot + 1))
-        k_choices = [s + 1 for s in sizes2]  # +1 for intercept
+        k_choices = [s + 2 for s in sizes2]  # + intercept + noise variance σ² (same convention as AIC / BIC page)
         n_fixed = n_obs
         rss_vals = [best_subset_by_size[s][1] for s in sizes2]
         aics = [n_fixed * np.log(max(r, 1e-10) / n_fixed) + 2 * k for r, k in zip(rss_vals, k_choices)]
@@ -1018,19 +1049,33 @@ elif section == "subset_selection":
             line=dict(color='#E24B4A', width=2.5)))
         best_aic_size = sizes2[int(np.argmin(aics))]
         best_bic_size = sizes2[int(np.argmin(bics))]
+        # ground truth: refit each best-subset model on the training data, score on fresh test data
+        test_mse_ss = []
+        for s_ in sizes2:
+            cols_ = best_subset_by_size[s_][0]
+            A_tr = np.column_stack([X_ss[:, list(cols_)], np.ones(n_obs)]) if cols_ else np.ones((n_obs, 1))
+            A_te = np.column_stack([X_ss_te[:, list(cols_)], np.ones(2000)]) if cols_ else np.ones((2000, 1))
+            beta_, *_ = np.linalg.lstsq(A_tr, y_ss, rcond=None)
+            test_mse_ss.append(float(np.mean((y_ss_te - A_te @ beta_) ** 2)))
+        best_test_size = sizes2[int(np.argmin(test_mse_ss))]
+        fig2.add_trace(go.Scatter(x=sizes2, y=test_mse_ss, name='Test MSE (right axis)', mode='lines+markers',
+            line=dict(color='#1D9E75', width=2.5, dash='dash'), yaxis='y2'))
         fig2.add_vline(x=best_aic_size, line=dict(color='#534AB7', dash='dot'))
         fig2.add_vline(x=best_bic_size, line=dict(color='#E24B4A', dash='dot'))
-        fig2.update_layout(xaxis_title="Number of predictors", yaxis_title="Score (lower is better)",
+        fig2.update_layout(xaxis_title="Number of predictors", yaxis_title="AIC / BIC (lower is better)",
+            yaxis2=dict(title="Test MSE", overlaying='y', side='right', type='log'),
             height=340, legend=dict(orientation='h', y=1.14))
         st.plotly_chart(fig2, width='stretch')
 
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns(3)
         c1.metric("Best size by AIC", best_aic_size)
         c2.metric("Best size by BIC", best_bic_size)
-        st.caption(f"Applied to the best-subset models from the previous tab (true number "
-                   f"of useful predictors was {n_true}). BIC's "
-                   f"heavier complexity penalty typically selects a model at least as small "
-                   f"as AIC's - the same tradeoff explored in **AIC / BIC**.")
+        c3.metric("Best size by test error", best_test_size,
+                  help="What actually works best on 2,000 new points - the answer AIC, BIC and CV try to estimate.")
+        st.caption(f"Applied to the best-subset models from the previous tab (true number of useful predictors: "
+                   f"{n_true_eff}). BIC's heavier complexity penalty typically selects a model at least as small as "
+                   f"AIC's - the same tradeoff explored in **AIC / BIC**. Here k counts the coefficients, the intercept "
+                   "and the noise variance σ², as on that page; the extra +1 doesn't change which size wins.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # ACTIVATION FUNCTIONS
