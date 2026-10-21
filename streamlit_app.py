@@ -1559,7 +1559,8 @@ elif section == "svm":
             C_svm = st.slider("C (log scale)", -2.0, 3.0, 0.0, step=0.5, key="svm_c_log",
                 help="Lower C → wider margin, tolerates more violations. Higher C → narrower margin, fits training points more tightly.")
             C_val = 10 ** C_svm
-            sep_svm = st.slider("Class separation", 0.5, 3.0, 1.5, step=0.1, key="svm_sep")
+            sep_svm = st.slider("Cluster spread (higher = more overlap)", 0.5, 3.0, 1.5, step=0.1, key="svm_sep",
+                help="The standard deviation of each blob. Larger spread pushes the classes into each other.")
             n_svm = st.slider("Points per class", 15, 60, 30, key="svm_n")
 
         np.random.seed(7)
@@ -1588,7 +1589,8 @@ elif section == "svm":
             fig.add_trace(go.Scatter(x=clf_svm.support_vectors_[:, 0], y=clf_svm.support_vectors_[:, 1],
                 mode='markers', name='Support vectors',
                 marker=dict(color='rgba(0,0,0,0)', size=16, line=dict(color='black', width=2))))
-            fig.update_layout(height=400, legend=dict(orientation='h', y=1.12))
+            fig.update_layout(height=400, legend=dict(orientation='h', y=1.12),
+                yaxis=dict(scaleanchor='x', scaleratio=1))   # equal scale: margins really are perpendicular
             st.plotly_chart(fig, width='stretch')
 
         c1, c2s, c3 = st.columns(3)
@@ -1633,8 +1635,15 @@ elif section == "svm":
         else:
             X_k, y_k = make_moons(n_samples=150, noise=noise_svm, random_state=7)
 
-        clf_k = SVC(kernel=kernel_svm, gamma=gamma_svm, C=1.0, degree=3).fit(X_k, y_k)
+        # coef0=1: the poly kernel (γ·x·x′ + 1)³ includes all terms up to degree 3 - with scikit-learn's
+        # default coef0=0 it has only pure cubic terms and can't express a circle (x² + y²)
+        clf_k = SVC(kernel=kernel_svm, gamma=gamma_svm, C=1.0, degree=3, coef0=1).fit(X_k, y_k)
         acc_k = clf_k.score(X_k, y_k)
+        if dataset_svm == "Circles":
+            X_k_te, y_k_te = make_circles(n_samples=2000, noise=noise_svm, factor=0.4, random_state=99)
+        else:
+            X_k_te, y_k_te = make_moons(n_samples=2000, noise=noise_svm, random_state=99)
+        acc_k_te = clf_k.score(X_k_te, y_k_te)
 
         xx2, yy2 = np.meshgrid(np.linspace(X_k[:, 0].min()-0.5, X_k[:, 0].max()+0.5, 150),
                                 np.linspace(X_k[:, 1].min()-0.5, X_k[:, 1].max()+0.5, 150))
@@ -1649,23 +1658,34 @@ elif section == "svm":
                 m = y_k == cls
                 fig2.add_trace(go.Scatter(x=X_k[m, 0], y=X_k[m, 1], mode='markers',
                     name=f'Class {cls}', marker=dict(color=c, size=7)))
-            fig2.update_layout(height=380, legend=dict(orientation='h', y=1.1))
+            fig2.update_layout(height=380, legend=dict(orientation='h', y=1.1),
+                yaxis=dict(scaleanchor='x', scaleratio=1))
             st.plotly_chart(fig2, width='stretch')
 
-        st.metric(f"Training accuracy ({kernel_svm} kernel)", f"{acc_k:.1%}")
+        mk1, mk2 = st.columns(2)
+        mk1.metric(f"Training accuracy ({kernel_svm} kernel)", f"{acc_k:.1%}")
+        mk2.metric(f"Test accuracy ({kernel_svm} kernel)", f"{acc_k_te:.1%}",
+                   help="On 2,000 fresh points from the same distribution.")
 
         st.markdown("### Same data, every kernel")
         rows = []
         for k in ["linear", "poly", "rbf"]:
-            c = SVC(kernel=k, gamma=gamma_svm, C=1.0, degree=3).fit(X_k, y_k)
-            rows.append((k, c.score(X_k, y_k)))
-        fig3 = go.Figure(go.Bar(x=[r[0] for r in rows], y=[r[1] for r in rows],
-            marker_color=['#888780', '#EF9F27', '#534AB7']))
-        fig3.update_layout(yaxis_title="Training accuracy", yaxis_range=[0, 1], height=260)
+            c = SVC(kernel=k, gamma=gamma_svm, C=1.0, degree=3, coef0=1).fit(X_k, y_k)
+            rows.append((k, c.score(X_k, y_k), c.score(X_k_te, y_k_te)))
+        fig3 = go.Figure()
+        fig3.add_trace(go.Bar(x=[r[0] for r in rows], y=[r[1] for r in rows], name='Train accuracy',
+            marker_color='#888780'))
+        fig3.add_trace(go.Bar(x=[r[0] for r in rows], y=[r[2] for r in rows], name='Test accuracy (2,000 new points)',
+            marker_color=['#888780', '#EF9F27', '#534AB7'], text=[f"{r[2]:.2f}" for r in rows],
+            textposition='outside'))
+        fig3.update_layout(barmode='group', yaxis_title="Accuracy", yaxis_range=[0, 1.1], height=280,
+            legend=dict(orientation='h', y=1.18))
         st.plotly_chart(fig3, width='stretch')
-        st.caption("On circular or crescent-shaped data, the linear kernel is stuck near "
-                   "chance - no straight line helps. RBF (and often poly) recovers a clean "
-                   "boundary by working in a space where the classes really are separable.")
+        st.caption("On circular or crescent-shaped data the linear kernel is stuck - no straight line helps "
+                   "(on Circles it's near chance). The poly kernel used here is (γ·x·x′ + 1)³, which includes "
+                   "x² and y² terms - enough to draw a circle; RBF recovers a clean boundary too. Judge kernels "
+                   "by **test** accuracy: a large gamma lets RBF fit the training points ever more tightly "
+                   "without doing better on new data.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
