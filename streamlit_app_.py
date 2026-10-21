@@ -246,15 +246,28 @@ elif section == "loss":
             n_pts = st.slider("Number of points", 5, 30, 10, key="mse_n")
             noise = st.slider("Data noise", 0.1, 3.0, 1.0, key="mse_noise")
             pred_offset = st.slider("Prediction offset", -3.0, 3.0, 1.0, key="mse_off", step=0.1)
+            add_outlier = st.checkbox("Add an outlier", value=False, key="mse_outlier",
+                help="Moves one point 12 units above the line.")
             np.random.seed(42)
             x_data = np.linspace(0, 10, n_pts)
             y_true = 2 * x_data + 1 + np.random.normal(0, noise, n_pts)
             y_pred = 2 * x_data + 1 + pred_offset
+            mse_clean = np.mean((y_true - y_pred) ** 2)
+            mae_clean = np.mean(np.abs(y_true - y_pred))
+            if add_outlier:
+                y_true = y_true.copy()
+                y_true[n_pts // 2] += 12.0
             mse_val = np.mean((y_true - y_pred) ** 2)
             mae_val = np.mean(np.abs(y_true - y_pred))
-            st.metric("MSE", f"{mse_val:.3f}")
-            st.metric("MAE", f"{mae_val:.3f}")
-            st.info("MSE penalises large errors more heavily because of the square.")
+            st.metric("MSE", f"{mse_val:.3f}",
+                      delta=f"×{mse_val / mse_clean:.1f} from the outlier" if add_outlier else None, delta_color="off")
+            st.metric("MAE", f"{mae_val:.3f}",
+                      delta=f"×{mae_val / mae_clean:.1f} from the outlier" if add_outlier else None, delta_color="off")
+            if add_outlier:
+                st.warning(f"One bad point multiplied MSE by {mse_val / mse_clean:.1f} but MAE only by "
+                           f"{mae_val / mae_clean:.1f} - squaring makes a single large error dominate the average.")
+            else:
+                st.info("MSE penalises large errors more heavily because of the square. Tick 'Add an outlier' to see it.")
         with col2:
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=x_data, y=y_true, mode='markers',
@@ -278,12 +291,19 @@ elif section == "loss":
             line=dict(color='#534AB7', width=2.5)))
         fig.add_trace(go.Scatter(x=errors, y=errors, name='MAE contribution (|e|)',
             line=dict(color='#1D9E75', width=2.5)))
+        fig.add_trace(go.Scatter(x=[1], y=[1], mode='markers', name='Cross at |e| = 1',
+            marker=dict(color='#EF9F27', size=12, symbol='circle')))
         fig.update_layout(xaxis_title="Error e", yaxis_title="Contribution to loss",
             height=360, legend=dict(orientation='h', y=1.1))
         st.plotly_chart(fig, width='stretch')
         st.markdown("""
         - **MSE** grows quadratically → strongly penalises outliers
         - **MAE** grows linearly → more robust to outliers
+        - The curves cross at **|e| = 1**: below it, squaring makes errors *smaller* (0.5² = 0.25), so MSE
+          penalises small errors **less** than MAE - and large errors far more
+        - **Which single value does each loss prefer?** If a model predicts one constant for everything,
+          MSE is minimised by the **mean** of the data and MAE by the **median** - which is exactly why MAE
+          is robust: the median ignores how far away outliers are. (See **Central Tendency**.)
         """)
 
     with tab3:
@@ -293,7 +313,9 @@ elif section == "loss":
             true_label = st.radio("True class (y)", [1, 0], key="bce_y")
             pred_prob = st.slider("Predicted probability (p)", 0.01, 0.99, 0.7, step=0.01, key="bce_p")
             bce = -(true_label * np.log(pred_prob) + (1 - true_label) * np.log(1 - pred_prob))
-            st.metric("BCE Loss", f"{bce:.4f}")
+            st.metric("BCE Loss (this example)", f"{bce:.4f}")
+            st.caption("This is the loss for one example. In training, BCE is averaged over all examples - "
+                       "(1/n)·Σ - just like MSE and MAE.")
             if bce < 0.3:
                 st.success("Very good prediction!")
             elif bce < 1.0:
@@ -607,11 +629,16 @@ elif section == "overfit":
     np.random.seed(7)
     x_tr = np.sort(np.random.uniform(-3, 3, n_train))
     y_tr = np.sin(x_tr) + np.random.normal(0, noise_of, n_train)
-    x_test = np.sort(np.random.uniform(-3, 3, 40))
-    y_test = np.sin(x_test) + np.random.normal(0, noise_of, 40)
+    rng_of = np.random.RandomState(1007)              # separate stream: 200 fresh test points
+    x_test = np.sort(rng_of.uniform(-3, 3, 200))
+    y_test = np.sin(x_test) + rng_of.normal(0, noise_of, 200)
 
-    coeffs = np.polyfit(x_tr, y_tr, degree)
-    p = np.poly1d(coeffs)
+    import warnings
+    def _fit_poly(d):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")           # degree ≥ n gives an underdetermined fit - expected here
+            return np.poly1d(np.polyfit(x_tr, y_tr, d))
+    p = _fit_poly(degree)
     x_line = np.linspace(-3.5, 3.5, 300)
     y_line = p(x_line)
     train_mse = np.mean((p(x_tr) - y_tr) ** 2)
@@ -621,8 +648,8 @@ elif section == "overfit":
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=x_tr, y=y_tr, mode='markers',
             name='Training data', marker=dict(color='#534AB7', size=9)))
-        fig.add_trace(go.Scatter(x=x_test, y=y_test, mode='markers',
-            name='Test data', marker=dict(color='#1D9E75', size=7, symbol='x')))
+        fig.add_trace(go.Scatter(x=x_test[::5], y=y_test[::5], mode='markers',
+            name='Test data (40 of 200 shown)', marker=dict(color='#1D9E75', size=7, symbol='x')))
         fig.add_trace(go.Scatter(x=x_line, y=np.sin(x_line),
             name='True function', line=dict(color='#888780', dash='dash', width=1.5)))
         clip = np.clip(y_line, -4, 4)
@@ -632,30 +659,41 @@ elif section == "overfit":
             yaxis_range=[-3, 3], height=380, legend=dict(orientation='h', y=1.12))
         st.plotly_chart(fig, width='stretch')
 
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Train MSE", f"{train_mse:.4f}")
-    c2.metric("Test MSE", f"{test_mse:.4f}")
-    ratio = test_mse / (train_mse + 1e-9)
-    c3.metric("Test / Train ratio", f"{ratio:.2f}")
+    degrees = list(range(1, 16))
+    tr_mses_raw, te_mses_raw = [], []
+    for d in degrees:
+        pp = _fit_poly(d)
+        tr_mses_raw.append(float(np.mean((pp(x_tr) - y_tr) ** 2)))
+        te_mses_raw.append(float(np.mean((pp(x_test) - y_test) ** 2)))
+    best_deg = degrees[int(np.argmin(te_mses_raw))]
+    best_te = min(te_mses_raw)
 
-    if degree <= 2:
-        st.warning("**Underfitting** - the model is too simple to capture the sine curve.")
-    elif degree >= 9:
-        st.error('**Overfitting** - the model bends too much and memorises the noise.')
+    def _fmt_mse(v):
+        return f"{v:.4f}" if v < 1000 else f"{v:.3g}"
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Train MSE", _fmt_mse(train_mse))
+    c2.metric("Test MSE", _fmt_mse(test_mse))
+    ratio = test_mse / (train_mse + 1e-9)
+    c3.metric("Test / Train ratio", f"{ratio:.2f}" if ratio < 1000 else f"{ratio:.3g}")
+    c4.metric("Best degree on test data", best_deg)
+
+    if degree > best_deg and test_mse > 1.25 * best_te:
+        st.error(f"**Overfitting** - degree {degree} bends to fit the noise: test MSE {_fmt_mse(test_mse)} versus "
+                 f"{best_te:.4f} at degree {best_deg}. It does better on training data and worse on new data.")
+    elif degree < best_deg and test_mse > 1.25 * best_te:
+        st.warning(f"**Underfitting** - degree {degree} is too simple to capture the sine curve: test MSE "
+                   f"{_fmt_mse(test_mse)} versus {best_te:.4f} at degree {best_deg}.")
     else:
-        st.success("**Good balance** - the model captures the structure without memorising noise.")
+        st.success(f"**Good fit** - test MSE {_fmt_mse(test_mse)} is within 25% of the best any degree achieves "
+                   f"on this data ({best_te:.4f} at degree {best_deg}).")
+    if degree >= n_train - 1:
+        st.info(f"Degree {degree} with only {n_train} training points: a polynomial of degree n − 1 can pass "
+                "**exactly through every training point** (train MSE ≈ 0). That's pure memorisation - and "
+                "above degree n − 1 there are more coefficients than points, so the fit isn't even unique.")
 
     st.markdown("### How MSE depends on model complexity")
-    degrees = list(range(1, 14))
-    tr_mses, te_mses = [], []
-    for d in degrees:
-        try:
-            c = np.polyfit(x_tr, y_tr, d)
-            pp = np.poly1d(c)
-            tr_mses.append(np.mean((pp(x_tr) - y_tr) ** 2))
-            te_mses.append(min(np.mean((pp(x_test) - y_test) ** 2), 20))
-        except Exception:
-            tr_mses.append(None); te_mses.append(None)
+    tr_mses = tr_mses_raw
+    te_mses = [min(v, 20) for v in te_mses_raw]
 
     fig2 = go.Figure()
     fig2.add_trace(go.Scatter(x=degrees, y=tr_mses, name='Train MSE',
@@ -668,6 +706,9 @@ elif section == "overfit":
         yaxis_title="MSE", yaxis_range=[0, 5], height=300,
         legend=dict(orientation='h', y=1.12))
     st.plotly_chart(fig2, width='stretch')
+    st.caption(f"Train MSE only ever falls as the degree grows; test MSE is U-shaped with its minimum at degree "
+               f"{best_deg} here. Very large test errors are capped at the top of the chart. Fewer training points "
+               "make the right-hand side blow up sooner - try 8 points.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SPLINES & GAMs
@@ -1056,37 +1097,73 @@ elif section == "linear_reg":
         params = np.linalg.lstsq(X_mat, y_lr, rcond=None)[0]
         w_hat, b_hat = params
 
+        def _line_label(w, b, fmt=".2f"):
+            """'y = 1.63x − 0.28' - proper sign instead of '+ -0.28'."""
+            return f"y = {format(w, fmt).replace('-', '−')}x {'+' if b >= 0 else '−'} {format(abs(b), fmt)}"
+
         with col2:
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=x_lr, y=y_lr, mode='markers',
                 name='Data', marker=dict(color='#534AB7', size=7)))
             x_fit = np.linspace(-4.5, 4.5, 100)
             fig.add_trace(go.Scatter(x=x_fit, y=w_hat*x_fit + b_hat,
-                name=f'Fitted: y={w_hat:.2f}x + {b_hat:.2f}',
+                name=f'Fitted: {_line_label(w_hat, b_hat)}',
                 line=dict(color='#E24B4A', width=2.5)))
             fig.add_trace(go.Scatter(x=x_fit, y=true_w*x_fit + true_b,
-                name=f'True: y={true_w}x + {true_b}',
+                name=f'True: {_line_label(true_w, true_b, "g")}',
                 line=dict(color='#1D9E75', width=1.5, dash='dash')))
             fig.update_layout(xaxis_title="x", yaxis_title="y",
                 height=360, legend=dict(orientation='h', y=1.12))
             st.plotly_chart(fig, width='stretch')
 
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Fitted w", f"{w_hat:.3f}", f"{w_hat - true_w:+.3f}")
-        c2.metric("Fitted b", f"{b_hat:.3f}", f"{b_hat - true_b:+.3f}")
+        c1.metric("Fitted w", f"{w_hat:.3f}", f"{w_hat - true_w:+.3f} vs true", delta_color="off")
+        c2.metric("Fitted b", f"{b_hat:.3f}", f"{b_hat - true_b:+.3f} vs true", delta_color="off")
         c3.metric("Train MSE", f"{np.mean((w_hat*x_lr+b_hat - y_lr)**2):.3f}")
         c4.metric("R²", f"{1 - np.var(y_lr - (w_hat*x_lr+b_hat))/np.var(y_lr):.4f}")
 
+        st.markdown("**The closed-form (analytical) solution** - no iterations needed:")
+        x_bar, y_bar = x_lr.mean(), y_lr.mean()
+        st.markdown(f'<div class="formula-box">'
+            f'w = Σ(xᵢ − x̄)(yᵢ − ȳ) / Σ(xᵢ − x̄)²  = {w_hat:.3f}<br>'
+            f'b = ȳ − w·x̄  = {_vout(y_bar)} − ({_vout(w_hat)})·({_vout(x_bar)})  = {_vout(b_hat)}<br><br>'
+            f'Matrix form (any number of features):  θ = (XᵀX)⁻¹ Xᵀy'
+            f'</div>', unsafe_allow_html=True)
+        st.caption("Gradient descent reaches the same answer step by step - see the second tab. The closed form is "
+                   "exact and instant for small problems; gradient descent scales better to huge datasets and is "
+                   "what's used for models without a closed form, like neural networks.")
+
     with tab2:
-        st.markdown("Loss surface over parameters **w** and **b**:")
-        ws = np.linspace(-3, 3, 60)
-        bs = np.linspace(-3, 3, 60)
+        st.markdown("Loss surface over parameters **w** and **b**, and gradient descent walking down it:")
+        gc1, gc2 = st.columns([1, 2])
+        with gc1:
+            lr_gd = st.select_slider("Learning rate", [0.001, 0.005, 0.01, 0.03, 0.05, 0.1, 0.15, 0.2],
+                                     value=0.03, key="linreg_gd_lr")
+            w0_gd = st.slider("Start w", -6.0, 6.0, -2.5, step=0.5, key="linreg_gd_w0")
+            b0_gd = st.slider("Start b", -6.0, 6.0, 4.0, step=0.5, key="linreg_gd_b0")
+            steps_gd = st.slider("Steps", 5, 300, 60, key="linreg_gd_steps")
+
+        # gradient of MSE: ∂/∂w = 2·mean((wx+b−y)·x), ∂/∂b = 2·mean(wx+b−y)
+        path_gd = [(w0_gd, b0_gd)]
+        div_gd, conv_gd = False, None
+        for k_gd in range(steps_gd):
+            w_c, b_c = path_gd[-1]
+            r_c = w_c * x_lr + b_c - y_lr
+            gw, gb = 2 * np.mean(r_c * x_lr), 2 * np.mean(r_c)
+            if np.hypot(gw, gb) < 1e-3:
+                conv_gd = k_gd; break
+            path_gd.append((w_c - lr_gd * gw, b_c - lr_gd * gb))
+            if max(abs(path_gd[-1][0]), abs(path_gd[-1][1])) > 50:
+                div_gd = True; break
+        path_gd = np.array(path_gd)
+
+        # window centred on the optimum, wide enough to include the start point
+        w_lo, w_hi = min(w_hat, w0_gd) - 2, max(w_hat, w0_gd) + 2
+        b_lo, b_hi = min(b_hat, b0_gd) - 2, max(b_hat, b0_gd) + 2
+        ws = np.linspace(w_lo, w_hi, 80)
+        bs = np.linspace(b_lo, b_hi, 80)
         WW, BB = np.meshgrid(ws, bs)
-        ZZ = np.zeros_like(WW)
-        for i in range(len(ws)):
-            for j in range(len(bs)):
-                preds = WW[j, i] * x_lr + BB[j, i]
-                ZZ[j, i] = np.mean((preds - y_lr) ** 2)
+        ZZ = np.mean((WW[..., None] * x_lr + BB[..., None] - y_lr) ** 2, axis=-1)   # vectorised MSE grid
 
         fig3 = go.Figure(data=[go.Contour(
             z=ZZ, x=ws, y=bs,
@@ -1096,11 +1173,31 @@ elif section == "linear_reg":
         )])
         fig3.add_scatter(x=[w_hat], y=[b_hat], mode='markers',
             marker=dict(color='#1D9E75', size=14, symbol='star'),
-            name='Found minimum')
-        fig3.update_layout(xaxis_title='w', yaxis_title='b',
-            height=400, legend=dict(orientation='h', y=1.1))
-        st.plotly_chart(fig3, width='stretch')
-        st.caption("The green star is the MSE minimum - the optimal w and b.")
+            name='Closed-form minimum')
+        fig3.add_scatter(x=np.clip(path_gd[:, 0], w_lo, w_hi), y=np.clip(path_gd[:, 1], b_lo, b_hi),
+            mode='lines+markers', name='Gradient descent path',
+            line=dict(color='#EF9F27', width=2), marker=dict(size=5, color='#EF9F27'))
+        fig3.add_scatter(x=[w0_gd], y=[b0_gd], mode='markers', name='Start',
+            marker=dict(color='#E24B4A', size=12))
+        fig3.update_layout(xaxis_title='w', yaxis_title='b', xaxis=dict(range=[w_lo, w_hi]),
+            yaxis=dict(range=[b_lo, b_hi]), height=420, legend=dict(orientation='h', y=1.12))
+        with gc2:
+            st.plotly_chart(fig3, width='stretch')
+
+        w_end, b_end = path_gd[-1]
+        if div_gd:
+            st.error(f"Diverged: learning rate {lr_gd} is too large - the steps overshoot further each time "
+                     "(stopped once a parameter passed 50). Here the limit is about 0.19.")
+        elif conv_gd is not None:
+            st.success(f"Converged in {conv_gd} steps to w = {w_end:.3f}, b = {b_end:.3f} - the same point the "
+                       f"closed-form formula gives instantly (w = {w_hat:.3f}, b = {b_hat:.3f}).")
+        else:
+            st.info(f"After {len(path_gd)-1} steps: w = {w_end:.3f}, b = {b_end:.3f}, still heading towards the "
+                    f"minimum (w = {w_hat:.3f}, b = {b_hat:.3f}). Add steps or raise the learning rate.")
+        st.caption("The bowl is stretched: MSE changes faster with w (because x ranges over ±4) than with b, so "
+                   "the path tends to drop quickly onto the valley floor and then slide slowly along it. "
+                   "Near the stability limit (about 0.19 here) the steps overshoot back and forth across the "
+                   "valley; at 0.2 they diverge.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # REGULARIZATION
@@ -1928,8 +2025,8 @@ elif section == "logistic_reg":
     st.markdown("""
     <div class="concept-card">
     Logistic regression predicts a <b>probability</b> between 0 and 1 by passing a linear
-    combination of inputs through the <b>sigmoid function</b>. It is the simplest classifier
-    and the building block of neural network output layers.
+    combination of inputs through the <b>sigmoid function</b>. It is one of the simplest
+    classifiers and the building block of neural network output layers.
     </div>
     """, unsafe_allow_html=True)
 
@@ -1942,9 +2039,18 @@ elif section == "logistic_reg":
             w_lg = st.slider("Weight w", -5.0, 5.0, 2.0, step=0.1, key="lg_w")
             b_lg = st.slider("Bias b", -5.0, 5.0, 0.0, step=0.1, key="lg_b")
             threshold_lg = st.slider("Decision threshold", 0.1, 0.9, 0.5, step=0.05)
-            decision_boundary = -b_lg / (w_lg + 1e-9)
-            st.metric("Decision boundary x*", f"{decision_boundary:.2f}")
-            st.info("The boundary is where p = threshold, i.e. w·x + b = 0 (for threshold 0.5).")
+            logit_t = np.log(threshold_lg / (1 - threshold_lg))       # σ⁻¹(threshold)
+            no_boundary = abs(w_lg) < 1e-9
+            decision_boundary = None if no_boundary else (logit_t - b_lg) / w_lg
+            st.metric("Decision boundary x*", "none" if no_boundary else f"{decision_boundary:.2f}")
+            if no_boundary:
+                st.warning(f"w = 0: p = σ(b) = {1/(1+np.exp(-b_lg)):.3f} for every x - a flat line, so "
+                           "there is no boundary. Every point gets the same prediction.")
+            else:
+                st.markdown(f'<div class="formula-box">p = threshold  ⟺  w·x + b = logit(t) = ln(t/(1−t))<br>'
+                            f'x* = (logit(t) − b) / w = ({logit_t:.3f} − {_vout(b_lg)}) / {_vout(w_lg)} '
+                            f'= {decision_boundary:.2f}</div>', unsafe_allow_html=True)
+                st.caption("For threshold 0.5, logit(0.5) = 0, so this reduces to the familiar x* = −b/w.")
 
         with col2:
             x_lg = np.linspace(-6, 6, 300)
@@ -1954,8 +2060,9 @@ elif section == "logistic_reg":
                 line=dict(color='#534AB7', width=2.5)))
             fig.add_hline(y=threshold_lg, line_dash='dash', line_color='#EF9F27',
                 annotation_text=f"threshold={threshold_lg}")
-            fig.add_vline(x=decision_boundary, line_dash='dot', line_color='#E24B4A',
-                annotation_text=f"x*={decision_boundary:.2f}")
+            if not no_boundary:
+                fig.add_vline(x=decision_boundary, line_dash='dot', line_color='#E24B4A',
+                    annotation_text=f"x*={decision_boundary:.2f}")
             fig.add_hrect(y0=threshold_lg, y1=1.05, fillcolor='rgba(29,158,117,0.08)', line_width=0)
             fig.add_hrect(y0=-0.05, y1=threshold_lg, fillcolor='rgba(226,75,74,0.08)', line_width=0)
             fig.update_layout(xaxis_title="x", yaxis_title="Predicted probability p",
@@ -2019,6 +2126,9 @@ elif section == "logistic_reg":
         c2.metric("Final b", f"{b_t:.3f}")
         final_acc = np.mean(((sigmoid(w_t * X_lg + b_t) >= 0.5).astype(float)) == y_lg)
         c3.metric("Accuracy", f"{final_acc:.1%}")
+        st.caption("When the two classes can be split perfectly (try a large separation), the loss can always be "
+                   "pushed a little lower by making w bigger - so with enough epochs the weights grow without "
+                   "limit and the curve becomes a step. In practice this is prevented with **regularization**.")
 
     with tab3:
         st.markdown("Decision boundary with **two features** - a line in 2D space.")
@@ -2064,7 +2174,7 @@ elif section == "logistic_reg":
                 fig.add_trace(go.Scatter(x=x_bd[mask], y=y_bd[mask],
                     name='Decision boundary', line=dict(color='#1D9E75', width=2.5)))
             fig.update_layout(xaxis_title="Feature 1", yaxis_title="Feature 2",
-                xaxis_range=[-4,4], yaxis_range=[-4,4],
+                xaxis_range=[-4,4], yaxis=dict(range=[-4,4], scaleanchor='x', scaleratio=1),
                 height=400, legend=dict(orientation='h', y=1.12))
             st.plotly_chart(fig, width='stretch')
 
@@ -4279,8 +4389,13 @@ elif section == "pca":
         c1, c2, c3 = st.columns(3)
         c1.metric("PC1 variance explained", f"{var_exp[0]:.1%}")
         c2.metric("PC2 variance explained", f"{var_exp[1]:.1%}")
-        c3.metric("PC1 direction", f"[{pc1[0]:.3f}, {pc1[1]:.3f}]")
+        c3.metric("PC1 direction", f"[{pc1[0]:.3f}, {pc1[1]:.3f}]",
+                  help="The sign is arbitrary: [a, b] and [−a, −b] describe the same line.")
         st.info("Orange lines show the reconstruction error - information lost by projecting onto PC1 only.")
+        if var_exp[0] < 0.55:
+            st.warning(f"PC1 explains only {var_exp[0]:.1%} - the cloud is nearly round, so no direction has much "
+                       "more variance than another. PC1's direction here is mostly determined by noise and can "
+                       "swing a lot between seeds; reducing to 1D would throw away almost half the information.")
 
     with tab2:
         st.markdown("PCA on a higher-dimensional dataset, projected to 2D for visualisation.")
@@ -4318,6 +4433,14 @@ elif section == "pca":
 
         st.markdown(f"Original: **{n_feats}D** → PCA projection: **2D** "
                     f"(retaining {var_ratio[0]+var_ratio[1]:.1%} of variance)")
+        st.caption("**PCA never sees the class labels** - the colours are added afterwards. It finds directions of "
+                   "maximum *variance*, which often separate the groups (as here) but aren't guaranteed to: if the "
+                   "classes differ along a low-variance direction, PCA can blur them together. For a projection "
+                   "that uses the labels to separate classes, see **LDA**.")
+        st.caption("**Standardise features first.** PCA chases variance, so a feature measured in large units "
+                   "dominates: two correlated features where one is in thousands give PC1 ≈ [1.000, 0.001] - "
+                   "essentially just the big feature. Scaling each feature to mean 0, std 1 puts them on equal "
+                   "footing. (All features here are already on the same scale.)")
 
     with tab3:
         st.markdown("### Scree plot - how many components to keep?")
@@ -4352,7 +4475,7 @@ elif section == "pca":
                 name='Cumulative'), row=1, col=2)
             fig.add_hline(y=threshold, line_dash='dash', line_color='#EF9F27',
                 annotation_text=f"{threshold:.0%}", row=1, col=2)
-            fig.add_vline(x=n_keep, line_dash='dot', line_color='#E24B4A',
+            fig.add_vline(x=n_keep + 0.5, line_dash='dot', line_color='#E24B4A',
                 annotation_text=f"keep {n_keep}", row=1, col=1)
             fig.update_xaxes(title_text="Component")
             fig.update_yaxes(title_text="Variance explained")
@@ -4362,6 +4485,10 @@ elif section == "pca":
         st.metric(f"Components needed for {threshold:.0%} variance",
                   f"{n_keep} out of {n_feat_s}",
                   f"{n_feat_s - n_keep} dimensions removed")
+        st.caption(f"This data was generated from **{true_dims} hidden factors** plus a little noise. Look for the "
+                   f"'elbow' in the scree plot: the first {true_dims} components carry the real signal, and from "
+                   f"component {true_dims + 1} onwards the bars drop to small, roughly equal noise-level values. "
+                   "A variance threshold and the elbow are two common ways to choose - they don't always agree.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

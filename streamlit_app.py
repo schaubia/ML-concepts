@@ -1224,8 +1224,9 @@ elif section == "regularization":
             st.markdown("- **L2** shrinks weights smoothly toward zero")
             st.markdown("- **L1** drives many weights to exactly zero (sparse model)")
         with col2:
-            w_vals = np.linspace(-3, 3, 300)
-            base_loss = w_vals**2 * 0.3 + 1
+            w_vals = np.linspace(-1, 3.5, 901)
+            w_star = 2.0                                   # where the data alone would put the weight
+            base_loss = 0.3 * (w_vals - w_star)**2 + 1
             if reg_type == "L2 (Ridge)":
                 penalty = lam * w_vals**2
                 pen_label = f"L2 penalty (λ={lam})"
@@ -1247,9 +1248,19 @@ elif section == "regularization":
                 line=dict(color='#E24B4A', width=2.5)))
             fig.add_vline(x=opt_w, line_dash='dot', line_color='#1D9E75',
                 annotation_text=f"optimal w = {opt_w:.2f}")
+            fig.add_vline(x=w_star, line_dash='dash', line_color='#AFA9EC',
+                annotation_text="no penalty: w = 2", annotation_position="bottom right")
             fig.update_layout(xaxis_title="Weight w", yaxis_title="Loss",
-                height=380, legend=dict(orientation='h', y=1.12))
+                yaxis_range=[0, 6], height=380, legend=dict(orientation='h', y=1.12))
             st.plotly_chart(fig, width='stretch')
+        if reg_type == "L2 (Ridge)":
+            st.caption(f"L2 shrinks the optimum smoothly: w = 0.3·2 / (0.3 + λ) = {0.6/(0.3+lam):.2f}. "
+                       "It gets closer to 0 as λ grows but never reaches it exactly.")
+        elif reg_type == "L1 (Lasso)":
+            snap = lam >= 1.2
+            st.caption(f"L1 subtracts a constant pull: w = 2 − λ/0.6 = {max(2 - lam/0.6, 0):.2f} - and once λ ≥ 1.2 "
+                       f"the optimum snaps to **exactly 0** {'(it has here)' if snap else '(push λ past 1.2)'}. "
+                       "The kink in |w| at 0 is what makes L1 produce sparse models.")
 
     with tab2:
         st.markdown("Train a small linear model with different regularization - watch the weights:")
@@ -1260,24 +1271,20 @@ elif section == "regularization":
         y_reg = X_reg @ true_coef + np.random.randn(n_reg) * 0.5
 
         lambdas = np.logspace(-3, 1, 60)
-        l2_paths, l1_paths = [], []
 
-        for lv in lambdas:
-            # Ridge closed form
-            I = np.eye(8)
-            w_ridge = np.linalg.solve(X_reg.T @ X_reg + lv * I, X_reg.T @ y_reg)
-            l2_paths.append(w_ridge)
-            # Lasso via coordinate descent (simple)
-            w_lasso = np.zeros(8)
-            for _ in range(200):
-                for j in range(8):
-                    r = y_reg - X_reg @ w_lasso + X_reg[:, j] * w_lasso[j]
-                    rho = X_reg[:, j] @ r / n_reg
-                    w_lasso[j] = np.sign(rho) * max(abs(rho) - lv / 2, 0)
-            l1_paths.append(w_lasso.copy())
+        @st.cache_data(show_spinner=False)
+        def _reg_paths():
+            from sklearn.linear_model import lasso_path
+            # Both use the same scale (mean squared error, scikit-learn's convention):
+            #   Ridge:  (1/2n)·‖y − Xw‖² + (λ/2)·‖w‖²   →  w = (XᵀX + nλI)⁻¹ Xᵀy
+            #   Lasso:  (1/2n)·‖y − Xw‖² +   λ ·‖w‖₁   (exact path via coordinate descent)
+            ridge = np.array([np.linalg.solve(X_reg.T @ X_reg + n_reg * lv * np.eye(8), X_reg.T @ y_reg)
+                              for lv in lambdas])
+            alphas, coefs, _ = lasso_path(X_reg, y_reg, alphas=lambdas[::-1])
+            lasso = coefs.T[::-1]                       # back to increasing λ order
+            return ridge, lasso
 
-        l2_paths = np.array(l2_paths)
-        l1_paths = np.array(l1_paths)
+        l2_paths, l1_paths = _reg_paths()
 
         reg_choice = st.radio("Regularization type", ["L2 (Ridge)", "L1 (Lasso)"], horizontal=True)
         paths = l2_paths if reg_choice == "L2 (Ridge)" else l1_paths
@@ -1292,7 +1299,10 @@ elif section == "regularization":
             yaxis_title="Weight value", height=360,
             legend=dict(orientation='h', y=1.15, font=dict(size=11)))
         st.plotly_chart(fig2, width='stretch')
-        st.caption("As λ increases, weights shrink. L1 reaches exactly 0 (sparse); L2 approaches 0 smoothly.")
+        st.caption("As λ increases, weights shrink. L1 drives them to exactly 0 one by one - the weakest "
+                   "(true value 0) go first, the strongest last - giving a sparse model; L2 shrinks them all "
+                   "smoothly towards 0 without reaching it. Both use the same λ scale (mean squared error), so the "
+                   "two charts are directly comparable.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
