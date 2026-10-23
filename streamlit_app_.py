@@ -562,6 +562,13 @@ elif section == "backprop":
         grad_w2 = d_loss_out * d_out_w2
         grad_w1 = d_loss_out * d_out_sig * d_sig_h * d_h_w1
 
+        # numerical check: central finite differences
+        def _bp_loss(a, b):
+            return 0.5 * (b / (1 + np.exp(-x_in * a)) - y_target) ** 2
+        eps_bp = 1e-5
+        num_w1 = (_bp_loss(w1_bp + eps_bp, w2_bp) - _bp_loss(w1_bp - eps_bp, w2_bp)) / (2 * eps_bp)
+        num_w2 = (_bp_loss(w1_bp, w2_bp + eps_bp) - _bp_loss(w1_bp, w2_bp - eps_bp)) / (2 * eps_bp)
+
     with col2:
         st.markdown("**Forward pass**")
         st.code(f"""
@@ -573,24 +580,35 @@ loss     = 0.5·(output - y)² = {loss_bp:.4f}
 """, language="text")
         st.markdown("**Backward pass (gradients)**")
         st.code(f"""
-dL/dw2 = {grad_w2:.4f}
-dL/dw1 = {grad_w1:.4f}
+dL/dw2 = (output − y) · sigmoid
+       = ({d_loss_out:.4f}) · {d_out_w2:.4f}
+       = {grad_w2:.4f}
 
-(via chain rule:)
-dL/dw1 = (output-y) · w2 · sigmoid'(h) · x
+dL/dw1 = (output − y) · w2   · sigmoid'(h) · x
+       = ({d_loss_out:.4f}) · {d_out_sig:.2f} · {d_sig_h:.4f}      · {d_h_w1:.2f}
+       = {grad_w1:.4f}
 """, language="text")
+        st.caption("Read dL/dw₁ right to left as the error flowing backwards: each factor is one local "
+                   "derivative - how much the output changes with the sigmoid (w₂), the sigmoid with h "
+                   "(σ′(h) = σ·(1−σ)), and h with w₁ (x). The chain rule multiplies them.")
+        st.markdown("**Check backprop numerically**")
+        st.code(f"""
+numerical dL/dw1 = [L(w1+ε) − L(w1−ε)] / 2ε = {num_w1:.4f}   (backprop: {grad_w1:.4f})
+numerical dL/dw2 = [L(w2+ε) − L(w2−ε)] / 2ε = {num_w2:.4f}   (backprop: {grad_w2:.4f})
+""", language="text")
+        st.caption("Nudging each weight by a tiny ε and measuring the change in loss gives the same numbers - "
+                   "this 'gradient check' is how backprop implementations are tested.")
 
-    st.markdown("### How weights change after one step")
+    st.markdown("### Training: repeating forward pass → backward pass → update")
     lr_bp = st.slider("Learning rate", 0.01, 1.0, 0.1, step=0.01)
+    steps = st.slider("Steps", 5, 200, 50, key="bp_steps")
 
-    steps = 50
     w1_hist, w2_hist, loss_hist = [w1_bp], [w2_bp], [loss_bp]
     ww1, ww2 = w1_bp, w2_bp
     for _ in range(steps):
         hh = x_in * ww1
         sh = 1 / (1 + np.exp(-hh))
         out = sh * ww2
-        l = 0.5 * (out - y_target) ** 2
         dl = out - y_target
         gw2 = dl * sh
         gw1 = dl * ww2 * sh * (1 - sh) * x_in
@@ -598,7 +616,8 @@ dL/dw1 = (output-y) · w2 · sigmoid'(h) · x
         ww2 -= lr_bp * gw2
         w1_hist.append(ww1)
         w2_hist.append(ww2)
-        loss_hist.append(l)
+        # record the loss AFTER the update, so loss_hist[k] matches w1_hist[k] and w2_hist[k]
+        loss_hist.append(0.5 * (ww2 / (1 + np.exp(-x_in * ww1)) - y_target) ** 2)
 
     fig = make_subplots(rows=1, cols=2, subplot_titles=["Loss during training", "Weight evolution"])
     fig.add_trace(go.Scatter(y=loss_hist, name='Loss', line=dict(color='#E24B4A', width=2)), row=1, col=1)
@@ -5470,12 +5489,19 @@ elif section == "attention":
             sentence = st.text_input("Input sentence (space-separated tokens)",
                 "the cat sat on the mat")
             tokens = sentence.strip().split()
+            if len(tokens) < 2:
+                st.warning("Please enter at least 2 words - attention compares tokens with each other. "
+                           "Showing the default sentence.")
+                tokens = "the cat sat on the mat".split()
             n_tok = len(tokens)
+            # unique labels: plotly merges identical category names, so repeated words get their position
+            tok_labels = [tok if tokens.count(tok) == 1 else f"{tok} ({i+1})" for i, tok in enumerate(tokens)]
             query_idx = st.slider("Query token (which word is 'looking')",
                 0, max(n_tok-1, 0), min(2, n_tok-1))
             d_k = st.select_slider("Key dimension dₖ", [4, 8, 16, 32], value=8)
             seed_att = st.slider("Seed (random QK weights)", 0, 20, 5, key="att_seed")
-            temperature = st.slider("Temperature (1/√dₖ scaling)", 0.1, 2.0, 1.0, step=0.1)
+            temperature = st.slider("Extra temperature τ (scores ÷ √dₖ·τ)", 0.1, 2.0, 1.0, step=0.1,
+                help="1 = the standard transformer scaling. Below 1 sharpens the attention, above 1 flattens it.")
 
         np.random.seed(seed_att)
         # random embeddings for demo
@@ -5500,13 +5526,13 @@ elif section == "attention":
 
         with col2:
             fig = make_subplots(rows=1, cols=2,
-                subplot_titles=[f'Attention from "{tokens[query_idx]}"',
+                subplot_titles=[f'Attention from "{tok_labels[query_idx]}"',
                                 "Full attention matrix"])
-            fig.add_trace(go.Bar(x=tokens, y=attn_weights,
+            fig.add_trace(go.Bar(x=tok_labels, y=attn_weights,
                 marker_color=['#E24B4A' if i==query_idx else '#534AB7' for i in range(n_tok)],
                 text=[f"{w:.3f}" for w in attn_weights], textposition='outside',
                 showlegend=False), row=1, col=1)
-            fig.add_trace(go.Heatmap(z=all_weights, x=tokens, y=tokens,
+            fig.add_trace(go.Heatmap(z=all_weights, x=tok_labels, y=tok_labels,
                 colorscale='Blues', showscale=False,
                 text=[[f"{all_weights[i,j]:.2f}" for j in range(n_tok)] for i in range(n_tok)],
                 texttemplate="%{text}", textfont=dict(size=10)), row=1, col=2)
@@ -5516,9 +5542,16 @@ elif section == "attention":
             fig.update_layout(height=380)
             st.plotly_chart(fig, width='stretch')
 
-        top_token = tokens[np.argmax(attn_weights)]
-        st.markdown(f'**"{tokens[query_idx]}"** attends most strongly to **"{top_token}"** '
+        top_token = tok_labels[int(np.argmax(attn_weights))]
+        st.markdown(f'**"{tok_labels[query_idx]}"** attends most strongly to **"{top_token}"** '
                     f'(weight = {attn_weights.max():.3f})')
+        st.caption("⚠️ The Q, K and V weights here are **random and untrained**, so this particular pattern means "
+                   "nothing about the sentence - change the seed and it changes completely. In a trained transformer, "
+                   "the same mechanism learns patterns such as a pronoun attending to the noun it refers to.")
+        st.caption("**Why divide by √dₖ?** A dot product of two random dₖ-dimensional vectors grows with dₖ - its "
+                   "typical size is about √dₖ. Without scaling, large dₖ gives huge scores, softmax turns almost "
+                   "one-hot, and gradients become tiny. Dividing by √dₖ keeps the scores at a stable scale whatever "
+                   "dₖ is. Try dₖ = 32 with τ = 0.1 to see the near one-hot effect.")
 
     with tab2:
         st.markdown("### Softmax converts raw scores into attention weights")
@@ -5547,7 +5580,9 @@ elif section == "attention":
                 legend=dict(orientation='h', y=1.12))
             st.plotly_chart(fig, width='stretch')
         st.markdown(f"**Temperature τ={temp_sm}:** {'sharp focus on top key' if temp_sm < 0.5 else 'uniform attention across all keys' if temp_sm > 2 else 'balanced attention'}")
-        st.caption("In transformers τ = 1/√dₖ. Low temperature → the model is more decisive; high → more exploratory.")
+        st.caption("Scores are divided by τ before the softmax. Transformers divide by √dₖ, so in this language the "
+                   "built-in temperature is **τ = √dₖ** (e.g. τ = 8 for dₖ = 64). Low temperature → the model is more "
+                   "decisive; high → more spread out.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
