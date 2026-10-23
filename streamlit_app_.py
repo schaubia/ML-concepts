@@ -2901,6 +2901,8 @@ elif section == "batch_size":
 
     np.random.seed(seed_b)
     w_final, losses_b = run_batch_gd(batch_size_sim, lr_batch, n_epochs_b)
+    w_ols_b = np.linalg.lstsq(X_b, y_b, rcond=None)[0]
+    best_mse_b = float(np.mean((X_b @ w_ols_b - y_b) ** 2))      # the lowest MSE any w can reach
 
     # compare multiple batch sizes
     batch_sizes_cmp = [1, 16, 64, n_total]
@@ -2913,7 +2915,7 @@ elif section == "batch_size":
     with col2:
         fig = make_subplots(rows=1, cols=2,
             subplot_titles=[f"Loss trajectory (batch={batch_size_sim})",
-                            "Smoothness comparison (same epochs)"])
+                            "All batch sizes, same number of epochs"])
 
         fig.add_trace(go.Scatter(y=losses_b, name=f'batch={batch_size_sim}',
             line=dict(color='#534AB7', width=1.5)), row=1, col=1)
@@ -2921,12 +2923,16 @@ elif section == "batch_size":
         cmp_colors = ['#E24B4A', '#534AB7', '#EF9F27', '#1D9E75']
         max_steps = max(len(v) for v in all_losses.values())
         for (bs, ls), col_c in zip(all_losses.items(), cmp_colors):
-            fig.add_trace(go.Scatter(y=ls,
+            steps_per_ep = int(np.ceil(n_total / bs))
+            ep_axis = (np.arange(len(ls)) + 1) / steps_per_ep          # x in epochs, so all lines span the same range
+            fig.add_trace(go.Scatter(x=ep_axis, y=ls,
                 name=f'B={bs}' if bs < n_total else 'Full batch',
                 line=dict(color=col_c, width=1.8)), row=1, col=2)
+        for col_i in (1, 2):
+            fig.add_hline(y=best_mse_b, line=dict(color='#333', dash='dot', width=1), row=1, col=col_i)
 
         fig.update_xaxes(title_text="Gradient step", row=1, col=1)
-        fig.update_xaxes(title_text="Gradient step", row=1, col=2)
+        fig.update_xaxes(title_text="Epoch", row=1, col=2)
         fig.update_yaxes(title_text="MSE", row=1, col=1)
         fig.update_yaxes(title_text="MSE", row=1, col=2)
         fig.update_layout(height=380, legend=dict(orientation='h', y=1.12))
@@ -2935,10 +2941,23 @@ elif section == "batch_size":
     c1, c2, c3 = st.columns(3)
     c1.metric("Steps per epoch", int(np.ceil(n_total / batch_size_sim)))
     c2.metric("Total gradient steps", len(losses_b))
-    c3.metric("Final MSE", f"{losses_b[-1]:.4f}" if losses_b else "-")
+    c3.metric("Final MSE", f"{losses_b[-1]:.4f}" if losses_b else "-",
+              delta=f"{losses_b[-1] - best_mse_b:+.4f} vs best possible" if losses_b else None, delta_color="off")
 
-    st.markdown("**Noise in small batches can actually help** - it acts like implicit regularization, "
-                "helping the optimizer escape sharp minima that generalise poorly.")
+    final_cmp = {bs: ls[-1] for bs, ls in all_losses.items()}
+    st.caption(f"Dotted line = best possible MSE ({best_mse_b:.4f}). **Same epochs ≠ same number of updates:** "
+               f"in {n_epochs_b} epochs, batch size 1 makes {len(all_losses[1]):,} updates but full batch only "
+               f"{len(all_losses[n_total])}. That - not bad gradients - is why full batch ends highest here "
+               f"(MSE {final_cmp[n_total]:.3f}). Its gradient is actually the most accurate; in practice large "
+               "batches are paired with a proportionally larger learning rate.")
+    st.caption(f"**The noise floor:** with a fixed learning rate, small batches never fully settle - batch size 1 "
+               f"ends at {final_cmp[1]:.4f}, jittering just above the minimum because every step uses a different, "
+               "noisy gradient. Decaying the learning rate over time removes that jitter - see **Learning Rate "
+               "Schedulers**.")
+
+    st.markdown("**Noise in small batches can actually help** - in deep networks it acts like implicit "
+                "regularization, helping the optimizer escape sharp minima that generalise poorly. (The linear "
+                "model on this page has a single minimum, so here the noise only costs a little accuracy.)")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
