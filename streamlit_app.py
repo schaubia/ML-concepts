@@ -5470,12 +5470,19 @@ elif section == "attention":
             sentence = st.text_input("Input sentence (space-separated tokens)",
                 "the cat sat on the mat")
             tokens = sentence.strip().split()
+            if len(tokens) < 2:
+                st.warning("Please enter at least 2 words - attention compares tokens with each other. "
+                           "Showing the default sentence.")
+                tokens = "the cat sat on the mat".split()
             n_tok = len(tokens)
+            # unique labels: plotly merges identical category names, so repeated words get their position
+            tok_labels = [tok if tokens.count(tok) == 1 else f"{tok} ({i+1})" for i, tok in enumerate(tokens)]
             query_idx = st.slider("Query token (which word is 'looking')",
                 0, max(n_tok-1, 0), min(2, n_tok-1))
             d_k = st.select_slider("Key dimension dₖ", [4, 8, 16, 32], value=8)
             seed_att = st.slider("Seed (random QK weights)", 0, 20, 5, key="att_seed")
-            temperature = st.slider("Temperature (1/√dₖ scaling)", 0.1, 2.0, 1.0, step=0.1)
+            temperature = st.slider("Extra temperature τ (scores ÷ √dₖ·τ)", 0.1, 2.0, 1.0, step=0.1,
+                help="1 = the standard transformer scaling. Below 1 sharpens the attention, above 1 flattens it.")
 
         np.random.seed(seed_att)
         # random embeddings for demo
@@ -5500,13 +5507,13 @@ elif section == "attention":
 
         with col2:
             fig = make_subplots(rows=1, cols=2,
-                subplot_titles=[f'Attention from "{tokens[query_idx]}"',
+                subplot_titles=[f'Attention from "{tok_labels[query_idx]}"',
                                 "Full attention matrix"])
-            fig.add_trace(go.Bar(x=tokens, y=attn_weights,
+            fig.add_trace(go.Bar(x=tok_labels, y=attn_weights,
                 marker_color=['#E24B4A' if i==query_idx else '#534AB7' for i in range(n_tok)],
                 text=[f"{w:.3f}" for w in attn_weights], textposition='outside',
                 showlegend=False), row=1, col=1)
-            fig.add_trace(go.Heatmap(z=all_weights, x=tokens, y=tokens,
+            fig.add_trace(go.Heatmap(z=all_weights, x=tok_labels, y=tok_labels,
                 colorscale='Blues', showscale=False,
                 text=[[f"{all_weights[i,j]:.2f}" for j in range(n_tok)] for i in range(n_tok)],
                 texttemplate="%{text}", textfont=dict(size=10)), row=1, col=2)
@@ -5516,9 +5523,16 @@ elif section == "attention":
             fig.update_layout(height=380)
             st.plotly_chart(fig, width='stretch')
 
-        top_token = tokens[np.argmax(attn_weights)]
-        st.markdown(f'**"{tokens[query_idx]}"** attends most strongly to **"{top_token}"** '
+        top_token = tok_labels[int(np.argmax(attn_weights))]
+        st.markdown(f'**"{tok_labels[query_idx]}"** attends most strongly to **"{top_token}"** '
                     f'(weight = {attn_weights.max():.3f})')
+        st.caption("⚠️ The Q, K and V weights here are **random and untrained**, so this particular pattern means "
+                   "nothing about the sentence - change the seed and it changes completely. In a trained transformer, "
+                   "the same mechanism learns patterns such as a pronoun attending to the noun it refers to.")
+        st.caption("**Why divide by √dₖ?** A dot product of two random dₖ-dimensional vectors grows with dₖ - its "
+                   "typical size is about √dₖ. Without scaling, large dₖ gives huge scores, softmax turns almost "
+                   "one-hot, and gradients become tiny. Dividing by √dₖ keeps the scores at a stable scale whatever "
+                   "dₖ is. Try dₖ = 32 with τ = 0.1 to see the near one-hot effect.")
 
     with tab2:
         st.markdown("### Softmax converts raw scores into attention weights")
@@ -5547,7 +5561,9 @@ elif section == "attention":
                 legend=dict(orientation='h', y=1.12))
             st.plotly_chart(fig, width='stretch')
         st.markdown(f"**Temperature τ={temp_sm}:** {'sharp focus on top key' if temp_sm < 0.5 else 'uniform attention across all keys' if temp_sm > 2 else 'balanced attention'}")
-        st.caption("In transformers τ = 1/√dₖ. Low temperature → the model is more decisive; high → more exploratory.")
+        st.caption("Scores are divided by τ before the softmax. Transformers divide by √dₖ, so in this language the "
+                   "built-in temperature is **τ = √dₖ** (e.g. τ = 8 for dₖ = 64). Low temperature → the model is more "
+                   "decisive; high → more spread out.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
