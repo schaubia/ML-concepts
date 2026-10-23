@@ -1094,16 +1094,20 @@ elif section == "activation":
         "Sigmoid": (lambda x: 1/(1+np.exp(-np.clip(x,-10,10))),
                     lambda x: (1/(1+np.exp(-np.clip(x,-10,10)))) * (1 - 1/(1+np.exp(-np.clip(x,-10,10))))),
         "Tanh": (lambda x: np.tanh(x), lambda x: 1 - np.tanh(x)**2),
-        "Leaky ReLU": (lambda x: np.where(x>0, x, 0.1*x), lambda x: np.where(x>0, 1, 0.1)),
-        "ELU": (lambda x: np.where(x>0, x, np.exp(x)-1),
-                lambda x: np.where(x>0, 1, np.exp(x))),
+        "Leaky ReLU (α=0.1)": (lambda x: np.where(x>0, x, 0.1*x), lambda x: np.where(x>0, 1, 0.1)),
+        "ELU": (lambda x: np.where(x>0, x, np.exp(np.minimum(x, 0))-1),
+                lambda x: np.where(x>0, 1, np.exp(np.minimum(x, 0)))),
+        # GELU (tanh approximation, as used in BERT/GPT); derivative by central difference
+        "GELU": (lambda x: 0.5*x*(1 + np.tanh(np.sqrt(2/np.pi)*(x + 0.044715*x**3))),
+                 lambda x: ((0.5*(x+1e-4)*(1 + np.tanh(np.sqrt(2/np.pi)*((x+1e-4) + 0.044715*(x+1e-4)**3))))
+                            - (0.5*(x-1e-4)*(1 + np.tanh(np.sqrt(2/np.pi)*((x-1e-4) + 0.044715*(x-1e-4)**3))))) / 2e-4),
     }
 
     selected = st.multiselect("Functions to compare", list(funcs.keys()),
         default=["ReLU", "Sigmoid", "Tanh"])
 
     x_act = np.linspace(-4, 4, 300)
-    colors = ['#534AB7', '#E24B4A', '#1D9E75', '#EF9F27', '#D4537E']
+    colors = ['#534AB7', '#E24B4A', '#1D9E75', '#EF9F27', '#D4537E', '#3AACC9']
 
     fig = make_subplots(rows=1, cols=2,
         subplot_titles=["Function f(x)", "Derivative f'(x)"])
@@ -1126,14 +1130,43 @@ elif section == "activation":
         "ReLU":       ("Simple, fast", "Dead neurons for x<0", "Hidden layers"),
         "Sigmoid":    ("Output in [0,1]", "Vanishing gradient", "Output (binary classification)"),
         "Tanh":       ("Zero-centred", "Vanishing gradient", "Hidden layers"),
-        "Leaky ReLU": ("No dead neurons", "Extra hyperparameter", "Hidden layers"),
+        "Leaky ReLU (α=0.1)": ("No dead neurons", "Extra hyperparameter α (libraries default to 0.01)", "Hidden layers"),
         "ELU":        ("Smooth, faster convergence", "Slower to compute", "Hidden layers"),
+        "GELU":       ("Smooth ReLU; lets small negatives through", "Slightly costlier to compute",
+                       "Transformers (BERT, GPT) - the modern default"),
     }
     rows = [(n,) + props[n] for n in selected if n in props]
     if rows:
         import pandas as pd
         df_props = pd.DataFrame(rows, columns=["Function", "Advantage", "Disadvantage", "Use case"])
         st.dataframe(df_props, width='stretch', hide_index=True)
+    st.caption("Why Sigmoid's gradient vanishes: its derivative is **at most 0.25** (at x = 0, see the right-hand "
+               "plot). Backpropagation multiplies one such factor per layer, so through 10 layers the gradient "
+               "shrinks to at most 0.25¹⁰ ≈ 0.000001. ReLU's derivative is exactly 1 for positive inputs, which is "
+               "why it trains deep networks so much better - see **Vanishing & Exploding Gradients**.")
+
+    st.markdown("### Why non-linearity matters - stacking layers without it")
+    st.markdown("A tiny network: 1 input → 3 hidden neurons → 1 output, with fixed weights. "
+                "The only difference between the two curves is the activation in the hidden layer.")
+    x_nl = np.linspace(-3, 3, 300)
+    W1 = np.array([1.0, -1.0, 0.5]); b1 = np.array([0.0, 1.0, -1.0])
+    W2 = np.array([1.0, 1.0, -2.0]); b2 = 0.0
+    H = np.outer(x_nl, W1) + b1                       # hidden pre-activations, shape (300, 3)
+    out_linear = H @ W2 + b2                          # no activation
+    out_relu = np.maximum(0, H) @ W2 + b2             # with ReLU
+    fig_nl = go.Figure()
+    fig_nl.add_trace(go.Scatter(x=x_nl, y=out_linear, name='No activation (2 layers)',
+        line=dict(color='#888780', width=2.5, dash='dash')))
+    fig_nl.add_trace(go.Scatter(x=x_nl, y=out_relu, name='With ReLU (same weights)',
+        line=dict(color='#534AB7', width=2.5)))
+    fig_nl.update_layout(xaxis_title="Input x", yaxis_title="Network output", height=300,
+        legend=dict(orientation='h', y=1.15))
+    st.plotly_chart(fig_nl, width='stretch')
+    slope_lin = float(W2 @ W1); icpt_lin = float(W2 @ b1 + b2)
+    st.caption(f"Without an activation the two layers collapse into **one straight line**: "
+               f"output = W₂·(W₁x + b₁) + b₂ = {_vout(slope_lin)}·x {'+' if icpt_lin >= 0 else '−'} {_vout(abs(icpt_lin))} - "
+               "adding more layers can never bend it. With ReLU, each hidden neuron switches on at a different x, "
+               "and the output becomes a bent, piecewise-linear curve. More neurons → more bends → any shape.")
 
     st.markdown("### Interactive example - effect of the activation")
     x_demo = st.slider("Input x", -4.0, 4.0, 1.5, step=0.1)
