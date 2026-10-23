@@ -562,6 +562,13 @@ elif section == "backprop":
         grad_w2 = d_loss_out * d_out_w2
         grad_w1 = d_loss_out * d_out_sig * d_sig_h * d_h_w1
 
+        # numerical check: central finite differences
+        def _bp_loss(a, b):
+            return 0.5 * (b / (1 + np.exp(-x_in * a)) - y_target) ** 2
+        eps_bp = 1e-5
+        num_w1 = (_bp_loss(w1_bp + eps_bp, w2_bp) - _bp_loss(w1_bp - eps_bp, w2_bp)) / (2 * eps_bp)
+        num_w2 = (_bp_loss(w1_bp, w2_bp + eps_bp) - _bp_loss(w1_bp, w2_bp - eps_bp)) / (2 * eps_bp)
+
     with col2:
         st.markdown("**Forward pass**")
         st.code(f"""
@@ -573,24 +580,35 @@ loss     = 0.5·(output - y)² = {loss_bp:.4f}
 """, language="text")
         st.markdown("**Backward pass (gradients)**")
         st.code(f"""
-dL/dw2 = {grad_w2:.4f}
-dL/dw1 = {grad_w1:.4f}
+dL/dw2 = (output − y) · sigmoid
+       = ({d_loss_out:.4f}) · {d_out_w2:.4f}
+       = {grad_w2:.4f}
 
-(via chain rule:)
-dL/dw1 = (output-y) · w2 · sigmoid'(h) · x
+dL/dw1 = (output − y) · w2   · sigmoid'(h) · x
+       = ({d_loss_out:.4f}) · {d_out_sig:.2f} · {d_sig_h:.4f}      · {d_h_w1:.2f}
+       = {grad_w1:.4f}
 """, language="text")
+        st.caption("Read dL/dw₁ right to left as the error flowing backwards: each factor is one local "
+                   "derivative - how much the output changes with the sigmoid (w₂), the sigmoid with h "
+                   "(σ′(h) = σ·(1−σ)), and h with w₁ (x). The chain rule multiplies them.")
+        st.markdown("**Check backprop numerically**")
+        st.code(f"""
+numerical dL/dw1 = [L(w1+ε) − L(w1−ε)] / 2ε = {num_w1:.4f}   (backprop: {grad_w1:.4f})
+numerical dL/dw2 = [L(w2+ε) − L(w2−ε)] / 2ε = {num_w2:.4f}   (backprop: {grad_w2:.4f})
+""", language="text")
+        st.caption("Nudging each weight by a tiny ε and measuring the change in loss gives the same numbers - "
+                   "this 'gradient check' is how backprop implementations are tested.")
 
-    st.markdown("### How weights change after one step")
+    st.markdown("### Training: repeating forward pass → backward pass → update")
     lr_bp = st.slider("Learning rate", 0.01, 1.0, 0.1, step=0.01)
+    steps = st.slider("Steps", 5, 200, 50, key="bp_steps")
 
-    steps = 50
     w1_hist, w2_hist, loss_hist = [w1_bp], [w2_bp], [loss_bp]
     ww1, ww2 = w1_bp, w2_bp
     for _ in range(steps):
         hh = x_in * ww1
         sh = 1 / (1 + np.exp(-hh))
         out = sh * ww2
-        l = 0.5 * (out - y_target) ** 2
         dl = out - y_target
         gw2 = dl * sh
         gw1 = dl * ww2 * sh * (1 - sh) * x_in
@@ -598,7 +616,8 @@ dL/dw1 = (output-y) · w2 · sigmoid'(h) · x
         ww2 -= lr_bp * gw2
         w1_hist.append(ww1)
         w2_hist.append(ww2)
-        loss_hist.append(l)
+        # record the loss AFTER the update, so loss_hist[k] matches w1_hist[k] and w2_hist[k]
+        loss_hist.append(0.5 * (ww2 / (1 + np.exp(-x_in * ww1)) - y_target) ** 2)
 
     fig = make_subplots(rows=1, cols=2, subplot_titles=["Loss during training", "Weight evolution"])
     fig.add_trace(go.Scatter(y=loss_hist, name='Loss', line=dict(color='#E24B4A', width=2)), row=1, col=1)
