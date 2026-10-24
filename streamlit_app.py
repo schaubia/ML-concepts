@@ -1980,7 +1980,7 @@ elif section == "lr_schedule":
     with col1:
         lr0 = st.slider("Initial learning rate", 0.01, 1.0, 0.1, step=0.01)
         total_epochs = st.slider("Total epochs", 20, 200, 100)
-        warmup_epochs = st.slider("Warmup epochs", 0, 20, 5)
+        warmup_epochs = st.slider("Warmup epochs (Warmup + Cosine only)", 0, 20, 5)
         step_size = st.slider("Step decay - drop every N epochs", 5, 40, 20)
         step_gamma = st.slider("Step decay - drop factor", 0.1, 0.9, 0.5, step=0.05)
 
@@ -2033,26 +2033,58 @@ elif section == "lr_schedule":
         fig.update_layout(xaxis_title="Epoch", yaxis_title="Learning rate",
             height=380, legend=dict(orientation='h', y=1.12))
         st.plotly_chart(fig, width='stretch')
+        if "Exponential Decay" in schedules_sel:
+            st.caption("Exponential Decay here uses lr₀·e^(−3·epoch/total), so it always ends at about 5% of the "
+                       "initial rate.")
 
-    st.markdown("### Simulated training loss with each schedule")
-    np.random.seed(42)
-    base_noise = np.random.randn(total_epochs) * 0.03
+    st.markdown("### Real training loss with each schedule")
+    st.markdown("Mini-batch SGD on a linear regression (400 points, 10 features, batches of 10). Each "
+                "mini-batch gives a noisy gradient, so with a large learning rate SGD keeps jumping around the "
+                "minimum. The chart shows how far the loss is **above the best achievable loss** (log scale).")
 
-    fig2 = go.Figure()
+    @st.cache_data
+    def _lr_sched_run(lrs, seed=0):
+        rng = np.random.default_rng(seed); n, d = 400, 10
+        X = rng.normal(size=(n, d)); y = X @ rng.normal(size=d) + rng.normal(0, 1, n)
+        w_best = np.linalg.lstsq(X, y, rcond=None)[0]
+        best = np.mean((X @ w_best - y) ** 2)
+        W = np.zeros(d); out = []
+        for lr in lrs:
+            idx = rng.permutation(n)
+            for b in range(0, n, 10):
+                i = idx[b:b + 10]
+                W = W - lr * X[i].T @ (X[i] @ W - y[i]) / len(i)
+            loss = np.mean((X @ W - y) ** 2)
+            if not np.isfinite(loss) or loss > 1e6:
+                return out, True               # diverged
+            out.append(max(loss - best, 1e-8))
+        return out, False
+
+    fig2 = go.Figure(); finals = {}; diverged = []
     for name in schedules_sel:
         fn = schedule_fns[name]
-        loss_sim = []
-        l = 1.0
-        for e in range(total_epochs):
-            lr_e = fn(e)
-            l = l * (1 - lr_e * 0.15) + abs(base_noise[e]) * lr_e
-            loss_sim.append(max(l, 0.01))
-        fig2.add_trace(go.Scatter(x=epochs, y=loss_sim, name=name,
+        curve, div = _lr_sched_run(tuple(float(fn(e)) for e in epochs))
+        if div:
+            diverged.append(name)
+        else:
+            finals[name] = curve[-1]
+        fig2.add_trace(go.Scatter(x=epochs[:len(curve)], y=curve, name=name + (" (diverged)" if div else ""),
             line=dict(color=sched_colors[name], width=2)))
-    fig2.update_layout(xaxis_title="Epoch", yaxis_title="Simulated loss",
-        height=300, legend=dict(orientation='h', y=1.12))
+    fig2.update_layout(xaxis_title="Epoch", yaxis_title="Loss above best possible", yaxis_type='log',
+        height=320, legend=dict(orientation='h', y=1.12))
     st.plotly_chart(fig2, width='stretch')
-    st.caption("Simulated - illustrates the qualitative effect of each schedule, not a real training run.")
+    if diverged:
+        st.error(f"Diverged: {', '.join(diverged)} - the learning rate {lr0} is too large for this problem, so "
+                 "the loss blew up. Lower the initial learning rate.")
+    if finals:
+        best_name = min(finals, key=finals.get)
+        st.markdown("**Final loss above best:** " +
+                    " · ".join(f"{k}: {v:.2g}" for k, v in sorted(finals.items(), key=lambda kv: kv[1])))
+        if "Constant" in finals and best_name != "Constant":
+            st.success(f"{best_name} ends {finals['Constant'] / finals[best_name]:,.0f}× closer to the best "
+                       "loss than Constant: lowering the learning rate lets SGD settle instead of bouncing around.")
+    st.caption("Real training, cached. Constant flattens at a noise floor set by its learning rate; decaying "
+               "schedules keep going down as their steps shrink.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
