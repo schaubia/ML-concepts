@@ -2561,7 +2561,7 @@ elif section == "neural_net":
                 h = st.slider(f"Hidden layer {i+1} neurons", 1, 128, [64,32,16,8,4,2][min(i,5)])
                 hidden_sizes.append(h)
             output_size = st.slider("Output neurons", 1, 10, 1)
-            activation_nn = st.selectbox("Activation", ["ReLU", "Sigmoid", "Tanh"])
+            activation_nn = st.selectbox("Activation (used in the Forward pass tab)", ["ReLU", "Sigmoid", "Tanh"])
 
         layer_sizes = [input_size] + hidden_sizes + [output_size]
         total_params = sum(layer_sizes[i]*layer_sizes[i+1] + layer_sizes[i+1]
@@ -2578,7 +2578,7 @@ elif section == "neural_net":
             node_positions = []
             for li, (lx, n_neurons) in enumerate(zip(x_positions, layer_sizes)):
                 display_n = min(n_neurons, 8)
-                y_positions = np.linspace(0.1, 0.9, display_n)
+                y_positions = np.linspace(0.1, 0.9, display_n) if display_n > 1 else np.array([0.5])
                 node_positions.append((lx, y_positions, n_neurons, display_n))
 
                 # draw connections to next layer
@@ -2587,7 +2587,7 @@ elif section == "neural_net":
                         np.linspace(0.1, 0.9, min(layer_sizes[li+1], 8)), \
                         layer_sizes[li+1], min(layer_sizes[li+1], 8)
                     for yi in y_positions:
-                        for yj in np.linspace(0.1, 0.9, min(layer_sizes[li+1], 8)):
+                        for yj in (next_ypos if next_dn > 1 else [0.5]):
                             fig.add_shape(type='line', x0=lx, y0=yi, x1=next_lx, y1=yj,
                                 line=dict(color='rgba(150,150,150,0.15)', width=1))
 
@@ -2613,11 +2613,12 @@ elif section == "neural_net":
 
         st.markdown("### Parameter count breakdown")
         param_data = []
+        _lnames = ["Input"] + [f"Hidden {k+1}" for k in range(n_hidden)] + ["Output"]
         for i in range(len(layer_sizes)-1):
             w_count = layer_sizes[i] * layer_sizes[i+1]
             b_count = layer_sizes[i+1]
             param_data.append({
-                "Layer": f"Layer {i+1} → {i+2}",
+                "Layer": f"{_lnames[i]} → {_lnames[i+1]}",
                 "Input neurons": layer_sizes[i],
                 "Output neurons": layer_sizes[i+1],
                 "Weights": w_count,
@@ -2640,6 +2641,8 @@ elif section == "neural_net":
             while len(inp_vals) < input_size:
                 inp_vals.append(0.0)
             inp_arr = np.array(inp_vals)
+            if input_size > 4:
+                st.caption(f"Inputs x5-x{input_size} are fixed at 0 (only the first 4 have sliders).")
 
         def act_fn(x, name):
             if name == "ReLU": return np.maximum(0, x)
@@ -2674,7 +2677,8 @@ elif section == "neural_net":
                 xaxis_title="Neuron", yaxis_title="Activation value",
                 legend=dict(orientation='h', y=1.12))
             st.plotly_chart(fig, width='stretch')
-        st.caption("Weights are random (seed=99). Change inputs to see activations shift.")
+        st.caption(f"Weights are random (seed=99). Hidden layers use {activation_nn}; the output layer is linear "
+                   "(no activation), as is usual for regression. Change inputs to see activations shift.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
