@@ -2782,8 +2782,12 @@ elif section == "dropout":
             seed_do = st.slider("Random seed (= one training step)", 0, 20, 3)
             st.markdown("---")
             st.markdown(f"**Expected active neurons:** {n_neurons_do * (1-dropout_rate):.1f} / {n_neurons_do}")
-            st.markdown(f"**Scale factor at inference:** ×{1/(1-dropout_rate+1e-9):.2f}")
-            st.info("At **inference** time, dropout is disabled and weights are scaled by (1-p) to compensate.")
+            st.markdown(f"**Scale during training (inverted dropout):** ×{1/(1-dropout_rate+1e-9):.2f}")
+            st.info("**Inverted dropout** (what PyTorch and TensorFlow do): during training the surviving "
+                    "activations are multiplied by 1/(1−p), so their expected total stays the same. At "
+                    "**inference** dropout is simply switched off - no scaling needed.")
+            st.caption("The original 2014 dropout did it the other way round: no scaling during training, then "
+                       "weights multiplied by (1−p) at inference. Both give the same expected activations.")
 
         np.random.seed(seed_do)
         activations_do = np.random.randn(n_neurons_do) * 2
@@ -2808,45 +2812,89 @@ elif section == "dropout":
             st.markdown(f"🔴 **{n_neurons_do - active} neurons dropped** &nbsp;|&nbsp; 🟣 **{active} neurons active**")
 
     with tab2:
-        st.markdown("Simulated train/test loss curves with and without dropout on an overfit-prone network.")
+        st.markdown("A **real** small network trained on 20 noisy points from sin(x) - a setup that overfits "
+                    "easily - once without dropout and once with your dropout rate.")
         col1, col2 = st.columns([1, 2])
         with col1:
-            do_rate_sim = st.slider("Dropout rate (simulation)", 0.0, 0.8, 0.4, step=0.05, key="do_sim")
-            epochs_do = st.slider("Training epochs", 30, 200, 100, key="do_ep")
-            capacity = st.slider("Model capacity (higher = more overfit risk)", 1, 5, 3)
+            do_rate_sim = st.slider("Dropout rate p", 0.0, 0.8, 0.4, step=0.05, key="do_sim")
+            epochs_do = st.select_slider("Training steps", [500, 1000, 2000, 3000, 4000], value=3000, key="do_ep")
+            capacity = st.select_slider("Hidden neurons (more = more overfit risk)", [25, 50, 100, 200, 400],
+                                        value=200, key="do_cap")
 
-        np.random.seed(0)
-        ep_range = np.arange(epochs_do)
-        overfit_strength = capacity * 0.015
+        @st.cache_data(show_spinner="Training the network…")
+        def _dropout_run(p_drop, steps, H, seed=0, lr=0.01):
+            """1-hidden-layer ReLU net, full-batch Adam, inverted dropout on the hidden layer."""
+            rng = np.random.default_rng(seed)
+            x = np.sort(rng.uniform(-3, 3, 20))[:, None]
+            y = np.sin(x) + rng.normal(0, 0.3, x.shape)
+            xt = np.linspace(-3, 3, 300)[:, None]; yt = np.sin(xt)
+            W1 = rng.normal(0, 1, (1, H)); b1 = rng.normal(0, 1, H)
+            W2 = rng.normal(0, 1 / np.sqrt(H), (H, 1)); b2 = np.zeros(1)
+            params = [W1, b1, W2, b2]
+            m_ = [np.zeros_like(a) for a in params]; v_ = [np.zeros_like(a) for a in params]
+            step_ax, tr, te = [], [], []
+            for k in range(1, steps + 1):
+                h = np.maximum(0, x @ W1 + b1)
+                mask = (rng.random(h.shape) > p_drop) / (1 - p_drop) if p_drop > 0 else 1.0
+                hd = h * mask
+                g = 2 * (hd @ W2 + b2 - y) / len(x)
+                gh = g @ W2.T * mask * (h > 0)
+                grads = [x.T @ gh, gh.sum(0), hd.T @ g, g.sum(0)]
+                for i, (P, G) in enumerate(zip(params, grads)):
+                    m_[i] = 0.9 * m_[i] + 0.1 * G; v_[i] = 0.999 * v_[i] + 0.001 * G * G
+                    P -= lr * (m_[i] / (1 - 0.9 ** k)) / (np.sqrt(v_[i] / (1 - 0.999 ** k)) + 1e-8)
+                if k % 25 == 0:                  # evaluate with dropout OFF (inference mode)
+                    step_ax.append(k)
+                    tr.append(float(np.mean((np.maximum(0, x @ W1 + b1) @ W2 + b2 - y) ** 2)))
+                    te.append(float(np.mean((np.maximum(0, xt @ W1 + b1) @ W2 + b2 - yt) ** 2)))
+            pred = (np.maximum(0, xt @ W1 + b1) @ W2 + b2).ravel()
+            return step_ax, tr, te, pred, x.ravel(), y.ravel(), xt.ravel()
 
-        # Without dropout
-        train_no = 0.8 * np.exp(-ep_range * 0.06) + 0.05 + np.random.randn(epochs_do)*0.01
-        test_no  = train_no + overfit_strength * ep_range + np.random.randn(epochs_do)*0.015
-
-        # With dropout
-        train_do_sim = 0.9 * np.exp(-ep_range * 0.05) + 0.08 + np.random.randn(epochs_do)*0.015
-        gap_reduction = (1 - do_rate_sim) * overfit_strength
-        test_do_sim  = train_do_sim + gap_reduction * ep_range + np.random.randn(epochs_do)*0.01
-
-        train_no = np.clip(train_no, 0.04, 1)
-        test_no  = np.clip(test_no,  0.04, 2)
-        train_do_sim = np.clip(train_do_sim, 0.04, 1)
-        test_do_sim  = np.clip(test_do_sim,  0.04, 2)
+        st_no, tr_no, te_no, pred_no, x_dd, y_dd, xt_dd = _dropout_run(0.0, epochs_do, capacity)
+        st_do, tr_do, te_do, pred_do, _, _, _ = _dropout_run(do_rate_sim, epochs_do, capacity)
 
         with col2:
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=ep_range, y=train_no, name='Train (no dropout)',
-                line=dict(color='#534AB7', width=2, dash='dash')))
-            fig.add_trace(go.Scatter(x=ep_range, y=test_no, name='Test (no dropout)',
-                line=dict(color='#E24B4A', width=2, dash='dash')))
-            fig.add_trace(go.Scatter(x=ep_range, y=train_do_sim, name=f'Train (p={do_rate_sim})',
-                line=dict(color='#534AB7', width=2.5)))
-            fig.add_trace(go.Scatter(x=ep_range, y=test_do_sim, name=f'Test (p={do_rate_sim})',
-                line=dict(color='#1D9E75', width=2.5)))
-            fig.update_layout(xaxis_title="Epoch", yaxis_title="Loss",
-                height=380, legend=dict(orientation='h', y=1.12))
+            fig = make_subplots(rows=1, cols=2, subplot_titles=["Loss during training", "What the network learned"])
+            fig.add_trace(go.Scatter(x=st_no, y=tr_no, name='Train (no dropout)',
+                line=dict(color='#534AB7', width=2, dash='dash')), row=1, col=1)
+            fig.add_trace(go.Scatter(x=st_no, y=te_no, name='Test (no dropout)',
+                line=dict(color='#E24B4A', width=2, dash='dash')), row=1, col=1)
+            fig.add_trace(go.Scatter(x=st_do, y=tr_do, name=f'Train (p={do_rate_sim})',
+                line=dict(color='#534AB7', width=2.5)), row=1, col=1)
+            fig.add_trace(go.Scatter(x=st_do, y=te_do, name=f'Test (p={do_rate_sim})',
+                line=dict(color='#1D9E75', width=2.5)), row=1, col=1)
+            fig.add_trace(go.Scatter(x=x_dd, y=y_dd, mode='markers', name='Training points',
+                marker=dict(color='#333', size=7), showlegend=False), row=1, col=2)
+            fig.add_trace(go.Scatter(x=xt_dd, y=np.sin(xt_dd), name='True sin(x)',
+                line=dict(color='#888780', width=1.5, dash='dot'), showlegend=False), row=1, col=2)
+            fig.add_trace(go.Scatter(x=xt_dd, y=pred_no, name='Fit, no dropout',
+                line=dict(color='#E24B4A', width=2, dash='dash'), showlegend=False), row=1, col=2)
+            fig.add_trace(go.Scatter(x=xt_dd, y=pred_do, name=f'Fit, p={do_rate_sim}',
+                line=dict(color='#1D9E75', width=2.5), showlegend=False), row=1, col=2)
+            fig.update_xaxes(title_text="Training step", row=1, col=1)
+            fig.update_xaxes(title_text="x", row=1, col=2)
+            fig.update_yaxes(title_text="MSE", type='log', row=1, col=1)
+            fig.update_yaxes(range=[-2, 2], row=1, col=2)
+            fig.update_layout(height=380, legend=dict(orientation='h', y=1.18))
             st.plotly_chart(fig, width='stretch')
-        st.caption("Dashed = no dropout. Solid = with dropout. The gap between train and test loss is the overfit signal.")
+
+        m1, m2 = st.columns(2)
+        m1.metric("Test error, no dropout", f"{te_no[-1]:.3f}")
+        m2.metric(f"Test error, p = {do_rate_sim}", f"{te_do[-1]:.3f}", delta=f"{te_do[-1]-te_no[-1]:+.3f}",
+                  delta_color="inverse")
+        if do_rate_sim == 0:
+            st.info("p = 0 - the two runs are identical. Raise the dropout rate.")
+        elif te_do[-1] < te_no[-1] * 0.9:
+            st.success(f"Dropout helps: test error {te_no[-1]:.3f} → {te_do[-1]:.3f}. Without dropout the network "
+                       "bends to pass through the noisy points (red dashed fit); dropout keeps it closer to the true curve.")
+        elif tr_do[-1] > tr_no[-1] * 3 and te_do[-1] > te_no[-1]:
+            st.warning(f"Too much dropout - underfitting: with p = {do_rate_sim} the network can't even fit the "
+                       f"training data well (train error {tr_do[-1]:.3f}), so test error gets worse too.")
+        else:
+            st.info("Little difference at this setting - try a larger network or a moderate p (0.2-0.5).")
+        st.caption("Real training, evaluated with dropout switched off (inference mode). Test error is measured against "
+                   "the true sin(x) curve. Moderate dropout usually helps; too much stops the network learning. "
+                   "Results are cached, so returning to a setting is instant.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

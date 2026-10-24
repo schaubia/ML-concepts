@@ -5388,7 +5388,16 @@ elif section == "cnn":
                 ["Random", "Vertical edge", "Horizontal edge", "Diagonal", "Checkerboard"])
             kernel_preset = st.selectbox("Kernel (3×3)",
                 ["Edge detect (vertical)", "Edge detect (horizontal)",
-                 "Sharpen", "Blur (average)", "Custom"])
+                 "Sharpen", "Blur (average)", "Prewitt (vertical)", "Custom"])
+            if kernel_preset == "Custom":
+                st.markdown("**Your kernel** (edit the 9 weights):")
+                default_ck = [[1.0, 0.0, -1.0], [1.0, 0.0, -1.0], [1.0, 0.0, -1.0]]
+                K_custom = np.zeros((3, 3))
+                for ki in range(3):
+                    kc = st.columns(3)
+                    for kj in range(3):
+                        K_custom[ki, kj] = kc[kj].number_input(f"k[{ki},{kj}]", value=default_ck[ki][kj],
+                            step=0.5, key=f"cnn_k{ki}{kj}", label_visibility="collapsed")
             stride = st.radio("Stride", [1, 2], horizontal=True)
             padding = st.checkbox("Zero padding (same size output)", value=False)
 
@@ -5410,9 +5419,9 @@ elif section == "cnn":
             "Edge detect (horizontal)": np.array([[-1,-2,-1],[0,0,0],[1,2,1]]),
             "Sharpen":                  np.array([[0,-1,0],[-1,5,-1],[0,-1,0]]),
             "Blur (average)":           np.ones((3,3))/9,
-            "Custom":                   np.array([[1,0,-1],[1,0,-1],[1,0,-1]]),
+            "Prewitt (vertical)":       np.array([[1,0,-1],[1,0,-1],[1,0,-1]]),
         }
-        K = kernels[kernel_preset]
+        K = K_custom if kernel_preset == "Custom" else kernels[kernel_preset]
 
         # convolution
         pad = 1 if padding else 0
@@ -5430,11 +5439,11 @@ elif section == "cnn":
                 column_widths=[0.45, 0.15, 0.4])
             fig.add_trace(go.Heatmap(z=inp, colorscale='Greys', showscale=False,
                 xgap=1, ygap=1), row=1, col=1)
-            fig.add_trace(go.Heatmap(z=K, colorscale='RdBu', showscale=False,
+            fig.add_trace(go.Heatmap(z=K, colorscale='RdBu', zmid=0, showscale=False,
                 xgap=2, ygap=2,
                 text=[[f"{K[i,j]:.1f}" for j in range(3)] for i in range(3)],
                 texttemplate="%{text}", textfont=dict(size=11)), row=1, col=2)
-            fig.add_trace(go.Heatmap(z=feature_map, colorscale='RdBu',
+            fig.add_trace(go.Heatmap(z=feature_map, colorscale='RdBu', zmid=0,
                 showscale=False, xgap=1, ygap=1), row=1, col=3)
             fig.update_yaxes(autorange='reversed')
             fig.update_layout(height=380)
@@ -5444,9 +5453,18 @@ elif section == "cnn":
         c1.metric("Input size", f"{G}×{G}")
         c2.metric("Output size", f"{out_size}×{out_size}")
         c3.metric("Parameters in kernel", "9 weights + 1 bias")
-        st.markdown(f"**Key insight:** the same 9 weights are reused at every position - "
-                    f"this *weight sharing* gives CNNs translation invariance and makes them vastly more "
-                    f"efficient than a fully-connected layer ({G*G*out_size*out_size:,} weights vs 9).")
+        st.caption("Colours: **white = 0**, red = negative, blue = positive response. An edge detector stays white "
+                   "on flat regions and lights up only where the brightness changes.")
+        st.markdown(f"**Key insight:** the same 9 weights are reused at every position - this *weight sharing* "
+                    f"makes the layer **translation-equivariant** (shift the input, and the feature map shifts the "
+                    f"same way) and vastly more efficient than a fully-connected layer "
+                    f"({G*G*out_size*out_size:,} weights vs 9). Full translation *invariance* - the output not "
+                    f"changing at all - only comes later, from pooling layers.")
+        st.caption("Technically this is **cross-correlation**: the kernel is slid over the input as-is. The "
+                   "mathematical convolution flips the kernel first. Deep-learning libraries (PyTorch, TensorFlow) "
+                   "compute cross-correlation and still call it convolution - which is why a kernel can look 'the "
+                   "wrong way round' compared with a maths textbook. Since the weights are learned, it makes no "
+                   "practical difference.")
 
     with tab2:
         st.markdown("### How different kernels highlight different features")
@@ -5477,7 +5495,7 @@ elif section == "cnn":
             subplot_titles=list(kernel_gallery.keys()))
         for idx, (name, fm) in enumerate(results.items()):
             fig.add_trace(go.Heatmap(z=fm, colorscale='RdBu' if idx>0 else 'Greys',
-                showscale=False, xgap=1, ygap=1), row=1, col=idx+1)
+                zmid=0 if idx > 0 else None, showscale=False, xgap=1, ygap=1), row=1, col=idx+1)
         fig.update_yaxes(autorange='reversed')
         fig.update_layout(height=200)
         st.plotly_chart(fig, width='stretch')
