@@ -3199,7 +3199,9 @@ elif section == "neuron":
     A single neuron is the fundamental building block of every neural network.
     It takes a set of inputs, multiplies each by a learned <b>weight</b>, adds a <b>bias</b>,
     then passes the result through an <b>activation function</b> to produce an output.
-    Everything in deep learning is just many of these stacked together.
+    Everything in deep learning is just many of these stacked together.<br><br>
+    Strictly, the original perceptron (Rosenblatt, 1958) used a <b>step function</b> (output 0 or 1);
+    the modern neuron replaces it with a smooth activation so it can be trained with gradients.
     </div>
     """, unsafe_allow_html=True)
 
@@ -3224,7 +3226,7 @@ elif section == "neuron":
             w2 = st.slider("w₂", -3.0, 3.0, -0.5, step=0.1, key="n_w2")
             w3 = st.slider("w₃", -3.0, 3.0, 1.2, step=0.1, key="n_w3")
             st.markdown("**Bias & activation**")
-            bias = st.slider("bias b", -3.0, 3.0, 0.3, step=0.1, key="n_b")
+            bias = st.slider("bias b", -3.0, 3.0, 0.8, step=0.1, key="n_b")
             act_n = st.selectbox("Activation", ["ReLU", "Sigmoid", "Tanh", "None (linear)"], key="n_act")
 
         # compute
@@ -3236,6 +3238,9 @@ elif section == "neuron":
             "None (linear)": lambda v: v,
         }
         output_n = act_fns[act_n](z)
+        z = 0.0 if abs(z) < 1e-9 else z                     # avoid showing −0.0000
+        output_n = 0.0 if abs(output_n) < 1e-9 else output_n
+        act_lbl = "z" if act_n == "None (linear)" else f"{act_n}(z)"
 
         with col_diag:
             # ── build the diagram with plotly shapes + annotations ──
@@ -3319,12 +3324,13 @@ elif section == "neuron":
         st.markdown("**Equation for this neuron right now:**")
         eq_parts = f"w₁·x₁ + w₂·x₂ + w₃·x₃ + b = ({w1:.1f})({x1:.1f}) + ({w2:.1f})({x2:.1f}) + ({w3:.1f})({x3:.1f}) + ({bias:.1f}) = {z:.4f}"
         st.markdown(f'<div class="formula-box">z = {eq_parts}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="formula-box">output = {act_n}(z) = {act_n}({z:.4f}) = <b>{output_n:.4f}</b></div>',
-            unsafe_allow_html=True)
+        _out_rhs = (f"z = <b>{output_n:.4f}</b>" if act_n == "None (linear)"
+                    else f"{act_n}(z) = {act_n}({z:.4f}) = <b>{output_n:.4f}</b>")
+        st.markdown(f'<div class="formula-box">output = {_out_rhs}</div>', unsafe_allow_html=True)
 
         m1, m2, m3 = st.columns(3)
         m1.metric("Weighted sum z", f"{z:.4f}")
-        m2.metric(f"{act_n}(z)", f"{output_n:.4f}")
+        m2.metric(f"Output = {act_lbl}", f"{output_n:.4f}")
         m3.metric("Contributions",
             f"x₁:{w1*x1:.2f}  x₂:{w2*x2:.2f}  x₃:{w3*x3:.2f}  b:{bias:.2f}")
 
@@ -3412,13 +3418,77 @@ for each batch:
     loss.backward()   # chain rule
 
     # 3. Update
-    w -= lr * w.grad
-    b -= lr * b.grad
-    optimizer.zero_grad()
+    with torch.no_grad():      # don't track the update itself
+        w -= lr * w.grad
+        b -= lr * b.grad
+    w.grad.zero_()             # gradients add up unless cleared
+    b.grad.zero_()
+
+# In practice: optimizer.step() and optimizer.zero_grad()
+# do these update and clearing lines for you.
 """, language="python")
 
         st.info("👉 For the full interactive step-by-step breakdown with a 2-layer network, "
                 "see the **Backpropagation** concept in Deep Learning.")
+
+        st.markdown("---")
+        st.markdown("### Worked example: one gradient step on the neuron from tab 1")
+        st.caption("Uses the inputs, weights, bias and activation you set in the first tab.")
+        c1, c2 = st.columns(2)
+        y_target = c1.slider("Target y", -3.0, 3.0, 1.0, step=0.1, key="n_ytgt")
+        eta_n = c2.select_slider("Learning rate η", [0.01, 0.05, 0.1, 0.2, 0.5], value=0.1, key="n_eta")
+
+        _derivs = {
+            "ReLU":          lambda v: 1.0 if v > 0 else 0.0,
+            "Sigmoid":       lambda v: float(1/(1+np.exp(-v)) * (1 - 1/(1+np.exp(-v)))),
+            "Tanh":          lambda v: float(1 - np.tanh(v)**2),
+            "None (linear)": lambda v: 1.0,
+        }
+        f_prime = _derivs[act_n](z)
+        err_n = output_n - y_target
+        loss_old = 0.5 * err_n**2
+        delta_n = err_n * f_prime                       # dL/dz
+        xs_n = [x1, x2, x3, 1.0]                        # bias acts like an input fixed at 1
+        old_p = [w1, w2, w3, bias]
+        grads_n = [delta_n * xv for xv in xs_n]
+        new_p = [pv - eta_n * gv for pv, gv in zip(old_p, grads_n)]
+        z_new = sum(pv * xv for pv, xv in zip(new_p[:3], xs_n[:3])) + new_p[3]
+        out_new = act_fns[act_n](z_new)
+        loss_new = 0.5 * (out_new - y_target)**2
+        f_lbl = "1 (linear)" if act_n == "None (linear)" else f"{act_n}′({z:.3f})"
+
+        st.markdown(
+            f'<div class="formula-box">'
+            f'1. Forward: z = {_vout(z)}, ŷ = {_vout(output_n)}<br>'
+            f'2. Loss: L = ½(ŷ − y)² = ½({_vin(output_n)} − {_vin(y_target)})² = <b>{_vout(loss_old)}</b><br>'
+            f'3. Backward: (ŷ − y) = {_vout(err_n)}, f′(z) = {f_lbl} = {_vout(f_prime)} '
+            f'→ dL/dz = {_vin(err_n)}·{_vin(f_prime)} = {_vout(delta_n)}<br>'
+            f'&nbsp;&nbsp;&nbsp;&nbsp;each dL/dwᵢ = dL/dz · xᵢ, and dL/db = dL/dz · 1'
+            f'</div>', unsafe_allow_html=True)
+
+        st.dataframe(pd.DataFrame({
+            "Parameter": ["w₁", "w₂", "w₃", "b"],
+            "Old value": [round(v, 4) for v in old_p],
+            "Input it multiplies": [round(v, 4) for v in xs_n],
+            "Gradient dL/d·": [round(g, 4) for g in grads_n],
+            f"New = old − {eta_n}·gradient": [round(v, 4) for v in new_p],
+        }), hide_index=True, width='stretch')
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("ŷ before → after", f"{output_n:.4f} → {out_new:.4f}")
+        m2.metric("Loss after one step", f"{loss_new:.4f}", delta=f"{loss_new - loss_old:+.4f}", delta_color="inverse")
+        m3.metric("Target y", f"{y_target:.1f}")
+        if abs(err_n) < 1e-9:
+            st.info("ŷ already equals the target - the loss is 0, so every gradient is 0 and nothing changes.")
+        elif f_prime == 0:
+            st.warning(f"**Dead ReLU:** z = {_vout(z)} is negative, so ReLU′(z) = 0 and every gradient is 0. "
+                       "The neuron is wrong but cannot learn from this example. Try Tanh, or raise the bias.")
+        elif loss_new < loss_old:
+            st.success(f"One step lowered the loss from {_vout(loss_old)} to {_vout(loss_new)}. Each weight moved "
+                       "opposite to its gradient; inputs that were 0 leave their weight unchanged.")
+        else:
+            st.warning(f"The loss went up ({_vout(loss_old)} → {_vout(loss_new)}): the learning rate η = {eta_n} "
+                       "overshot. Try a smaller η.")
 
         st.markdown("---")
         st.markdown("### Why activation functions must be differentiable")
