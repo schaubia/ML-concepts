@@ -2109,7 +2109,7 @@ elif section == "normalization":
                 help="Large ratio = very different feature scales")
             scaling = st.radio("Normalization method",
                 ["None", "Min-Max [0,1]", "Standardization (z-score)"])
-            lr_norm = st.select_slider("Learning rate", [0.001,0.005,0.01,0.05,0.1], value=0.01)
+            lr_norm = st.select_slider("Learning rate", [0.001,0.005,0.01,0.05,0.1,0.5,1.0], value=0.01)
             steps_norm = st.slider("GD steps", 10, 80, 40)
 
         np.random.seed(42)
@@ -2128,34 +2128,50 @@ elif section == "normalization":
             X1s, X2s = X1, X2
 
         X_n = np.column_stack([X1s, X2s])
+        # Centre X and y: identical to fitting a bias term that is always at its best value,
+        # so the loss surface stays 2-D in (w1, w2) and Min-Max isn't penalised for being off-centre.
+        X_n = X_n - X_n.mean(axis=0)
+        y_c = y_norm - y_norm.mean()
+        w_opt = np.linalg.lstsq(X_n, y_c, rcond=None)[0]
+        best_mse = float(np.mean((X_n @ w_opt - y_c)**2))
+        H_n = 2 * X_n.T @ X_n / n_norm                     # curvature (Hessian) of the MSE
+        eig_n = np.linalg.eigvalsh(H_n)
+        lr_stable = 2 / eig_n[-1]
+        stretch = eig_n[-1] / eig_n[0]
 
         # gradient descent trajectory
         w = np.array([0.0, 0.0])
         traj = [w.copy()]
-        losses_n = []
+        diverged_n = False
         for _ in range(steps_norm):
-            pred = X_n @ w
-            err = pred - y_norm
-            loss_n = np.mean(err**2)
-            losses_n.append(loss_n)
-            grad = 2 * X_n.T @ err / n_norm
+            grad = 2 * X_n.T @ (X_n @ w - y_c) / n_norm
             w = w - lr_norm * grad
+            if not np.all(np.isfinite(w)) or np.abs(w).max() > 1e8:
+                diverged_n = True
+                break
             traj.append(w.copy())
         traj = np.array(traj)
+        if lr_norm > lr_stable:          # above the limit it always diverges, even if slowly at first
+            diverged_n = True
+        final_mse = float(np.mean((X_n @ traj[-1] - y_c)**2))
 
-        # loss surface
-        w1r = np.linspace(-3, 5, 60)
-        w2r = np.linspace(-3, 5, 60)
-        WW2, BB2 = np.meshgrid(w1r, w2r)
-        ZZ2 = np.array([[np.mean((X_n @ np.array([ww, bb]) - y_norm)**2)
-                         for ww in w1r] for bb in w2r])
+        # square plot window centred on the minimum, large enough for the path (equal axis scales)
+        if diverged_n:
+            R = 1.5 * np.abs(w_opt).max() + 0.5
+        else:
+            R = max(1.15 * np.abs(traj - w_opt).max(), 0.5)
+        w1r = np.linspace(w_opt[0] - R, w_opt[0] + R, 80)
+        w2r = np.linspace(w_opt[1] - R, w_opt[1] + R, 80)
+        G1, G2 = np.meshgrid(w1r, w2r)
+        P = G1[..., None] * X_n[:, 0] + G2[..., None] * X_n[:, 1]
+        ZZ2 = np.mean((P - y_c)**2, axis=-1)
 
         with col2:
             fig = go.Figure()
-            fig.add_trace(go.Contour(z=ZZ2, x=w1r, y=w2r,
-                colorscale='RdPu', opacity=0.7,
+            fig.add_trace(go.Contour(z=np.log10(ZZ2), x=w1r, y=w2r,
+                colorscale='RdPu', opacity=0.7, ncontours=25,
                 contours=dict(showlabels=False),
-                colorbar=dict(title='MSE', thickness=10)))
+                colorbar=dict(title='log₁₀ MSE', thickness=10)))
             fig.add_trace(go.Scatter(x=traj[:,0], y=traj[:,1],
                 mode='lines+markers', name='GD path',
                 line=dict(color='#EF9F27', width=2),
@@ -2163,15 +2179,50 @@ elif section == "normalization":
             fig.add_trace(go.Scatter(x=[traj[0,0]], y=[traj[0,1]],
                 mode='markers', marker=dict(color='#E24B4A', size=12, symbol='circle'),
                 name='Start'))
-            fig.add_trace(go.Scatter(x=[traj[-1,0]], y=[traj[-1,1]],
-                mode='markers', marker=dict(color='#1D9E75', size=12, symbol='star'),
-                name='End'))
+            if not diverged_n:
+                fig.add_trace(go.Scatter(x=[traj[-1,0]], y=[traj[-1,1]],
+                    mode='markers', marker=dict(color='#1D9E75', size=12, symbol='star'),
+                    name='End'))
+            fig.add_trace(go.Scatter(x=[w_opt[0]], y=[w_opt[1]],
+                mode='markers', marker=dict(color='black', size=12, symbol='x'),
+                name='Minimum'))
             fig.update_layout(xaxis_title='w₁', yaxis_title='w₂',
-                height=380, legend=dict(orientation='h', y=1.12))
+                xaxis=dict(range=[w1r[0], w1r[-1]]),
+                yaxis=dict(range=[w2r[0], w2r[-1]], scaleanchor='x', scaleratio=1),
+                height=420, legend=dict(orientation='h', y=1.12))
             st.plotly_chart(fig, width='stretch')
 
-        st.markdown("**Without normalization:** elongated elliptical contours → slow, zigzagging descent.  \n"
-                    "**With normalization:** rounder contours → faster, straighter path to minimum.")
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Final MSE (best possible)", "diverged" if diverged_n else f"{final_mse:.3f}",
+                  delta=None if diverged_n else f"best {best_mse:.3f}", delta_color="off")
+        m2.metric("Largest stable learning rate", f"{lr_stable:.3g}",
+                  help="2 ÷ largest curvature of the loss surface. Above this, gradient descent explodes.")
+        m3.metric("Contour stretch", f"{stretch:.1f}×",
+                  help="Ratio of steepest to flattest curvature. 1× = perfectly round contours.")
+
+        if diverged_n:
+            st.error(f"**Diverged:** learning rate {lr_norm} is above the stable limit {lr_stable:.3g}. The steep "
+                     "direction overshoots further on every step. Lower the learning rate, or normalize the features "
+                     "so the limit rises.")
+        elif final_mse < best_mse * 1.05:
+            st.success(f"Reached the minimum (MSE {final_mse:.3f}, within 5% of the best {best_mse:.3f}) "
+                       f"in {steps_norm} steps.")
+        else:
+            st.info(f"Not there yet after {steps_norm} steps: MSE {final_mse:.3f} vs best {best_mse:.3f}. "
+                    + ("The contours are stretched, so a learning rate that is safe for the steep direction "
+                       "crawls along the flat one." if stretch > 5 else
+                       "The contours are round, so this learning rate is just too small - try a larger one or "
+                       "more steps." + (" Min-Max squeezes features into [0, 1], so it needs a bigger learning "
+                       "rate than z-score." if scaling.startswith("Min-Max") else "")))
+
+        st.markdown("**Without normalization:** stretched contours. The learning rate must stay below a tiny limit "
+                    "set by the large-scale feature, so progress along the other direction is slow - and anything "
+                    "above the limit diverges.  \n"
+                    "**With normalization:** round contours, a much higher stable learning rate, and a straight path "
+                    "to the minimum. The weights change meaning (they now multiply scaled features), so the minimum "
+                    "moves - the plot is centred on it.")
+        st.caption("The data is centred internally, which is the same as fitting a bias term that is always at its "
+                   "best value. That keeps the picture 2-D and treats Min-Max fairly.")
 
     with tab2:
         st.markdown("### Batch Norm vs Layer Norm - where they normalise")
@@ -2200,15 +2251,24 @@ elif section == "normalization":
         with col2:
             import pandas as pd
             fig_bn = make_subplots(rows=1, cols=3,
-                subplot_titles=["Raw input", "After Batch Norm", "After Layer Norm"])
+                subplot_titles=["Raw input<br>(one box per feature)", "After Batch Norm<br>(one box per feature)",
+                                "After Layer Norm<br>(one box per sample)"])
             for r, (data, label) in enumerate([(X_bn, "Raw"), (bn_out, "BatchNorm"), (ln_out, "LayerNorm")]):
-                for f in range(min(n_features, 8)):
-                    fig_bn.add_trace(go.Box(y=data[:,f], name=f"F{f+1}",
-                        showlegend=False, marker_color='#534AB7',
-                        opacity=0.7), row=1, col=r+1)
+                if label == "LayerNorm":                    # Layer Norm works per sample (row)
+                    for i in range(min(batch_size, 12)):
+                        fig_bn.add_trace(go.Box(y=data[i, :], name=f"S{i+1}",
+                            showlegend=False, marker_color='#1D9E75',
+                            opacity=0.7), row=1, col=r+1)
+                else:                                       # per feature (column)
+                    for f in range(min(n_features, 8)):
+                        fig_bn.add_trace(go.Box(y=data[:,f], name=f"F{f+1}",
+                            showlegend=False, marker_color='#534AB7',
+                            opacity=0.7), row=1, col=r+1)
             fig_bn.update_layout(height=340)
             st.plotly_chart(fig_bn, width='stretch')
-            st.caption("Each box = one feature column. Batch Norm centres each feature; Layer Norm centres each sample.")
+            st.caption("Batch Norm normalises each **feature** across the batch, so each purple box ends up centred at 0 "
+                       "with spread 1. Layer Norm normalises each **sample** across its features, so it is drawn "
+                       "per sample (S1, S2, …): each green box is centred at 0 with spread 1.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # LOGISTIC REGRESSION
