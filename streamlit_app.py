@@ -1,6 +1,9 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
+import html as _html
+import json as _json
+import re as _re
 
 import plotly.graph_objects as go
 import plotly.express as px
@@ -6353,6 +6356,9 @@ elif section == "tool_use":
                                "units": "string - 'celsius' or 'fahrenheit'"},
                 "example_call": '{"location": "Sofia, Bulgaria", "units": "celsius"}',
                 "example_result": '{"temp": 12, "condition": "partly cloudy", "humidity": 65, "wind_kph": 20}',
+                "required": ["location"],
+                "user_msg": "What's the weather in Sofia today?",
+                "final": "It's 12 °C and partly cloudy in Sofia, with 65% humidity and a 20 km/h wind.",
             },
             "web_search": {
                 "description": "Search the web and return top results",
@@ -6360,12 +6366,18 @@ elif section == "tool_use":
                                "max_results": "integer - number of results (1-10)"},
                 "example_call": '{"query": "latest transformer architecture research", "max_results": 3}',
                 "example_result": '["FlashAttention-3 reduces memory...", "Mamba SSMs challenge...", "Mixture-of-experts scaling..."]',
+                "required": ["query"],
+                "user_msg": "What's new in transformer architecture research?",
+                "final": "Three recent directions: FlashAttention-3 for faster, leaner attention, Mamba-style state-space models, and mixture-of-experts scaling.",
             },
             "code_interpreter": {
                 "description": "Execute Python code and return output",
                 "parameters": {"code": "string - valid Python code to execute"},
                 "example_call": '{"code": "import numpy as np\\nprint(np.linalg.norm([3, 4]))"}',
                 "example_result": '{"stdout": "5.0\\n", "stderr": "", "exit_code": 0}',
+                "required": ["code"],
+                "user_msg": "What's the length of the vector (3, 4)?",
+                "final": "The vector (3, 4) has length 5 - that's √(3² + 4²).",
             },
             "database_query": {
                 "description": "Run a SQL query on the company database",
@@ -6373,6 +6385,9 @@ elif section == "tool_use":
                                "database": "string - database name"},
                 "example_call": '{"sql": "SELECT AVG(score) FROM users WHERE active=1", "database": "prod"}',
                 "example_result": '{"rows": [{"AVG(score)": 87.3}], "row_count": 1, "elapsed_ms": 42}',
+                "required": ["sql", "database"],
+                "user_msg": "What's the average score of our active users?",
+                "final": "Active users have an average score of 87.3.",
             },
         }
 
@@ -6384,6 +6399,19 @@ elif section == "tool_use":
             st.markdown("**Parameters:**")
             for pname, pdesc in tool_info['parameters'].items():
                 st.markdown(f"- `{pname}`: {pdesc}")
+            _props = {}
+            for pname, pdesc in tool_info['parameters'].items():
+                ptype, _, pexpl = pdesc.partition(" - ")
+                _props[pname] = {"type": ptype, "description": pexpl}
+                if pname == "units":
+                    _props[pname]["enum"] = ["celsius", "fahrenheit"]
+            st.markdown("**What the model actually sees** (JSON Schema tool definition):")
+            st.code(_json.dumps({"name": chosen_tool, "description": tool_info['description'],
+                                 "input_schema": {"type": "object", "properties": _props,
+                                                  "required": tool_info['required']}},
+                                indent=2, ensure_ascii=False), language="json")
+            st.caption("The model reads the name and descriptions to decide when to call the tool, and the schema "
+                       "to know which arguments to send.")
 
         with col2:
             st.markdown("**Example tool call (JSON):**")
@@ -6393,10 +6421,10 @@ elif section == "tool_use":
 
         st.markdown("### Full message flow")
         flow_steps = [
-            ("User message", "What's the weather in Sofia today?", "#f0f0f0", "#333"),
+            ("User message", tool_info["user_msg"], "#f0f0f0", "#333"),
             ("LLM generates tool call", f'<tool_call>\n{{"name": "{chosen_tool}",\n "args": {tool_info["example_call"]}}}\n</tool_call>', "#fff8e1", "#b8860b"),
             ("Tool executes & returns", tool_info["example_result"], "#e8f5e9", "#1b5e20"),
-            ("LLM generates final response", "Based on the tool result, the agent now composes a natural language answer to the user.", "#f3f0ff", "#534AB7"),
+            ("LLM generates final response", tool_info["final"], "#f3f0ff", "#534AB7"),
         ]
         for label, content_f, bg, col_f in flow_steps:
             st.markdown(f"""
@@ -6405,7 +6433,8 @@ elif section == "tool_use":
                 <div style="font-size:0.75rem;font-weight:600;color:{col_f};
                             text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">
                     {label}</div>
-                <code style="font-size:0.85rem;color:{col_f}">{content_f}</code>
+                <pre style="font-size:0.85rem;color:{col_f};background:none;margin:0;
+                            white-space:pre-wrap;font-family:monospace">{_html.escape(content_f)}</pre>
             </div>
             """, unsafe_allow_html=True)
 
@@ -6418,29 +6447,50 @@ elif section == "tool_use":
 
         user_query = st.text_input("User query", "What is the square root of 1764?")
 
-        # simple keyword scoring for demo
-        tool_scores = {}
+        # simple keyword scoring for demo - whole words / phrases only
+        TOOL_KEYWORDS = {
+            "get_weather":      ["weather", "temperature", "rain", "raining", "sunny", "forecast", "cold", "hot",
+                                 "snow", "wind", "humid"],
+            "web_search":       ["search", "find", "latest", "news", "who", "when", "where", "research", "recent",
+                                 "look up"],
+            "code_interpreter": ["calculate", "compute", "code", "run", "python", "math", "sqrt", "square root",
+                                 "sum", "plot", "sort", "algorithm", "multiply", "divide", "times", "percent",
+                                 "factorial", "log", "power"],
+            "database_query":   ["database", "query", "sql", "table", "rows", "records", "average", "count",
+                                 "users", "customers", "orders"],
+        }
         q_lower = user_query.lower()
-        tool_scores["get_weather"]      = sum(w in q_lower for w in ["weather","temperature","rain","sunny","forecast","climate","cold","hot"])
-        tool_scores["web_search"]       = sum(w in q_lower for w in ["search","find","latest","news","who","what","when","where","research","recent"])
-        tool_scores["code_interpreter"] = sum(w in q_lower for w in ["calculate","compute","code","run","python","math","sqrt","sum","plot","sort","algorithm"])
-        tool_scores["database_query"]   = sum(w in q_lower for w in ["database","query","sql","table","rows","records","average","count","users","data"])
+        tool_scores = {k: sum(bool(_re.search(rf"\b{_re.escape(w)}\b", q_lower)) for w in kws)
+                       for k, kws in TOOL_KEYWORDS.items()}
+        matched = {k: [w for w in kws if _re.search(rf"\b{_re.escape(w)}\b", q_lower)]
+                   for k, kws in TOOL_KEYWORDS.items()}
 
-        total = sum(tool_scores.values()) or 1
-        tool_probs = {k: v/total for k,v in tool_scores.items()}
-        best_tool = max(tool_scores, key=tool_scores.get)
+        total = sum(tool_scores.values())
+        tool_probs = {k: (v/total if total else 0.0) for k, v in tool_scores.items()}
+        top = max(tool_scores.values())
+        best_tools = [k for k, v in tool_scores.items() if v == top and top > 0]
 
         fig = go.Figure(go.Bar(
             x=list(tool_scores.keys()),
             y=[tool_probs[k] for k in tool_scores],
-            marker_color=['#534AB7' if k==best_tool else '#AFA9EC' for k in tool_scores],
+            marker_color=['#534AB7' if k in best_tools else '#AFA9EC' for k in tool_scores],
             text=[f"{tool_probs[k]:.0%}" for k in tool_scores],
             textposition='outside'))
-        fig.update_layout(yaxis_title="Relevance score", height=300, showlegend=False,
+        fig.update_layout(yaxis_title="Share of keyword matches", height=300, showlegend=False,
             yaxis_range=[0, 1.2])
         st.plotly_chart(fig, width='stretch')
 
-        st.markdown(f"**Best tool for this query:** `{best_tool}`")
+        if not best_tools:
+            st.info("**No tool needed** - nothing in the query points to a tool, so the model would answer "
+                    "directly from what it knows. Real agents do this often: calling a tool is a choice, not a must.")
+        elif len(best_tools) > 1:
+            st.warning("**Tie:** " + ", ".join(f"`{k}`" for k in best_tools) + " match equally. A real LLM would "
+                       "read the tool descriptions to break the tie - or call more than one.")
+        else:
+            st.markdown(f"**Best tool for this query:** `{best_tools[0]}`")
+        hits = [f"`{k}`: {', '.join(v)}" for k, v in matched.items() if v]
+        if hits:
+            st.caption("Matched words - " + " · ".join(hits))
         st.caption("Real agents use the LLM itself to select tools based on natural language descriptions - "
                    "not keyword matching. This demo uses simple keyword heuristics for illustration.")
 
