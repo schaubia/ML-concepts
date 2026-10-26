@@ -3150,32 +3150,52 @@ elif section == "vanishing_grad":
 
     tab1, tab2 = st.tabs(["Gradient magnitude through layers", "Fixes: initialisation & residuals"])
 
+    @st.cache_data
+    def _vg_backprop(L, gain, act, residual=False, n=64, batch=32, seed=0):
+        """Real backprop through a random deep MLP. Weights ~ N(0, gain²/n).
+        Returns the mean gradient norm at each layer, ordered from output to input."""
+        rng = np.random.default_rng(seed)
+        if act == "Sigmoid":
+            f = lambda z: 1/(1+np.exp(-z)); d = lambda z: f(z)*(1-f(z))
+        elif act == "Tanh":
+            f = np.tanh; d = lambda z: 1 - np.tanh(z)**2
+        else:
+            f = lambda z: np.maximum(0, z); d = lambda z: (z > 0).astype(float)
+        h = rng.normal(size=(batch, n)); Ws, zs = [], []
+        for _ in range(L):                                   # forward pass
+            W = rng.normal(0, gain/np.sqrt(n), (n, n)); z = h @ W
+            Ws.append(W); zs.append(z)
+            h = h + f(z) if residual else f(z)
+        g = rng.normal(size=(batch, n)); g /= np.linalg.norm(g, axis=1, keepdims=True)   # output gradient, norm 1
+        out = []
+        for l in reversed(range(L)):                         # backward pass
+            g_in = (g * d(zs[l])) @ Ws[l].T
+            g = g + g_in if residual else g_in               # skip connection passes g through unchanged
+            out.append(float(np.linalg.norm(g, axis=1).mean()))
+        return out
+
     with tab1:
         col1, col2 = st.columns([1, 2])
         with col1:
             n_layers_vg = st.slider("Number of layers", 2, 30, 10)
-            weight_scale = st.slider("Average weight magnitude |w|", 0.1, 2.0, 1.0, step=0.05)
+            weight_scale = st.slider("Weight scale (weights ~ N(0, scale²/width))", 0.1, 3.0, 1.0, step=0.05,
+                help="Scale 1 = Xavier-style for a square layer; scale √2 ≈ 1.41 = He initialisation.")
             act_vg = st.selectbox("Activation", ["Sigmoid", "Tanh", "ReLU"], key="vg_act")
             st.markdown("---")
-            if weight_scale < 0.9:
-                st.error("🔴 **Vanishing gradient** - signal dies before reaching early layers")
-            elif weight_scale > 1.1:
-                st.warning("🟡 **Exploding gradient** - signal grows exponentially")
+            layer_grad_mags = _vg_backprop(n_layers_vg, weight_scale, act_vg)
+            ratio_vg = layer_grad_mags[-1]          # output gradient has norm 1
+            if ratio_vg < 1e-2:
+                st.error(f"🔴 **Vanishing gradient** - the first layer gets {ratio_vg:.1e} of the output gradient")
+            elif ratio_vg < 0.1:
+                st.warning(f"🟠 **Shrinking** - the first layer gets {ratio_vg:.2f}× the output gradient")
+            elif ratio_vg > 100:
+                st.error(f"🟡 **Exploding gradient** - the first layer gets {ratio_vg:.1e}× the output gradient")
+            elif ratio_vg > 10:
+                st.warning(f"🟠 **Growing** - the first layer gets {ratio_vg:.1f}× the output gradient")
             else:
-                st.success("🟢 **Stable** - gradient magnitude stays reasonable")
-
-        # Simulate gradient magnitude through layers
-        np.random.seed(42)
-        grad_mags = [1.0]
-        act_deriv_avg = {'Sigmoid': 0.25, 'Tanh': 0.42, 'ReLU': 0.5}
-        d_act = act_deriv_avg[act_vg]
-
-        layer_grad_mags = []
-        g = 1.0
-        for l in range(n_layers_vg):
-            w_sample = np.random.randn(8, 8) * weight_scale
-            g = g * np.mean(np.abs(w_sample)) * d_act
-            layer_grad_mags.append(g)
+                st.success(f"🟢 **Stable** - the first layer gets {ratio_vg:.2f}× the output gradient")
+            st.caption("Try ReLU at scale 1.41 (He) and Tanh at scale 1.0 (Xavier). Sigmoid vanishes at "
+                       "every scale: its slope is at most 0.25.")
 
         layers_axis = list(range(1, n_layers_vg + 1))
 
@@ -3189,19 +3209,21 @@ elif section == "vanishing_grad":
                 annotation_text="vanishing zone")
             fig.add_hline(y=100, line_dash='dash', line_color='#EF9F27',
                 annotation_text="exploding zone")
-            fig.update_layout(xaxis_title="Layer (from output → input)",
-                yaxis_title="Gradient magnitude",
+            fig.update_layout(xaxis_title=f"Layer, counted from the output (layer {n_layers_vg} = closest to input)",
+                yaxis_title="Gradient norm ‖∂L/∂h‖",
                 yaxis_type='log', height=380)
             st.plotly_chart(fig, width='stretch')
+            st.caption("Real backpropagation through a random network (64 neurons per layer, batch of 32). "
+                       "The gradient arriving from the output has norm 1.")
 
-        # Also show on linear scale for small networks
-        st.markdown("### Gradient magnitude table (first 10 layers)")
-        import pandas as pd
+        n_show = min(10, n_layers_vg)
+        st.markdown(f"### Gradient magnitude - the {n_show} layers closest to the input")
+        st.markdown("These are the layers that stop learning when gradients vanish.")
         df_vg = pd.DataFrame({
-            "Layer (from output)": layers_axis[:10],
-            "Gradient magnitude": [f"{g:.2e}" for g in layer_grad_mags[:10]],
+            "Layer (from output)": layers_axis[-n_show:],
+            "Gradient magnitude": [f"{g:.2e}" for g in layer_grad_mags[-n_show:]],
             "Status": ["🔴 Vanished" if g < 1e-3 else "🟡 Exploding" if g > 100 else "🟢 OK"
-                       for g in layer_grad_mags[:10]]
+                       for g in layer_grad_mags[-n_show:]]
         })
         st.dataframe(df_vg, width='stretch', hide_index=True)
 
@@ -3255,13 +3277,8 @@ elif section == "vanishing_grad":
             n_res_layers = st.slider("Network depth", 2, 20, 8, key="res_layers")
             with_residual = st.checkbox("Show with residual connections", value=True)
 
-            w_res = 0.85
-            g_no_res = [1.0]
-            g_with_res = [1.0]
-            for l in range(n_res_layers):
-                g_no_res.append(g_no_res[-1] * w_res * 0.25)  # sigmoid-like
-                g_with_res.append(g_with_res[-1] * (w_res * 0.25 + 1.0) / 2)  # skip helps
-
+            g_no_res = [1.0] + _vg_backprop(n_res_layers, 1.0, "Sigmoid")
+            g_with_res = [1.0] + _vg_backprop(n_res_layers, 1.0, "Sigmoid", residual=True)
             fig3 = go.Figure()
             fig3.add_trace(go.Scatter(y=g_no_res, name='Without residual',
                 line=dict(color='#E24B4A', width=2.5), mode='lines+markers'))
@@ -3269,9 +3286,12 @@ elif section == "vanishing_grad":
                 fig3.add_trace(go.Scatter(y=g_with_res, name='With residual',
                     line=dict(color='#1D9E75', width=2.5), mode='lines+markers'))
             fig3.update_layout(xaxis_title="Layer (from output)",
-                yaxis_title="Gradient magnitude",
+                yaxis_title="Gradient norm (log scale)", yaxis_type='log',
                 height=280, legend=dict(orientation='h', y=1.12))
             st.plotly_chart(fig3, width='stretch')
+            st.caption(f"Real backprop, sigmoid network, scale 1. At the first layer: without residual "
+                       f"{g_no_res[-1]:.1e}, with residual {g_with_res[-1]:.2f}. The skip adds the identity "
+                       "to every layer's Jacobian (∂(F(x)+x)/∂x = ∂F/∂x + I), so the gradient can't shrink to 0.")
 
         st.markdown("""
         **3. Other fixes:**
