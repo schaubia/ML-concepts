@@ -2781,10 +2781,14 @@ elif section == "optimizers":
         def loss_surf(w): return w[0]**2 * 0.2 + w[1]**2 * 5.0
         def grad_surf(w): return np.array([0.4*w[0], 10.0*w[1]])
     elif surface_type == "Ravine (ill-conditioned)":
-        def loss_surf(w): return (w[0] - w[1])**2 * 10 + (w[0] + w[1])**2 * 0.1
-        def grad_surf(w): return np.array([
-            20*(w[0]-w[1]) + 0.2*(w[0]+w[1]),
-            -20*(w[0]-w[1]) + 0.2*(w[0]+w[1])])
+        # narrow valley tilted 20° from the w₁ axis: steep across it (a), almost flat along it (b)
+        _S, _C = np.sin(np.deg2rad(20)), np.cos(np.deg2rad(20))
+        def loss_surf(w):
+            a = w[0]*_S - w[1]*_C; b = w[0]*_C + w[1]*_S
+            return 15*a**2 + 0.1*b**2
+        def grad_surf(w):
+            a = w[0]*_S - w[1]*_C; b = w[0]*_C + w[1]*_S
+            return np.array([30*a*_S + 0.2*b*_C, -30*a*_C + 0.2*b*_S])
     else:  # saddle
         def loss_surf(w): return w[0]**2 - w[1]**2 + 0.1*(w[0]**3)
         def grad_surf(w): return np.array([2*w[0] + 0.3*w[0]**2, -2*w[1]])
@@ -2797,6 +2801,7 @@ elif section == "optimizers":
         losses = []
         v = np.zeros(2); s = np.zeros(2); t = 0
         eps = 1e-8
+        status = None
         for _ in range(steps):
             g = grad_surf(w)
             losses.append(loss_surf(w))
@@ -2815,10 +2820,13 @@ elif section == "optimizers":
                 v_hat = v / (1 - beta1**t)
                 s_hat = s / (1 - beta2**t)
                 w = w - lr_opt * v_hat / (np.sqrt(s_hat) + eps)
-            w = np.clip(w, -6, 6)
             path.append(w.copy())
+            if not np.all(np.isfinite(w)) or np.abs(w).max() > 1e3:
+                status = f"diverged at step {t}"; break
+            if surface_type == "Saddle point" and np.abs(w).max() > 4:
+                status = f"escaped downhill (left the plot) at step {t}"; break   # no minimum to return to
         losses.append(loss_surf(w))
-        return np.array(path), losses
+        return np.array(path), losses, status
 
     trajectories = {name: run_optimizer(name, n_opt_steps) for name in optimizers_sel}
 
@@ -2835,7 +2843,7 @@ elif section == "optimizers":
             colorscale='RdPu', opacity=0.6, showscale=False,
             contours=dict(showlabels=False)), row=1, col=1)
 
-        for name, (path, losses) in trajectories.items():
+        for name, (path, losses, _st) in trajectories.items():
             c = opt_colors[name]
             fig.add_trace(go.Scatter(x=path[:,0], y=path[:,1],
                 mode='lines+markers', name=name,
@@ -2844,14 +2852,37 @@ elif section == "optimizers":
             fig.add_trace(go.Scatter(y=losses, name=name,
                 line=dict(color=c, width=2), showlegend=False), row=1, col=2)
 
-        fig.update_xaxes(title_text="w₁", row=1, col=1)
-        fig.update_yaxes(title_text="w₂", row=1, col=1)
+        fig.update_xaxes(title_text="w₁", range=[-4, 4], row=1, col=1)
+        fig.update_yaxes(title_text="w₂", range=[-4, 4], row=1, col=1)
         fig.update_xaxes(title_text="Step", row=1, col=2)
-        fig.update_yaxes(title_text="Loss", row=1, col=2)
+        fig.update_yaxes(title_text="Loss" + ("" if surface_type == "Saddle point" else " (log scale)"),
+                         type="linear" if surface_type == "Saddle point" else "log", row=1, col=2)
         fig.update_layout(height=420, legend=dict(orientation='h', y=1.12))
         st.plotly_chart(fig, width='stretch')
 
-    st.markdown("**Tip:** try the *Ravine* surface - SGD zigzags badly while Adam cuts straight through.")
+    if trajectories:
+        st.dataframe(pd.DataFrame([{
+            "Optimizer": name,
+            "Steps run": len(losses) - 1,
+            "Final loss": round(float(losses[-1]), 4),
+            "Status": _st or "ran all steps",
+        } for name, (path, losses, _st) in trajectories.items()]), hide_index=True, width='stretch')
+
+    if surface_type == "Ravine (ill-conditioned)":
+        st.markdown("**Tip:** the valley is steep across and almost flat along. At learning rate 0.05, SGD "
+                    "zigzags across it and crawls along it; Momentum builds up speed along the floor. At 0.1, "
+                    "SGD's steps across the valley overshoot more each time and it diverges.")
+    elif surface_type == "Saddle point":
+        st.markdown("**Tip:** this surface has no minimum - it goes downhill forever along w₂. Set **Start w₂ "
+                    "to 0.1** (close to the saddle) and learning rate 0.01: the gradient along w₂ is tiny there, "
+                    "so plain SGD lingers near the saddle, while RMSProp and Momentum escape much sooner.")
+    else:
+        st.markdown("**Tip:** the bowl is 25× steeper along w₂ than along w₁. SGD must use a step small enough "
+                    "for w₂, so it is slow along w₁; Adam and RMSProp rescale each direction separately.")
+    if "RMSProp" in optimizers_sel:
+        st.caption(f"RMSProp has no bias correction, so its running average s starts near 0 and the first step is "
+                   f"about 1/√(1−β₂) = {1/np.sqrt(1-beta2):.1f}× the learning rate - you can see it jump at the "
+                   "start. Adam's bias correction is exactly what removes this jump.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
