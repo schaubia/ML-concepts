@@ -6524,7 +6524,6 @@ elif section == "planning":
                     ("T8", "Review & edit",            ["T7"]),
                     ("T9", "Final report",             ["T8"]),
                 ],
-                "parallel": ["T3","T4","T5"],
             },
             "Build and deploy a feature": {
                 "tasks": [
@@ -6538,7 +6537,6 @@ elif section == "planning":
                     ("T8", "QA testing",         ["T7"]),
                     ("T9", "Deploy to prod",     ["T8"]),
                 ],
-                "parallel": ["T3","T4"],
             },
             "Plan a trip": {
                 "tasks": [
@@ -6551,7 +6549,6 @@ elif section == "planning":
                     ("T7", "Plan itinerary",     ["T5","T6"]),
                     ("T8", "Pack & prepare",     ["T2","T7"]),
                 ],
-                "parallel": ["T2","T3","T4"],
             },
         }
 
@@ -6560,12 +6557,26 @@ elif section == "planning":
             plan_choice = st.selectbox("Task scenario", list(TASK_PLANS.keys()))
             plan = TASK_PLANS[plan_choice]
             tasks = plan["tasks"]
-            parallel = plan["parallel"]
+
+            # ancestors: every task that must finish before this one (directly or indirectly)
+            _deps = {tid: d for tid, _, d in tasks}
+            _anc = {}
+            def ancestors(tid):
+                if tid not in _anc:
+                    _anc[tid] = set()
+                    for d in _deps[tid]:
+                        _anc[tid] |= {d} | ancestors(d)
+                return _anc[tid]
+            ids = [tid for tid, _, _ in tasks]
+            # two tasks can run at the same time if neither one leads to the other
+            concurrent = {a: [b for b in ids if b != a and a not in ancestors(b) and b not in ancestors(a)]
+                          for a in ids}
+            parallel = [tid for tid in ids if concurrent[tid]]
 
             st.markdown("**Task list:**")
             for tid, tname, deps in tasks:
                 dep_str = f" (after {', '.join(deps)})" if deps else " (start)"
-                is_par  = "⚡ parallel" if tid in parallel else ""
+                is_par  = f"⚡ alongside {', '.join(concurrent[tid])}" if concurrent[tid] else ""
                 st.markdown(f"**{tid}** {tname}{dep_str} {is_par}")
 
         with col2:
@@ -6609,22 +6620,49 @@ elif section == "planning":
                     fig.add_shape(type="rect",
                         x0=lvl-0.38, y0=y-0.45, x1=lvl+0.38, y1=y+0.45,
                         fillcolor=fill, line=dict(color=border, width=2))
-                    label = tname if len(tname)<=18 else tname[:16]+"…"
-                    fig.add_annotation(x=lvl, y=y+0.12, text=f"<b>{tid}</b>",
+                    if len(tname) <= 16:
+                        label = tname
+                    else:                                    # wrap onto two lines at the space nearest the middle
+                        spaces = [k for k, ch in enumerate(tname) if ch == " "]
+                        cut = min(spaces, key=lambda k: abs(k - len(tname)/2)) if spaces else len(tname)
+                        label = tname[:cut] + "<br>" + tname[cut+1:]
+                    fig.add_annotation(x=lvl, y=y+0.24, text=f"<b>{tid}</b>",
                         showarrow=False, font=dict(size=10, color=border))
-                    fig.add_annotation(x=lvl, y=y-0.18, text=label,
+                    fig.add_annotation(x=lvl, y=y-0.12, text=label,
                         showarrow=False, font=dict(size=8, color="#444"))
 
-            # draw dependency arrows
+            # draw dependency arrows (dependency → task)
+            y_low = min(p_[1] for p_ in pos.values()) - 0.6
+            y_high = max(p_[1] for p_ in pos.values()) + 0.6
             for tid, tname, deps in tasks:
                 x1, y1 = pos[tid]
                 for dep in deps:
                     x0, y0 = pos[dep]
-                    fig.add_shape(type="line", x0=x0+0.38, y0=y0, x1=x1-0.38, y1=y1,
-                        line=dict(color="#aaa", width=1.2))
+                    xs, xe = x0 + 0.38, x1 - 0.38
+                    span = x1 - x0
+                    if span <= 1:                                # neighbouring levels: straight arrow
+                        fig.add_annotation(x=xe, y=y1, ax=xs, ay=y0,
+                            xref="x", yref="y", axref="x", ayref="y", text="",
+                            showarrow=True, arrowhead=2, arrowwidth=1.3, arrowcolor="#999")
+                    else:                                        # skips levels: curve around the boxes between
+                        sign = -1 if (y0 + y1) / 2 <= 0 else 1
+                        cx, cy = (xs + xe) / 2, (y0 + y1) / 2 + sign * 1.6 * (span - 1)
+                        fig.add_shape(type="path", path=f"M {xs},{y0} Q {cx},{cy} {xe},{y1}",
+                            line=dict(color="#999", width=1.3))
+                        tt = 0.92                                # arrowhead on the last bit of the curve
+                        bx = (1-tt)**2*xs + 2*(1-tt)*tt*cx + tt**2*xe
+                        by = (1-tt)**2*y0 + 2*(1-tt)*tt*cy + tt**2*y1
+                        fig.add_annotation(x=xe, y=y1, ax=bx, ay=by,
+                            xref="x", yref="y", axref="x", ayref="y", text="",
+                            showarrow=True, arrowhead=2, arrowwidth=1.3, arrowcolor="#999")
+                        y_low = min(y_low, (y0 + 2*cy + y1) / 4 - 0.3)
+                        y_high = max(y_high, (y0 + 2*cy + y1) / 4 + 0.3)
+            fig.update_yaxes(range=[y_low, y_high])
 
             st.plotly_chart(fig, width='stretch')
-            st.caption("🟡 Yellow = can run in parallel. Purple = sequential dependency.")
+            st.caption("🟡 Yellow = can run alongside at least one other task (neither depends on the other). "
+                       "Purple = must wait for, or be waited on by, every other task. Arrows point from a "
+                       "dependency to the task that needs it.")
 
         # stats
         n_parallel = len(parallel)
@@ -6633,7 +6671,9 @@ elif section == "planning":
         c1,c2,c3 = st.columns(3)
         c1.metric("Total subtasks", len(tasks))
         c2.metric("Parallelisable", n_parallel)
-        c3.metric("Critical path length", critical)
+        c3.metric("Critical path length", critical,
+                  help="Tasks on the longest chain of dependencies - the number of rounds needed if "
+                       "every parallel group runs at the same time.")
 
     with tab2:
         st.markdown("### Planning strategies compared")
@@ -6655,23 +6695,20 @@ elif section == "planning":
             width='stretch', hide_index=True)
 
         st.markdown("### When does planning fail?")
-        failure_modes = {
-            "Incorrect decomposition": 0.30,
-            "Missing dependencies": 0.20,
-            "Tool call errors": 0.25,
-            "Context window overflow": 0.15,
-            "Infinite loops": 0.10,
-        }
-        fig2 = go.Figure(go.Bar(
-            x=list(failure_modes.values()), y=list(failure_modes.keys()),
-            orientation='h',
-            marker_color=['#E24B4A','#EF9F27','#534AB7','#1D9E75','#D4537E'],
-            text=[f"{v:.0%}" for v in failure_modes.values()],
-            textposition='outside'))
-        fig2.update_layout(xaxis_title="Relative frequency", height=280,
-            xaxis_range=[0, 0.45], showlegend=False)
-        st.plotly_chart(fig2, width='stretch')
-        st.caption("Illustrative distribution - real failure rates depend heavily on model capability and task complexity.")
+        failure_rows = [
+            ("Incorrect decomposition", "The report plan has no 'search for sources' step, so the agent writes from memory",
+             "Ask the model to check the plan against the goal before starting"),
+            ("Missing dependency", "'Book hotel' runs before the dates are fixed by 'Book flights'",
+             "Make each subtask list what it needs as input"),
+            ("Stale plan", "A flight is sold out, but the agent keeps following the original plan",
+             "Re-plan after each observation that contradicts the plan"),
+            ("Infinite loop", "The agent repeats the same search because the result never looks good enough",
+             "Cap the number of steps and detect repeated actions"),
+            ("Context overflow", "Long tool outputs push the original goal out of the context window",
+             "Summarise results and keep the goal and plan pinned at the top"),
+        ]
+        st.dataframe(pd.DataFrame(failure_rows, columns=["Failure mode", "Example", "How to prevent it"]),
+                     width='stretch', hide_index=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
