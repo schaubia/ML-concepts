@@ -8272,7 +8272,11 @@ elif section == "rnn":
         repeatedly. If the weights are small, gradients vanish; if large, they explode.
         This makes vanilla RNNs forget events from more than ~10 steps ago.
         """)
-        st.markdown('<div class="formula-box">∂Loss/∂h₁ = ∂Loss/∂hₜ · (Wₕ)^(t−1)  →  0 as t grows</div>', unsafe_allow_html=True)
+        st.markdown('<div class="formula-box">∂Loss/∂h₁ = ∂Loss/∂hₜ · ∏ₖ diag(1 − hₖ²) · Wₕ'
+                    '<br><small>one factor per timestep: the tanh derivative times the recurrent weights</small></div>',
+                    unsafe_allow_html=True)
+        st.markdown("Multiply t−1 of these factors together: if they are typically **below 1** the gradient shrinks "
+                    "towards 0 (vanishing); if **above 1** it blows up (exploding).")
 
         st.markdown("---")
         st.markdown("### LSTM - Long Short-Term Memory")
@@ -8295,6 +8299,8 @@ elif section == "rnn":
                 'cₜ = fₜ ⊙ cₜ₋₁ + iₜ ⊙ c̃ₜ   <small>update cell state</small><br>'
                 'hₜ = oₜ ⊙ tanh(cₜ)            <small>new hidden state</small>'
                 '</div>', unsafe_allow_html=True)
+            st.caption("These are the modern LSTM equations. The original 1997 LSTM had no forget gate - it was "
+                       "added by Gers, Schmidhuber & Cummins in 2000.")
 
         with col2:
             st.markdown("**Interactive gate demo - what each gate does:**")
@@ -8339,7 +8345,7 @@ elif section == "rnn":
             st.markdown("""
             - **Update gate zₜ** - blend of old and new (replaces forget + input)
             - **Reset gate rₜ** - how much past hidden state to expose when computing candidate
-            - **No separate cell state** - simpler, 33% fewer parameters than LSTM
+            - **No separate cell state** - simpler, 25% fewer parameters than LSTM (3 weight blocks instead of 4)
             - **When to choose:** GRU for speed/simplicity; LSTM when you need finer
               control over what to remember long-term
             """)
@@ -8355,10 +8361,10 @@ elif section == "rnn":
         import pandas as pd
         rows = [
             ("Parallelism during training",   "❌ Sequential - step t needs step t−1",   "✅ All tokens processed simultaneously"),
-            ("Parallelism during inference",  "✅ Streaming - one step at a time",        "❌ Needs full context window"),
+            ("Streaming inference",           "✅ Constant compute and memory per step",  "⚠️ Each new token attends to all previous ones - cost and KV-cache memory grow with context"),
             ("Memory (context length)",       "❌ Degrades for sequences > ~100 steps",  "✅ Scales to thousands of tokens"),
             ("Parameter count",               "✅ Compact for small tasks",              "❌ Typically very large"),
-            ("Latency (real-time)",           "✅ Low - constant compute per step",      "❌ Higher - full attention per decode step"),
+            ("Latency (real-time)",           "✅ Low - constant compute per step",      "⚠️ Grows with context length (KV cache avoids recomputing, but each step still reads all past tokens)"),
             ("Long-range dependencies",       "⚠️ LSTMs help but still limited",        "✅ Attention reaches any position directly"),
             ("Time-series (short context)",   "✅ Strong - natural sequential inductive bias", "⚠️ Possible but overkill"),
             ("NLP at scale",                  "❌ Outperformed by Transformers",         "✅ State of the art"),
@@ -8371,11 +8377,11 @@ elif section == "rnn":
         st.markdown("### Architecture family tree")
 
         timeline = [
-            ("1986", "Simple RNN\n(Elman)", "#aaa"),
+            ("1990", "Simple RNN\n(Elman)", "#aaa"),
             ("1997", "LSTM\n(Hochreiter\n& Schmidhuber)", "#534AB7"),
+            ("1997", "Bidirectional\nRNN (Schuster\n& Paliwal)", "#1D9E75"),
             ("2014", "GRU\n(Cho et al.)", "#534AB7"),
-            ("2015", "Bidirectional\nLSTM", "#1D9E75"),
-            ("2017", "Transformer\n(Vaswani et al.)", "#E24B4A"),
+                        ("2017", "Transformer\n(Vaswani et al.)", "#E24B4A"),
             ("2023+", "SSMs / Mamba\n(new RNN revival)", "#EF9F27"),
         ]
 
