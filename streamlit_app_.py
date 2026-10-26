@@ -1,0 +1,10637 @@
+import streamlit as st
+import numpy as np
+import pandas as pd
+
+import plotly.graph_objects as go
+import plotly.express as px
+from plotly.subplots import make_subplots
+
+# Number formatting for formulas shown to the user (shared by several pages)
+def _vin(x):
+    """Input number as a person writes it: 2, 2.3, (−0.7) - no trailing .0, negatives in brackets."""
+    s = f"{round(x, 2):g}".replace("-", "−")
+    return f"({s})" if x < 0 else s
+
+def _vout(x):
+    """Result: up to 3 decimals, trailing zeros dropped (7.000 → 7, 2.236 stays)."""
+    s = f"{x:.3f}".rstrip("0").rstrip(".")
+    return "0" if s in ("-0", "") else s.replace("-", "−")
+
+def _parse_numbers(raw, default):
+    """Parse comma-separated numbers. Returns (array, error message or None); falls back to default on bad input."""
+    try:
+        arr = np.array([float(x.strip()) for x in raw.split(",") if x.strip()])
+    except ValueError:
+        return np.asarray(default, dtype=float), "Please enter valid numbers separated by commas. Showing the default data."
+    if len(arr) == 0:
+        return np.asarray(default, dtype=float), "No numbers entered. Showing the default data."
+    if not np.all(np.isfinite(arr)):
+        return np.asarray(default, dtype=float), ("'nan' and 'inf' are not real data values - please enter ordinary "
+                                                  "numbers. Showing the default data.")
+    return arr, None
+
+
+st.set_page_config(
+    page_title="ML Concepts",
+    page_icon="🧠",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+st.markdown("""
+<style>
+.concept-card {
+    background: #f8f9fa;
+    border-left: 4px solid #534AB7;
+    padding: 1rem 1.2rem;
+    border-radius: 0 8px 8px 0;
+    margin-bottom: 1rem;
+}
+.formula-box {
+    background: #eeedfe;
+    border: 1px solid #afa9ec;
+    border-radius: 8px;
+    padding: 0.6rem 1rem;
+    font-family: monospace;
+    font-size: 1.05rem;
+    text-align: center;
+    margin: 0.5rem 0;
+    color: #3C3489;
+}
+.stTabs [data-baseweb="tab"] { font-size: 15px; }
+</style>
+""", unsafe_allow_html=True)
+
+# ── Catalogue ────────────────────────────────────────────────────────────────
+# (key, name, icon, short description)
+CATALOGUE = [
+    # ── Machine Learning ──
+    ("bias_var",      "Bias-Variance Tradeoff",         "↔️", "Decomposing prediction error into bias and variance"),
+    ("clustering",     "Clustering (K-Means & Hierarchical)", "🧩", "Grouping unlabeled data by similarity - centroids and dendrograms"),
+    ("confusion",     "Confusion Matrix & Metrics",     "🔢", "Precision, recall, F1 and the threshold effect"),
+    ("decision_tree", "Decision Tree",                  "🌳", "Recursive feature splits that form a tree of rules"),
+    ("ensemble_trees","Ensemble Trees (Bagging, RF, Boosting)", "🌲", "Combining many trees to beat any single one of them"),
+    ("gradient",      "Gradient & Descent",             "🏔️", "Direction and step size of learning"),
+    ("knn",           "K-Nearest Neighbors",            "🔵", "Classify by majority vote of closest points"),
+    ("lda_qda",       "LDA & QDA",                       "🔮", "Classifying via class-conditional Gaussians - shared vs. per-class covariance"),
+    ("linear_reg",    "Linear Regression",              "📊", "Finding the best-fit line through data"),
+    ("logistic_reg",  "Logistic Regression",            "🔀", "Binary classification with sigmoid output"),
+    ("loss",          "Loss Function",                  "📉", "How we measure model error"),
+    ("naive_bayes",   "Naive Bayes",                    "📊", "Probabilistic classifier using Bayes theorem"),
+    ("overfit",       "Overfitting / Underfitting",     "⚖️", "Too much or too little training"),
+    ("pca",           "PCA",                            "🔍", "Dimensionality reduction via principal components"),
+    ("regularization","Regularization",                 "🔒", "L1 and L2 penalty to prevent overfitting"),
+    ("splines_gam",   "Splines & GAMs",                  "🎢", "Piecewise-smooth curves and additive models beyond straight lines"),
+    ("subset_selection","Subset Selection",              "🎛️", "Best subset and stepwise search for which predictors to keep"),
+    ("svm",           "Support Vector Machines",         "🧱", "Maximum-margin boundaries and the kernel trick for non-linear data"),
+    # ── Deep Learning ──
+    ("activation",    "Activation Functions",           "🎯", "ReLU, Sigmoid, Tanh and their properties"),
+    ("attention",     "Attention Mechanism",            "👁️", "How transformers focus on relevant input tokens"),
+    ("backprop",      "Backpropagation",                "🔄", "How the error propagates backwards"),
+    ("batch_size",    "Batch Size & Gradient Noise",    "🎲", "How batch size affects gradient quality"),
+    ("bayes_theorem",     "Bayes' Theorem",              "🧪", "Conditional probability, priors and posteriors"),
+    ("central_tendency",  "Central Tendency",           "📊", "Mean, median and mode - summarising where data is centred"),
+    ("cnn",           "Convolutional Layer (CNN)",      "🖼️", "Kernel sliding over input to detect local patterns"),
+    ("correlation",       "Correlation & Covariance",    "📈", "How variables move together - Pearson r and the covariance matrix"),
+    ("cross_validation",  "Cross-Validation",            "🗂️", "Splitting data into folds to estimate performance on unseen data"),
+    ("cooks_distance",    "Cook's Distance",            "🎯", "How much one data point alone can drag a regression line around"),
+    ("aic_bic",           "AIC / BIC",                   "🧮", "Scoring models on fit vs. complexity to pick the right one"),
+    ("dispersion",        "Dispersion",                  "📏", "Variance, std dev, IQR - how spread out data is"),
+    ("hypothesis_testing","Hypothesis Testing",          "🧪", "p-values, t-tests and statistical significance"),
+    ("sampling_estimation","Sampling & Estimation",     "🎯", "Standard error, confidence intervals and the Central Limit Theorem"),
+    ("rnn",           "Recurrent Networks",             "🔁", "RNNs, LSTMs and GRUs - memory across time"),
+    ("dropout",       "Dropout",                        "💧", "Randomly zeroing neurons to prevent overfitting"),
+    ("lr_schedule",   "Learning Rate Schedulers",       "📅", "Step decay, cosine annealing and warmup"),
+    ("neural_net",    "Neural Network Architecture",    "🧬", "Layers, parameters and forward pass"),
+    ("neuron",        "Neuron (Perceptron)",             "🔬", "The single computational unit at the core of every network"),
+    ("normalization", "Normalization",                   "📐", "Batch norm, layer norm and feature scaling"),
+    ("optimizers",    "Optimizers",                     "🚀", "SGD, Momentum, RMSProp and Adam compared"),
+    ("vanishing_grad","Vanishing & Exploding Gradients","⚡", "Signal death in deep networks and fixes"),
+    # ── Agentic AI ──
+    ("agent_memory", "Agent Memory Types",        "🧠", "In-context, external (RAG) and parametric memory"),
+    ("multi_agent",  "Multi-Agent Systems",        "🤝", "Orchestrators, workers and message passing"),
+    ("planning",     "Planning & Task Decomposition","🗺️","Breaking goals into subtasks and dependency graphs"),
+    ("rag",          "RAG Pipeline",               "📚", "Retrieval-Augmented Generation - grounding LLMs in external knowledge"),
+    ("reflection",   "Reflection & Self-Critique",  "🪞", "Generate, critique and revise - how agents improve their own output"),
+    ("react_loop",   "ReAct Loop",                 "🔄", "Reason → Act → Observe cycle for tool-using agents"),
+    ("tool_use",     "Tool Use",                   "🔧", "How agents call functions and parse results"),
+    # ── Math Foundations ──
+    ("chain_rule",    "Chain Rule",                     "🔗", "Derivative of composite functions - the engine of backprop"),
+    ("derivative",    "Derivative",                     "📐", "Instantaneous rate of change and the tangent line"),
+    ("dot_product",   "Dot Product",                    "·",  "Multiply two vectors into a scalar - similarity and projection"),
+    ("embeddings",    "Embeddings",                     "🗺️", "Word2Vec, GloVe and contextual vectors - meaning as geometry"),
+    ("eigenvalues",   "Eigenvalues & Eigenvectors",     "λ",  "Directions a matrix stretches without rotating"),
+    ("integral",      "Integral",                       "∫",  "Area under a curve and accumulation"),
+    ("matrix_ops",    "Matrix Operations",              "🔲", "Addition, multiplication, determinant, transpose and norms"),
+    ("partial_deriv", "Partial Derivatives",            "∂",  "Rate of change along one dimension of a multivariable function"),
+    ("probability",   "Probability Distributions",      "🎲", "Normal, Binomial, Poisson and their shapes"),
+    ("svd",           "SVD - Matrix Decomposition",     "✂️", "Singular values, low-rank approximation and compression"),
+    ("vectors",       "Vectors",                        "➡️", "Direction and magnitude - the language of ML data"),
+    ("vector_spaces",  "Vector Spaces",                  "🧭", "Basis, span, projection and orthogonality"),
+    ("vector_norms",  "Vector Norms",                   "‖·‖", "L1, L2 and Lp norms - measuring size and distance"),
+]
+
+ML_KEYS     = {"bias_var","confusion","clustering","decision_tree","ensemble_trees","gradient","knn","lda_qda","linear_reg","logistic_reg",
+               "loss","overfit","pca","regularization","splines_gam","subset_selection","svm"}
+DL_KEYS     = {"activation","attention","backprop","batch_size","cnn","dropout","lr_schedule",
+               "neural_net","neuron","normalization","optimizers","rnn","vanishing_grad"}
+MATH_KEYS   = {"chain_rule","derivative","dot_product","eigenvalues","embeddings","integral","matrix_ops",
+               "partial_deriv","svd","vectors","vector_norms","vector_spaces"}
+AGENT_KEYS  = {"react_loop","tool_use","planning","agent_memory","multi_agent","rag","reflection"}
+STAT_KEYS   = {"central_tendency","dispersion","probability","naive_bayes","bayes_theorem","correlation","hypothesis_testing","sampling_estimation","cooks_distance","aic_bic","cross_validation"}
+# alphabetical within each group
+ALPHA_ML   = sorted([c for c in CATALOGUE if c[0] in ML_KEYS],   key=lambda x: x[1].lower())
+ALPHA_DL   = sorted([c for c in CATALOGUE if c[0] in DL_KEYS],   key=lambda x: x[1].lower())
+ALPHA_MATH = sorted([c for c in CATALOGUE if c[0] in MATH_KEYS], key=lambda x: x[1].lower())
+ALPHA_AGENT = sorted([c for c in CATALOGUE if c[0] in AGENT_KEYS], key=lambda x: x[1].lower())
+ALPHA_STAT  = sorted([c for c in CATALOGUE if c[0] in STAT_KEYS],  key=lambda x: x[1].lower())
+
+# ── State ────────────────────────────────────────────────────────────────────
+if "section" not in st.session_state:
+    st.session_state["section"] = "home"
+
+def go_to(key):
+    st.session_state["section"] = key
+
+# ── Sidebar - alphabetical index ─────────────────────────────────────────────
+with st.sidebar:
+    st.title("🧠 ML Concepts")
+    st.caption("Interactive reference guide")
+    st.divider()
+
+    if st.button("🏠  Home", width='stretch'):
+        go_to("home")
+
+    st.markdown("**Math Foundations**")
+    for key, name, icon, _ in ALPHA_MATH:
+        if st.button(name, key=f"sb_{key}", width='stretch'):
+            go_to(key)
+    st.markdown("**Statistics & Data Science**")
+    for key, name, icon, _ in ALPHA_STAT:
+        if st.button(name, key=f"sb_{key}", width='stretch'):
+            go_to(key)
+    st.markdown("**Machine Learning**")
+    for key, name, icon, _ in ALPHA_ML:
+        if st.button(name, key=f"sb_{key}", width='stretch'):
+            go_to(key)
+    st.markdown("**Deep Learning**")
+    for key, name, icon, _ in ALPHA_DL:
+        if st.button(name, key=f"sb_{key}", width='stretch'):
+            go_to(key)
+    st.markdown("**Agentic AI**")
+    for key, name, icon, _ in ALPHA_AGENT:
+        if st.button(name, key=f"sb_{key}", width='stretch'):
+            go_to(key)
+
+    st.divider()
+    st.caption("Runs fully offline - no internet needed")
+
+section = st.session_state["section"]
+
+# ═══════════════════════════════════════════════════════════════════════════
+# HOME - clickable cards
+# ═══════════════════════════════════════════════════════════════════════════
+if section == "home":
+    st.title("Interactive Machine Learning Reference")
+    st.markdown("Pick a concept from the cards below or from the A–Z index on the left.")
+    st.divider()
+
+    def render_cards(items):
+        cols = st.columns(3)
+        for i, (key, name, icon, desc) in enumerate(items):
+            with cols[i % 3]:
+                st.markdown(f"""
+                <div style="border:0.5px solid #d3d1c7;border-radius:12px;
+                            padding:1.2rem;margin-bottom:0.4rem;min-height:100px">
+                    <div style="font-size:2rem">{icon}</div>
+                    <div style="font-weight:500;margin:6px 0 4px">{name}</div>
+                    <div style="font-size:0.85rem;color:#5F5E5A">{desc}</div>
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button("Open →", key=f"card_{key}", width='stretch'):
+                    go_to(key)
+                    st.rerun()
+
+    st.markdown("### 📐 Math Foundations")
+    render_cards(ALPHA_MATH)
+    st.markdown("### 📊 Statistics & Data Science")
+    render_cards(ALPHA_STAT)
+    st.markdown("### 🤖 Machine Learning")
+    render_cards(ALPHA_ML)
+    st.markdown("### 🧠 Deep Learning")
+    render_cards(ALPHA_DL)
+    st.markdown("### 🤝 Agentic AI")
+    render_cards(ALPHA_AGENT)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# LOSS FUNCTION
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "loss":
+    st.title("📉 Loss Function")
+    st.markdown("""
+    <div class="concept-card">
+    A <b>loss function</b> measures how wrong the model is. It takes the prediction and
+    the true value and returns a single number - <em>how badly we are doing</em>.
+    The goal of training is to minimise this value.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["MSE - Mean Squared Error", "MAE - Mean Absolute Error", "Binary Cross-Entropy"])
+
+    with tab1:
+        st.markdown('<div class="formula-box">MSE = (1/n) · Σ (y_true − y_pred)²</div>', unsafe_allow_html=True)
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.markdown("**Parameters**")
+            n_pts = st.slider("Number of points", 5, 30, 10, key="mse_n")
+            noise = st.slider("Data noise", 0.1, 3.0, 1.0, key="mse_noise")
+            pred_offset = st.slider("Prediction offset", -3.0, 3.0, 1.0, key="mse_off", step=0.1)
+            add_outlier = st.checkbox("Add an outlier", value=False, key="mse_outlier",
+                help="Moves one point 12 units above the line.")
+            np.random.seed(42)
+            x_data = np.linspace(0, 10, n_pts)
+            y_true = 2 * x_data + 1 + np.random.normal(0, noise, n_pts)
+            y_pred = 2 * x_data + 1 + pred_offset
+            mse_clean = np.mean((y_true - y_pred) ** 2)
+            mae_clean = np.mean(np.abs(y_true - y_pred))
+            if add_outlier:
+                y_true = y_true.copy()
+                y_true[n_pts // 2] += 12.0
+            mse_val = np.mean((y_true - y_pred) ** 2)
+            mae_val = np.mean(np.abs(y_true - y_pred))
+            st.metric("MSE", f"{mse_val:.3f}",
+                      delta=f"×{mse_val / mse_clean:.1f} from the outlier" if add_outlier else None, delta_color="off")
+            st.metric("MAE", f"{mae_val:.3f}",
+                      delta=f"×{mae_val / mae_clean:.1f} from the outlier" if add_outlier else None, delta_color="off")
+            if add_outlier:
+                st.warning(f"One bad point multiplied MSE by {mse_val / mse_clean:.1f} but MAE only by "
+                           f"{mae_val / mae_clean:.1f} - squaring makes a single large error dominate the average.")
+            else:
+                st.info("MSE penalises large errors more heavily because of the square. Tick 'Add an outlier' to see it.")
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=x_data, y=y_true, mode='markers',
+                name='True values', marker=dict(color='#534AB7', size=8)))
+            fig.add_trace(go.Scatter(x=x_data, y=y_pred, mode='lines',
+                name='Prediction', line=dict(color='#E24B4A', width=2)))
+            for xi, yt, yp in zip(x_data, y_true, y_pred):
+                fig.add_shape(type='line', x0=xi, x1=xi, y0=yt, y1=yp,
+                    line=dict(color='#EF9F27', width=1.5, dash='dot'))
+            fig.update_layout(title="Data, prediction and errors (orange)",
+                xaxis_title="x", yaxis_title="y", height=380,
+                legend=dict(orientation='h', y=1.1))
+            st.plotly_chart(fig, width='stretch')
+
+    with tab2:
+        st.markdown('<div class="formula-box">MAE = (1/n) · Σ |y_true − y_pred|</div>', unsafe_allow_html=True)
+        st.markdown("MAE vs MSE for different error magnitudes:")
+        errors = np.linspace(0, 4, 200)
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=errors, y=errors**2, name='MSE contribution (e²)',
+            line=dict(color='#534AB7', width=2.5)))
+        fig.add_trace(go.Scatter(x=errors, y=errors, name='MAE contribution (|e|)',
+            line=dict(color='#1D9E75', width=2.5)))
+        fig.add_trace(go.Scatter(x=[1], y=[1], mode='markers', name='Cross at |e| = 1',
+            marker=dict(color='#EF9F27', size=12, symbol='circle')))
+        fig.update_layout(xaxis_title="Error e", yaxis_title="Contribution to loss",
+            height=360, legend=dict(orientation='h', y=1.1))
+        st.plotly_chart(fig, width='stretch')
+        st.markdown("""
+        - **MSE** grows quadratically → strongly penalises outliers
+        - **MAE** grows linearly → more robust to outliers
+        - The curves cross at **|e| = 1**: below it, squaring makes errors *smaller* (0.5² = 0.25), so MSE
+          penalises small errors **less** than MAE - and large errors far more
+        - **Which single value does each loss prefer?** If a model predicts one constant for everything,
+          MSE is minimised by the **mean** of the data and MAE by the **median** - which is exactly why MAE
+          is robust: the median ignores how far away outliers are. (See **Central Tendency**.)
+        """)
+
+    with tab3:
+        st.markdown('<div class="formula-box">BCE = −[y·log(p) + (1−y)·log(1−p)]</div>', unsafe_allow_html=True)
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            true_label = st.radio("True class (y)", [1, 0], key="bce_y")
+            pred_prob = st.slider("Predicted probability (p)", 0.01, 0.99, 0.7, step=0.01, key="bce_p")
+            bce = -(true_label * np.log(pred_prob) + (1 - true_label) * np.log(1 - pred_prob))
+            st.metric("BCE Loss (this example)", f"{bce:.4f}")
+            st.caption("This is the loss for one example. In training, BCE is averaged over all examples - "
+                       "(1/n)·Σ - just like MSE and MAE.")
+            if bce < 0.3:
+                st.success("Very good prediction!")
+            elif bce < 1.0:
+                st.warning("Moderate error")
+            else:
+                st.error("Large error!")
+        with col2:
+            probs = np.linspace(0.01, 0.99, 300)
+            loss_y1 = -np.log(probs)
+            loss_y0 = -np.log(1 - probs)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=probs, y=loss_y1, name='y=1 (want p→1)',
+                line=dict(color='#534AB7', width=2.5)))
+            fig.add_trace(go.Scatter(x=probs, y=loss_y0, name='y=0 (want p→0)',
+                line=dict(color='#D85A30', width=2.5)))
+            fig.add_vline(x=pred_prob, line_dash='dash', line_color='#EF9F27',
+                annotation_text=f"p={pred_prob:.2f}")
+            fig.update_layout(xaxis_title="Predicted probability",
+                yaxis_title="Loss", yaxis_range=[0, 5], height=360,
+                legend=dict(orientation='h', y=1.1))
+            st.plotly_chart(fig, width='stretch')
+
+# ═══════════════════════════════════════════════════════════════════════════
+# GRADIENT DESCENT
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "gradient":
+    st.title("🏔️ Gradient & Gradient Descent")
+    st.markdown("""
+    <div class="concept-card">
+    The <b>gradient</b> is a vector that points in the direction of steepest increase of the function.
+    To minimise the loss we walk in the <em>opposite</em> direction - that is <b>gradient descent</b>.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["1D simulation", "2D loss surface"])
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.markdown("**Settings**")
+            lr = st.select_slider("Learning rate", [0.01, 0.05, 0.1, 0.3, 0.5, 0.8, 1.0, 1.5], value=0.1)
+            start_x = st.slider("Starting point x₀", -4.0, 4.0, 3.0, step=0.1)
+            n_steps = st.slider("Number of steps", 5, 60, 25)
+            loss_type = st.selectbox("Loss shape", ["Parabola x²", "Asymmetric", "With local minimum"])
+
+        def get_loss_and_grad(loss_type):
+            if loss_type == "Parabola x²":
+                return lambda x: x**2, lambda x: 2*x
+            elif loss_type == "Asymmetric":
+                # gentle bowl on the right (0.5x²), steep on the left (2x²) - bounded below, minimum at 0
+                return (lambda x: np.where(x >= 0, 0.5*x**2, 2*x**2),
+                        lambda x: np.where(x >= 0, x, 4*x))
+            else:
+                return (lambda x: x**2 + 2*np.sin(2*x),
+                        lambda x: 2*x + 4*np.cos(2*x))
+
+        loss_fn, grad_fn = get_loss_and_grad(loss_type)
+
+        xs_hist = [start_x]
+        conv_step, diverged = None, False
+        for k in range(n_steps):
+            g = float(grad_fn(xs_hist[-1]))
+            if abs(g) < 1e-3:                     # gradient ~ 0 → converged
+                conv_step = k
+                break
+            xs_hist.append(xs_hist[-1] - lr * g)
+            if abs(xs_hist[-1]) > 50:             # running away - stop before the plot explodes
+                diverged = True
+                break
+        if conv_step is None and not diverged and abs(float(grad_fn(xs_hist[-1]))) < 1e-3:
+            conv_step = len(xs_hist) - 1
+
+        with col2:
+            x_range = np.linspace(-5, 5, 400)
+            y_range = np.array([loss_fn(xi) for xi in x_range])
+            ys_hist = [loss_fn(xi) for xi in xs_hist]
+
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=x_range, y=y_range, name='Loss curve',
+                line=dict(color='#AFA9EC', width=2.5)))
+            fig.add_trace(go.Scatter(
+                x=xs_hist, y=ys_hist, mode='markers+lines',
+                name='Gradient descent steps',
+                marker=dict(color=list(range(len(xs_hist))), colorscale='RdYlGn_r',
+                    size=9, showscale=True, colorbar=dict(title='Step', thickness=12)),
+                line=dict(color='rgba(239,159,39,0.4)', width=1.5, dash='dot')
+            ))
+            fig.add_scatter(x=[xs_hist[0]], y=[ys_hist[0]], mode='markers',
+                marker=dict(color='#E24B4A', size=14, symbol='circle'),
+                name='Start', showlegend=True)
+            fig.add_scatter(x=[xs_hist[-1]], y=[ys_hist[-1]], mode='markers',
+                marker=dict(color='#1D9E75', size=14, symbol='star'),
+                name='End', showlegend=True)
+            y_lo, y_hi = float(y_range.min()), float(y_range.max())
+            fig.update_layout(xaxis_title="x (parameter)", yaxis_title="Loss",
+                xaxis=dict(range=[-5.2, 5.2]),
+                yaxis=dict(range=[y_lo - 0.05*(y_hi-y_lo), y_hi + 0.05*(y_hi-y_lo)]),
+                height=400, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, width='stretch')
+
+        steps_run = len(xs_hist) - 1
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Starting x", f"{xs_hist[0]:.3f}")
+        c2.metric("Final x", "diverged" if diverged else f"{xs_hist[-1]:.3f}")
+        c3.metric("Steps to converge", f"{conv_step}" if conv_step is not None else f"not converged in {steps_run}",
+                  help="Steps until the gradient is below 0.001.")
+
+        # Describe what the run actually did, from its path
+        deltas = np.diff(xs_hist)
+        flips = int(np.sum(np.sign(deltas[1:]) != np.sign(deltas[:-1]))) if len(deltas) > 1 else 0
+        g_first, g_last = abs(float(grad_fn(xs_hist[0]))), abs(float(grad_fn(xs_hist[-1])))
+        if diverged:
+            st.error(f"Diverged: learning rate {lr} is too large - each step overshoots further than the last, "
+                     "so x runs away (stopped once |x| > 50).")
+        elif conv_step is not None:
+            if flips >= max(3, conv_step // 2):
+                st.success(f"Converged in {conv_step} steps, but by zig-zagging across the minimum - "
+                           "the learning rate is near the upper limit for this curve.")
+            elif conv_step > 0.8 * n_steps:
+                st.info(f"Converged, but slowly ({conv_step} steps) - a larger learning rate would get there faster.")
+            else:
+                st.success(f"Converged smoothly in {conv_step} step{'s' if conv_step != 1 else ''}.")
+        elif flips >= max(3, steps_run // 2) and g_last > 0.8 * g_first:
+            st.warning("Stuck bouncing: each step overshoots by about as much as the last, so x jumps back and "
+                       "forth across the minimum without getting closer. Lower the learning rate.")
+        elif flips >= max(3, steps_run // 2):
+            st.warning(f"Oscillating: x zig-zags across the minimum and hasn't settled within {steps_run} steps. "
+                       "A smaller learning rate would descend more smoothly.")
+        else:
+            st.info(f"Still descending: not converged within {steps_run} steps - the learning rate is small "
+                    "(or add more steps).")
+
+        if loss_type == "With local minimum" and not diverged:
+            x_glob = float(x_range[np.argmin(y_range)])
+            if conv_step is not None and abs(xs_hist[-1] - x_glob) > 0.3:
+                st.warning(f"Stuck in a **local** minimum at x ≈ {xs_hist[-1]:.2f}. The global minimum is at "
+                           f"x ≈ {x_glob:.2f} - gradient descent only sees the local slope, so where it ends up "
+                           "depends on where it starts.")
+
+    with tab2:
+        st.markdown("Loss surface with two parameters (w₁, w₂):")
+        w1 = np.linspace(-3, 3, 80)
+        w2 = np.linspace(-3, 3, 80)
+        W1, W2 = np.meshgrid(w1, w2)
+        Z = W1**2 + 2*W2**2 + 0.5*np.sin(3*W1)*W2
+
+        fig = go.Figure(data=[go.Surface(z=Z, x=W1, y=W2,
+            colorscale='RdPu', opacity=0.85,
+            contours=dict(z=dict(show=True, usecolormap=True, project_z=True)))])
+        fig.update_layout(scene=dict(
+            xaxis_title='w₁', yaxis_title='w₂', zaxis_title='Loss',
+            camera=dict(eye=dict(x=1.8, y=1.8, z=1.2))),
+            height=480, margin=dict(l=0, r=0, b=0, t=20))
+        st.plotly_chart(fig, width='stretch')
+        st.caption("Drag to rotate. The goal is to find the valley - the minimum loss.")
+
+        st.markdown("### Gradient descent on this surface")
+        def grad2(w):
+            return np.array([2*w[0] + 1.5*np.cos(3*w[0])*w[1],
+                             4*w[1] + 0.5*np.sin(3*w[0])])
+        def loss2(w):
+            return w[0]**2 + 2*w[1]**2 + 0.5*np.sin(3*w[0])*w[1]
+        c2a, c2b = st.columns([1, 2])
+        with c2a:
+            lr2 = st.select_slider("Learning rate", [0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.45, 0.5, 0.55],
+                                   value=0.1, key="gd2_lr")
+            w1_0 = st.slider("Start w₁", -3.0, 3.0, 2.5, step=0.1, key="gd2_w1")
+            w2_0 = st.slider("Start w₂", -3.0, 3.0, 2.0, step=0.1, key="gd2_w2")
+            steps2 = st.slider("Steps", 5, 80, 30, key="gd2_steps")
+        path = [np.array([w1_0, w2_0])]
+        div2 = False
+        for _ in range(steps2):
+            g2 = grad2(path[-1])
+            if np.linalg.norm(g2) < 1e-3:
+                break
+            path.append(path[-1] - lr2 * g2)
+            if np.linalg.norm(path[-1]) > 20:
+                div2 = True
+                break
+        path = np.array(path)
+        with c2b:
+            figc = go.Figure()
+            figc.add_trace(go.Contour(x=w1, y=w2, z=Z, colorscale='RdPu', showscale=False,
+                contours=dict(coloring='lines'), line=dict(width=1), hoverinfo='skip'))
+            figc.add_trace(go.Scatter(x=np.clip(path[:, 0], -3.2, 3.2), y=np.clip(path[:, 1], -3.2, 3.2),
+                mode='lines+markers', name='Descent path',
+                line=dict(color='#EF9F27', width=2), marker=dict(size=6, color='#EF9F27')))
+            figc.add_trace(go.Scatter(x=[w1_0], y=[w2_0], mode='markers', name='Start',
+                marker=dict(color='#E24B4A', size=13)))
+            if not div2:
+                figc.add_trace(go.Scatter(x=[path[-1, 0]], y=[path[-1, 1]], mode='markers', name='End',
+                    marker=dict(color='#1D9E75', size=15, symbol='star')))
+            figc.update_layout(xaxis=dict(title='w₁', range=[-3, 3]),
+                yaxis=dict(title='w₂', range=[-3, 3], scaleanchor='x'),
+                height=420, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(figc, width='stretch')
+        d2 = np.diff(path[:, 1])
+        flips2 = int(np.sum(np.sign(d2[1:]) != np.sign(d2[:-1]))) if len(d2) > 1 else 0
+        if div2:
+            st.error(f"Diverged: learning rate {lr2} is too large for the steep w₂ direction - the path flies off "
+                     "(roughly, anything above 0.5 overshoots in w₂, whose curvature is twice that of w₁).")
+        elif flips2 >= max(3, (len(path) - 1) // 2):
+            st.warning(f"Zig-zag: the valley is about twice as steep in w₂ as in w₁, so a learning rate of {lr2} "
+                       "overshoots back and forth across the narrow direction while creeping along the long one. "
+                       "This is exactly the problem that momentum and Adam were designed to fix.")
+        else:
+            st.success(f"Smooth descent: loss {loss2(path[0]):.2f} → {loss2(path[-1]):.3f} in {len(path)-1} steps.")
+        st.caption("Try learning rate 0.4-0.45 to see the classic zig-zag, and 0.55 to see it diverge.")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# BACKPROPAGATION
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "backprop":
+    st.title("🔄 Backpropagation")
+    st.markdown("""
+    <div class="concept-card">
+    <b>Backpropagation</b> is the algorithm used to compute the gradient of every parameter
+    in the network. It applies the <em>chain rule</em> from calculus to carry the error
+    signal from the output back towards the input.
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("### Manual example - simple network")
+    col1, col2 = st.columns([1, 1])
+
+    with col1:
+        st.markdown("**Inputs**")
+        x_in = st.slider("Input x", 0.1, 3.0, 1.0, step=0.1)
+        w1_bp = st.slider("Weight w₁", -3.0, 3.0, 0.5, step=0.1)
+        w2_bp = st.slider("Weight w₂", -3.0, 3.0, 2.0, step=0.1)
+        y_target = st.slider("Target value y", 0.0, 5.0, 2.0, step=0.1)
+
+        h = x_in * w1_bp
+        sigmoid_h = 1 / (1 + np.exp(-h))
+        output = sigmoid_h * w2_bp
+        loss_bp = 0.5 * (output - y_target) ** 2
+
+        d_loss_out = output - y_target
+        d_out_w2 = sigmoid_h
+        d_out_sig = w2_bp
+        d_sig_h = sigmoid_h * (1 - sigmoid_h)
+        d_h_w1 = x_in
+
+        grad_w2 = d_loss_out * d_out_w2
+        grad_w1 = d_loss_out * d_out_sig * d_sig_h * d_h_w1
+
+        # numerical check: central finite differences
+        def _bp_loss(a, b):
+            return 0.5 * (b / (1 + np.exp(-x_in * a)) - y_target) ** 2
+        eps_bp = 1e-5
+        num_w1 = (_bp_loss(w1_bp + eps_bp, w2_bp) - _bp_loss(w1_bp - eps_bp, w2_bp)) / (2 * eps_bp)
+        num_w2 = (_bp_loss(w1_bp, w2_bp + eps_bp) - _bp_loss(w1_bp, w2_bp - eps_bp)) / (2 * eps_bp)
+
+    with col2:
+        st.markdown("**Forward pass**")
+        st.code(f"""
+x        = {x_in:.2f}
+h        = x · w1 = {h:.4f}
+sigmoid  = {sigmoid_h:.4f}
+output   = sigmoid · w2 = {output:.4f}
+loss     = 0.5·(output - y)² = {loss_bp:.4f}
+""", language="text")
+        st.markdown("**Backward pass (gradients)**")
+        st.code(f"""
+dL/dw2 = (output − y) · sigmoid
+       = ({d_loss_out:.4f}) · {d_out_w2:.4f}
+       = {grad_w2:.4f}
+
+dL/dw1 = (output − y) · w2   · sigmoid'(h) · x
+       = ({d_loss_out:.4f}) · {d_out_sig:.2f} · {d_sig_h:.4f}      · {d_h_w1:.2f}
+       = {grad_w1:.4f}
+""", language="text")
+        st.caption("Read dL/dw₁ right to left as the error flowing backwards: each factor is one local "
+                   "derivative - how much the output changes with the sigmoid (w₂), the sigmoid with h "
+                   "(σ′(h) = σ·(1−σ)), and h with w₁ (x). The chain rule multiplies them.")
+        st.markdown("**Check backprop numerically**")
+        st.code(f"""
+numerical dL/dw1 = [L(w1+ε) − L(w1−ε)] / 2ε = {num_w1:.4f}   (backprop: {grad_w1:.4f})
+numerical dL/dw2 = [L(w2+ε) − L(w2−ε)] / 2ε = {num_w2:.4f}   (backprop: {grad_w2:.4f})
+""", language="text")
+        st.caption("Nudging each weight by a tiny ε and measuring the change in loss gives the same numbers - "
+                   "this 'gradient check' is how backprop implementations are tested.")
+
+    st.markdown("### Training: repeating forward pass → backward pass → update")
+    lr_bp = st.slider("Learning rate", 0.01, 1.0, 0.1, step=0.01)
+    steps = st.slider("Steps", 5, 200, 50, key="bp_steps")
+
+    w1_hist, w2_hist, loss_hist = [w1_bp], [w2_bp], [loss_bp]
+    ww1, ww2 = w1_bp, w2_bp
+    for _ in range(steps):
+        hh = x_in * ww1
+        sh = 1 / (1 + np.exp(-hh))
+        out = sh * ww2
+        dl = out - y_target
+        gw2 = dl * sh
+        gw1 = dl * ww2 * sh * (1 - sh) * x_in
+        ww1 -= lr_bp * gw1
+        ww2 -= lr_bp * gw2
+        w1_hist.append(ww1)
+        w2_hist.append(ww2)
+        # record the loss AFTER the update, so loss_hist[k] matches w1_hist[k] and w2_hist[k]
+        loss_hist.append(0.5 * (ww2 / (1 + np.exp(-x_in * ww1)) - y_target) ** 2)
+
+    fig = make_subplots(rows=1, cols=2, subplot_titles=["Loss during training", "Weight evolution"])
+    fig.add_trace(go.Scatter(y=loss_hist, name='Loss', line=dict(color='#E24B4A', width=2)), row=1, col=1)
+    fig.add_trace(go.Scatter(y=w1_hist, name='w₁', line=dict(color='#534AB7', width=2)), row=1, col=2)
+    fig.add_trace(go.Scatter(y=w2_hist, name='w₂', line=dict(color='#1D9E75', width=2)), row=1, col=2)
+    fig.update_xaxes(title_text="Step")
+    fig.update_layout(height=320, showlegend=True)
+    st.plotly_chart(fig, width='stretch')
+
+# ═══════════════════════════════════════════════════════════════════════════
+# OVERFITTING / UNDERFITTING
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "overfit":
+    st.title("⚖️ Overfitting and Underfitting")
+    st.markdown("""
+    <div class="concept-card">
+    <b>Underfitting</b> - the model is too simple and fails to capture the structure in the data.<br>
+    <b>Overfitting</b> - the model has memorised the training data and performs poorly on new examples.
+    </div>
+    """, unsafe_allow_html=True)
+
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        degree = st.slider("Polynomial degree", 1, 15, 3)
+        noise_of = st.slider("Noise", 0.1, 1.5, 0.5, step=0.1)
+        n_train = st.slider("Training points", 8, 25, 12)
+
+    np.random.seed(7)
+    x_tr = np.sort(np.random.uniform(-3, 3, n_train))
+    y_tr = np.sin(x_tr) + np.random.normal(0, noise_of, n_train)
+    rng_of = np.random.RandomState(1007)              # separate stream: 200 fresh test points
+    x_test = np.sort(rng_of.uniform(-3, 3, 200))
+    y_test = np.sin(x_test) + rng_of.normal(0, noise_of, 200)
+
+    import warnings
+    def _fit_poly(d):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")           # degree ≥ n gives an underdetermined fit - expected here
+            return np.poly1d(np.polyfit(x_tr, y_tr, d))
+    p = _fit_poly(degree)
+    x_line = np.linspace(-3.5, 3.5, 300)
+    y_line = p(x_line)
+    train_mse = np.mean((p(x_tr) - y_tr) ** 2)
+    test_mse = np.mean((p(x_test) - y_test) ** 2)
+
+    with col2:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=x_tr, y=y_tr, mode='markers',
+            name='Training data', marker=dict(color='#534AB7', size=9)))
+        fig.add_trace(go.Scatter(x=x_test[::5], y=y_test[::5], mode='markers',
+            name='Test data (40 of 200 shown)', marker=dict(color='#1D9E75', size=7, symbol='x')))
+        fig.add_trace(go.Scatter(x=x_line, y=np.sin(x_line),
+            name='True function', line=dict(color='#888780', dash='dash', width=1.5)))
+        clip = np.clip(y_line, -4, 4)
+        fig.add_trace(go.Scatter(x=x_line, y=clip,
+            name=f'Polynomial (degree {degree})', line=dict(color='#E24B4A', width=2.5)))
+        fig.update_layout(xaxis_title="x", yaxis_title="y",
+            yaxis_range=[-3, 3], height=380, legend=dict(orientation='h', y=1.12))
+        st.plotly_chart(fig, width='stretch')
+
+    degrees = list(range(1, 16))
+    tr_mses_raw, te_mses_raw = [], []
+    for d in degrees:
+        pp = _fit_poly(d)
+        tr_mses_raw.append(float(np.mean((pp(x_tr) - y_tr) ** 2)))
+        te_mses_raw.append(float(np.mean((pp(x_test) - y_test) ** 2)))
+    best_deg = degrees[int(np.argmin(te_mses_raw))]
+    best_te = min(te_mses_raw)
+
+    def _fmt_mse(v):
+        return f"{v:.4f}" if v < 1000 else f"{v:.3g}"
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Train MSE", _fmt_mse(train_mse))
+    c2.metric("Test MSE", _fmt_mse(test_mse))
+    ratio = test_mse / (train_mse + 1e-9)
+    c3.metric("Test / Train ratio", f"{ratio:.2f}" if ratio < 1000 else f"{ratio:.3g}")
+    c4.metric("Best degree on test data", best_deg)
+
+    if degree > best_deg and test_mse > 1.25 * best_te:
+        st.error(f"**Overfitting** - degree {degree} bends to fit the noise: test MSE {_fmt_mse(test_mse)} versus "
+                 f"{best_te:.4f} at degree {best_deg}. It does better on training data and worse on new data.")
+    elif degree < best_deg and test_mse > 1.25 * best_te:
+        st.warning(f"**Underfitting** - degree {degree} is too simple to capture the sine curve: test MSE "
+                   f"{_fmt_mse(test_mse)} versus {best_te:.4f} at degree {best_deg}.")
+    else:
+        st.success(f"**Good fit** - test MSE {_fmt_mse(test_mse)} is within 25% of the best any degree achieves "
+                   f"on this data ({best_te:.4f} at degree {best_deg}).")
+    if degree >= n_train - 1:
+        st.info(f"Degree {degree} with only {n_train} training points: a polynomial of degree n − 1 can pass "
+                "**exactly through every training point** (train MSE ≈ 0). That's pure memorisation - and "
+                "above degree n − 1 there are more coefficients than points, so the fit isn't even unique.")
+
+    st.markdown("### How MSE depends on model complexity")
+    tr_mses = tr_mses_raw
+    te_mses = [min(v, 20) for v in te_mses_raw]
+
+    fig2 = go.Figure()
+    fig2.add_trace(go.Scatter(x=degrees, y=tr_mses, name='Train MSE',
+        line=dict(color='#534AB7', width=2.5), mode='lines+markers'))
+    fig2.add_trace(go.Scatter(x=degrees, y=te_mses, name='Test MSE',
+        line=dict(color='#E24B4A', width=2.5), mode='lines+markers'))
+    fig2.add_vline(x=degree, line_dash='dash', line_color='#EF9F27',
+        annotation_text=f"Selected degree: {degree}")
+    fig2.update_layout(xaxis_title="Polynomial degree",
+        yaxis_title="MSE", yaxis_range=[0, 5], height=300,
+        legend=dict(orientation='h', y=1.12))
+    st.plotly_chart(fig2, width='stretch')
+    st.caption(f"Train MSE only ever falls as the degree grows; test MSE is U-shaped with its minimum at degree "
+               f"{best_deg} here. Very large test errors are capped at the top of the chart. Fewer training points "
+               "make the right-hand side blow up sooner - try 8 points.")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SPLINES & GAMs
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "splines_gam":
+    st.title("🎢 Splines & GAMs")
+    st.markdown("""
+    <div class="concept-card">
+    Instead of forcing one polynomial to fit the whole range of x (which tends to wobble
+    wildly near the edges), a <b>regression spline</b> stitches together several low-degree
+    polynomial pieces, joined smoothly at points called <b>knots</b>. A <b>Generalized
+    Additive Model (GAM)</b> takes this one step further for multiple features: fit a
+    separate smooth curve for each predictor and simply add them together.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Splines vs. polynomial", "Smoothing splines & a 2-feature GAM"])
+
+    from scipy.interpolate import BSpline, UnivariateSpline
+
+    def _spline_predict_fn(x, y, n_internal_knots, degree=3):
+        knots_internal = (np.quantile(x, np.linspace(0, 1, n_internal_knots + 2)[1:-1])
+                           if n_internal_knots > 0 else np.array([]))
+        knots = np.r_[[x.min()]*(degree+1), knots_internal, [x.max()]*(degree+1)]
+        n_basis = len(knots) - degree - 1
+        def basis_at(xq):
+            B = np.zeros((len(xq), n_basis))
+            for i in range(n_basis):
+                c = np.zeros(n_basis); c[i] = 1
+                B[:, i] = BSpline(knots, c, degree, extrapolate=True)(xq)
+            return B
+        beta, *_ = np.linalg.lstsq(basis_at(x), y, rcond=None)
+        return lambda xq: basis_at(xq) @ beta, knots_internal
+
+    def _natural_spline_predict_fn(x, y, n_internal_knots):
+        """Natural cubic spline regression: cubic between the knots, but forced to have zero curvature at
+        the boundary knots - so it continues as a straight line outside the data. Basis from Hastie,
+        Tibshirani & Friedman, *Elements of Statistical Learning*, eq. 5.4-5.5."""
+        xi = np.quantile(x, np.linspace(0, 1, n_internal_knots + 2))      # boundary + internal knots
+        K = len(xi)
+        def basis_at(xq):
+            def d(k):
+                return (np.maximum(xq - xi[k], 0)**3 - np.maximum(xq - xi[K-1], 0)**3) / (xi[K-1] - xi[k])
+            return np.column_stack([np.ones_like(xq), xq] + [d(k) - d(K-2) for k in range(K-2)])
+        beta, *_ = np.linalg.lstsq(basis_at(x), y, rcond=None)
+        return lambda xq: basis_at(xq) @ beta, xi[1:-1]
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            n_knots = st.slider("Number of internal knots", 0, 8, 3, key="sp_knots")
+            noise_sp = st.slider("Noise", 0.1, 1.0, 0.4, step=0.1, key="sp_noise")
+            n_sp = st.slider("Data points", 20, 80, 40, key="sp_n")
+            show_poly = st.checkbox("Compare with polynomial of similar flexibility", True, key="sp_showpoly")
+            spline_kind = st.radio("Spline type", ["Cubic spline", "Natural spline"], key="sp_kind",
+                help="A natural spline is forced to be a straight line beyond the outermost knots.")
+
+        np.random.seed(7)
+        x_sp = np.sort(np.random.uniform(-3, 3, n_sp))
+        y_sp = x_sp * np.sin(x_sp) * 0.6 + np.random.normal(0, noise_sp, n_sp)
+
+        if spline_kind == "Natural spline":
+            spline_fn, internal_knots = _natural_spline_predict_fn(x_sp, y_sp, n_knots)
+        else:
+            spline_fn, internal_knots = _spline_predict_fn(x_sp, y_sp, n_knots)
+        x_plot = np.linspace(-4, 4, 300)  # extends past the data range on purpose
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=x_sp, y=y_sp, mode='markers',
+                name='Data', marker=dict(color='#534AB7', size=7)))
+            fig.add_vrect(x0=-4, x1=x_sp.min(), fillcolor='rgba(226,75,74,0.06)', line_width=0)
+            fig.add_vrect(x0=x_sp.max(), x1=4, fillcolor='rgba(226,75,74,0.06)', line_width=0)
+            fig.add_trace(go.Scatter(x=x_plot, y=np.clip(spline_fn(x_plot), -8, 8),
+                name=f'{spline_kind} ({n_knots} knots)', line=dict(color='#1D9E75', width=2.5)))
+            if show_poly:
+                poly_degree = n_knots + 3  # roughly matching parameter count
+                c_poly = np.polyfit(x_sp, y_sp, poly_degree)
+                p_poly = np.poly1d(c_poly)
+                fig.add_trace(go.Scatter(x=x_plot, y=np.clip(p_poly(x_plot), -8, 8),
+                    name=f'Polynomial (degree {poly_degree})', line=dict(color='#E24B4A', width=2, dash='dash')))
+            for k in internal_knots:
+                fig.add_vline(x=k, line=dict(color='#888780', dash='dot', width=1))
+            fig.update_layout(xaxis_title="x", yaxis_title="y", yaxis_range=[-6, 6],
+                height=400, legend=dict(orientation='h', y=1.14))
+            st.plotly_chart(fig, width='stretch')
+
+        st.caption("Shaded bands are outside the training data (extrapolation); dotted grey lines mark the knots. "
+                   "**Inside** the data, splines beat the polynomial because each piece only has local influence - "
+                   "no global wobble. **Outside**, an ordinary cubic spline just continues its last cubic piece and "
+                   "can also shoot off (raise knots and noise to see it). A **natural spline** is forced to be a "
+                   "straight line beyond the outermost knots, which is usually far safer - but any prediction "
+                   "outside the data is a guess.")
+
+    with tab2:
+        st.markdown("### Smoothing splines: a knot at every point, controlled by a penalty")
+        st.markdown("""
+        A **smoothing spline** sidesteps choosing knot locations entirely - it places a
+        knot at every data point, then adds a roughness penalty to keep the curve from
+        interpolating the noise:
+        """)
+        st.markdown('<div class="formula-box">minimize  Σᵢ(yᵢ − f(xᵢ))² + λ∫f″(t)² dt</div>',
+            unsafe_allow_html=True)
+        st.markdown("λ controls the tradeoff - λ = 0 interpolates every point exactly; "
+                    "λ → ∞ forces f toward a straight line (the only curves with f″ = 0).")
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            lam_ss = st.select_slider("Penalty λ (higher = smoother)",
+                options=[1e-5, 1e-4, 1e-3, 0.01, 0.1, 1, 10, 100, 1000], value=0.1, key="sp_lam",
+                format_func=lambda v: f"{v:g}")
+
+        from scipy.interpolate import make_smoothing_spline
+        np.random.seed(7)
+        n_ss = 50
+        x_ss = np.sort(np.random.uniform(-3, 3, n_ss))
+        y_ss = np.sin(x_ss) + np.random.normal(0, 0.3, n_ss)
+        spl = make_smoothing_spline(x_ss, y_ss, lam=lam_ss)     # minimises exactly the formula above
+        x_ssplot = np.linspace(-3, 3, 300)
+
+        with col2:
+            fig2 = go.Figure()
+            fig2.add_trace(go.Scatter(x=x_ss, y=y_ss, mode='markers',
+                marker=dict(color='#534AB7', size=6), name='Data'))
+            fig2.add_trace(go.Scatter(x=x_ssplot, y=spl(x_ssplot),
+                line=dict(color='#1D9E75', width=2.5), name=f'Smoothing spline (λ = {lam_ss:g})'))
+            fig2.add_trace(go.Scatter(x=x_ssplot, y=np.sin(x_ssplot), name='True function',
+                line=dict(color='#888780', width=1.5, dash='dash')))
+            fig2.update_layout(height=330, legend=dict(orientation='h', y=1.14))
+            st.plotly_chart(fig2, width='stretch')
+        rmse_train = float(np.sqrt(np.mean((spl(x_ss) - y_ss) ** 2)))
+        rmse_true = float(np.sqrt(np.mean((spl(x_ssplot) - np.sin(x_ssplot)) ** 2)))
+        m1, m2 = st.columns(2)
+        m1.metric("Error on the data points (RMSE)", f"{rmse_train:.3f}")
+        m2.metric("Error vs the true curve (RMSE)", f"{rmse_true:.3f}",
+                  help="How far the fitted curve is from sin(x), the curve the data came from.")
+        if lam_ss <= 1e-4:
+            st.warning("Tiny λ - almost no penalty, so the curve chases individual noisy points: "
+                       "low error on the data, but far from the true curve.")
+        elif lam_ss >= 100:
+            st.info("Huge λ - any bending is so expensive that the curve is essentially a straight line.")
+        else:
+            st.caption("The error on the data always rises with λ; the error against the true curve is lowest "
+                       "somewhere in the middle (around λ = 0.1 here) - the same bias-variance balance again.")
+
+        st.markdown("### A 2-feature GAM, fit by backfitting")
+        st.markdown("""
+        A GAM models **y ≈ f₁(x₁) + f₂(x₂)** - a separate smooth curve per feature, added
+        together. It's fit by **backfitting**: repeatedly fit a spline of one feature to
+        whatever the other feature's curve hasn't already explained, and alternate.
+        """)
+
+        np.random.seed(3)
+        n_gam = 200
+        x1_gam = np.random.uniform(-3, 3, n_gam)
+        x2_gam = np.random.uniform(-3, 3, n_gam)
+        f1_true = np.sin(x1_gam)
+        f2_true = 0.3 * x2_gam ** 2 - 1
+        y_gam = f1_true + f2_true + np.random.normal(0, 0.3, n_gam)
+
+        f1_hat = np.zeros(n_gam)
+        f2_hat = np.zeros(n_gam)
+        for _ in range(10):
+            fn1, _ = _spline_predict_fn(x1_gam, y_gam - f2_hat, n_internal_knots=4)
+            f1_hat = fn1(x1_gam); f1_hat -= f1_hat.mean()
+            fn2, _ = _spline_predict_fn(x2_gam, y_gam - f1_hat, n_internal_knots=4)
+            f2_hat = fn2(x2_gam); f2_hat -= f2_hat.mean()
+
+        order1 = np.argsort(x1_gam)
+        order2 = np.argsort(x2_gam)
+        col1, col2 = st.columns(2)
+        with col1:
+            fig3 = go.Figure()
+            fig3.add_trace(go.Scatter(x=x1_gam[order1], y=f1_hat[order1],
+                name='Estimated f̂₁(x₁)', line=dict(color='#534AB7', width=2.5)))
+            fig3.add_trace(go.Scatter(x=x1_gam[order1], y=f1_true[order1] - f1_true.mean(),
+                name='True f₁(x₁)', line=dict(color='#888780', width=1.5, dash='dot')))
+            fig3.update_layout(xaxis_title="x₁", yaxis_title="Partial effect", height=300,
+                legend=dict(orientation='h', y=1.16))
+            st.plotly_chart(fig3, width='stretch')
+        with col2:
+            fig4 = go.Figure()
+            fig4.add_trace(go.Scatter(x=x2_gam[order2], y=f2_hat[order2],
+                name='Estimated f̂₂(x₂)', line=dict(color='#E24B4A', width=2.5)))
+            fig4.add_trace(go.Scatter(x=x2_gam[order2], y=f2_true[order2] - f2_true.mean(),
+                name='True f₂(x₂)', line=dict(color='#888780', width=1.5, dash='dot')))
+            fig4.update_layout(xaxis_title="x₂", yaxis_title="Partial effect", height=300,
+                legend=dict(orientation='h', y=1.16))
+            st.plotly_chart(fig4, width='stretch')
+        st.caption("Each panel shows the effect of one feature *holding the other fixed* - "
+                   "exactly the interpretability a plain multiple linear regression gives you "
+                   "(one coefficient per feature), except each effect here is allowed to bend.")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SUBSET SELECTION
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "subset_selection":
+    st.title("🎛️ Subset Selection")
+    st.markdown("""
+    <div class="concept-card">
+    Instead of shrinking every coefficient toward zero (what <b>Regularization</b> does),
+    subset selection makes a harder choice: which predictors to <b>include at all</b>.
+    <b>Best subset</b> checks every possible combination; <b>stepwise</b> methods add or
+    remove one predictor at a time as a cheaper approximation.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Best subset vs. forward stepwise", "Choosing the model size"])
+
+    from itertools import combinations
+
+    def _fit_score(X, y, cols):
+        if len(cols) == 0:
+            resid = y - y.mean()
+            return np.sum(resid ** 2)
+        Xc = np.column_stack([X[:, c] for c in cols] + [np.ones(len(y))])
+        beta, *_ = np.linalg.lstsq(Xc, y, rcond=None)
+        resid = y - Xc @ beta
+        return np.sum(resid ** 2)
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            p_total = st.slider("Number of candidate predictors", 3, 8, 6, key="ss_p")
+            n_true = st.slider("Number that actually matter", 1, p_total, 3, key="ss_ntrue")
+            n_obs = st.slider("Training points", 30, 200, 80, key="ss_n")
+            noise_ss = st.slider("Noise", 0.2, 2.0, 0.8, step=0.1, key="ss_noise")
+            decoy = st.checkbox("Decoy predictor trap", value=False, key="ss_decoy",
+                help="y depends on x0 and x1 only; x2 is a noisy copy of their average - the single best "
+                     "predictor on its own, but not part of the true model.")
+
+        def _gen_ss(n, rng):
+            X = rng.randn(n, p_total)
+            if decoy:
+                X[:, 2] = (X[:, 0] + X[:, 1]) / np.sqrt(2) + 0.5 * rng.randn(n)   # the decoy
+            return X
+
+        rng_ss = np.random.RandomState(7)
+        X_ss = _gen_ss(n_obs, rng_ss)
+        true_beta = np.zeros(p_total)
+        if decoy:
+            true_beta[[0, 1]] = 2.0
+            n_true_eff = 2
+        else:
+            true_beta[:n_true] = rng_ss.uniform(1.5, 3.0, n_true)
+            rng_ss.shuffle(true_beta)
+            n_true_eff = n_true
+        y_ss = X_ss @ true_beta + rng_ss.normal(0, noise_ss, n_obs)
+        true_cols = set(np.where(true_beta != 0)[0])
+        # fresh test data from the same process, for tab 2
+        rng_te_ss = np.random.RandomState(99)
+        X_ss_te = _gen_ss(2000, rng_te_ss)
+        y_ss_te = X_ss_te @ true_beta + rng_te_ss.normal(0, noise_ss, 2000)
+
+        # best subset: exhaustively check all sizes up to a practical cap
+        max_size_bs = min(p_total, 8)
+        best_subset_by_size = {}
+        for size in range(0, max_size_bs + 1):
+            best_rss, best_cols = np.inf, ()
+            for cols in combinations(range(p_total), size):
+                rss = _fit_score(X_ss, y_ss, cols)
+                if rss < best_rss:
+                    best_rss, best_cols = rss, cols
+            best_subset_by_size[size] = (best_cols, best_rss)
+
+        # forward stepwise
+        remaining = list(range(p_total))
+        selected = []
+        fwd_by_size = {0: ((), _fit_score(X_ss, y_ss, ()))}
+        for size in range(1, p_total + 1):
+            best_rss, best_add = np.inf, None
+            for cand in remaining:
+                trial = tuple(sorted(selected + [cand]))
+                rss = _fit_score(X_ss, y_ss, trial)
+                if rss < best_rss:
+                    best_rss, best_add = rss, cand
+            selected.append(best_add)
+            remaining.remove(best_add)
+            fwd_by_size[size] = (tuple(sorted(selected)), best_rss)
+
+        with col2:
+            sizes = list(range(0, max_size_bs + 1))
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=sizes, y=[best_subset_by_size[s][1] for s in sizes],
+                name='Best subset', mode='lines+markers', line=dict(color='#534AB7', width=2.5)))
+            fig.add_trace(go.Scatter(x=sizes, y=[fwd_by_size[s][1] for s in sizes],
+                name='Forward stepwise', mode='lines+markers',
+                line=dict(color='#E24B4A', width=2, dash='dash')))
+            fig.update_layout(xaxis_title="Number of predictors in model", yaxis_title="Training RSS",
+                height=380, legend=dict(orientation='h', y=1.14))
+            st.plotly_chart(fig, width='stretch')
+
+        bs_pick = sorted(best_subset_by_size.get(n_true_eff, ((), 0))[0])
+        fw_pick = sorted(fwd_by_size.get(n_true_eff, ((), 0))[0])
+        st.caption(f"True predictors that matter: {sorted(int(c) for c in true_cols)}. "
+                   f"Best subset at that size picked: {[int(c) for c in bs_pick]}. "
+                   f"Forward stepwise at that size picked: {[int(c) for c in fw_pick]}.")
+        if decoy:
+            first_fwd = fwd_by_size[1][0]
+            st.warning(f"**The trap:** on its own, the decoy x2 explains y best, so forward stepwise grabs "
+                       f"{'x2' if 2 in first_fwd else 'x' + str(first_fwd[0])} first. At size 2, best subset finds "
+                       f"{[int(c) for c in bs_pick]} with RSS {best_subset_by_size[2][1]:.1f}, while forward "
+                       f"stepwise is stuck with {[int(c) for c in fw_pick]} (RSS {fwd_by_size[2][1]:.1f}) - it can "
+                       "never drop x2 again. With independent predictors (the default data) this rarely happens.")
+        elif bs_pick != fw_pick:
+            st.warning("Here forward stepwise and best subset disagree at the true size - an early greedy choice "
+                       "couldn't be undone.")
+        st.info("Both curves always go down as you add predictors - training RSS can never "
+                "get worse with more variables. That's exactly why picking model size needs "
+                "something other than training error (see the next tab). Forward stepwise "
+                "can only match best subset when it happens to add the right variables "
+                "early - it never revisits a choice once made.")
+
+    with tab2:
+        st.markdown("""
+        Training RSS always improves with more predictors, so it can't tell you when to
+        stop. The usual fixes (the chart below also shows the **test error on 2,000 fresh points** -
+        the ground truth these methods are trying to estimate):
+        - **AIC / BIC / adjusted R²** - score each size with a complexity penalty (see
+          **AIC / BIC**) and pick the best-scoring size
+        - **Cross-validation** - hold out data and pick the size with the best validation
+          error (see **Cross-Validation**) - the most reliable option, since it needs no
+          assumption about the error distribution
+        """)
+
+        n_boot = min(p_total, 8)
+        sizes2 = list(range(0, n_boot + 1))
+        k_choices = [s + 2 for s in sizes2]  # + intercept + noise variance σ² (same convention as AIC / BIC page)
+        n_fixed = n_obs
+        rss_vals = [best_subset_by_size[s][1] for s in sizes2]
+        aics = [n_fixed * np.log(max(r, 1e-10) / n_fixed) + 2 * k for r, k in zip(rss_vals, k_choices)]
+        bics = [n_fixed * np.log(max(r, 1e-10) / n_fixed) + k * np.log(n_fixed) for r, k in zip(rss_vals, k_choices)]
+
+        fig2 = go.Figure()
+        fig2.add_trace(go.Scatter(x=sizes2, y=aics, name='AIC', mode='lines+markers',
+            line=dict(color='#534AB7', width=2.5)))
+        fig2.add_trace(go.Scatter(x=sizes2, y=bics, name='BIC', mode='lines+markers',
+            line=dict(color='#E24B4A', width=2.5)))
+        best_aic_size = sizes2[int(np.argmin(aics))]
+        best_bic_size = sizes2[int(np.argmin(bics))]
+        # ground truth: refit each best-subset model on the training data, score on fresh test data
+        test_mse_ss = []
+        for s_ in sizes2:
+            cols_ = best_subset_by_size[s_][0]
+            A_tr = np.column_stack([X_ss[:, list(cols_)], np.ones(n_obs)]) if cols_ else np.ones((n_obs, 1))
+            A_te = np.column_stack([X_ss_te[:, list(cols_)], np.ones(2000)]) if cols_ else np.ones((2000, 1))
+            beta_, *_ = np.linalg.lstsq(A_tr, y_ss, rcond=None)
+            test_mse_ss.append(float(np.mean((y_ss_te - A_te @ beta_) ** 2)))
+        best_test_size = sizes2[int(np.argmin(test_mse_ss))]
+        fig2.add_trace(go.Scatter(x=sizes2, y=test_mse_ss, name='Test MSE (right axis)', mode='lines+markers',
+            line=dict(color='#1D9E75', width=2.5, dash='dash'), yaxis='y2'))
+        fig2.add_vline(x=best_aic_size, line=dict(color='#534AB7', dash='dot'))
+        fig2.add_vline(x=best_bic_size, line=dict(color='#E24B4A', dash='dot'))
+        fig2.update_layout(xaxis_title="Number of predictors", yaxis_title="AIC / BIC (lower is better)",
+            yaxis2=dict(title="Test MSE", overlaying='y', side='right', type='log'),
+            height=340, legend=dict(orientation='h', y=1.14))
+        st.plotly_chart(fig2, width='stretch')
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Best size by AIC", best_aic_size)
+        c2.metric("Best size by BIC", best_bic_size)
+        c3.metric("Best size by test error", best_test_size,
+                  help="What actually works best on 2,000 new points - the answer AIC, BIC and CV try to estimate.")
+        st.caption(f"Applied to the best-subset models from the previous tab (true number of useful predictors: "
+                   f"{n_true_eff}). BIC's heavier complexity penalty typically selects a model at least as small as "
+                   f"AIC's - the same tradeoff explored in **AIC / BIC**. Here k counts the coefficients, the intercept "
+                   "and the noise variance σ², as on that page; the extra +1 doesn't change which size wins.")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ACTIVATION FUNCTIONS
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "activation":
+    st.title("🎯 Activation Functions")
+    st.markdown("""
+    <div class="concept-card">
+    Activation functions introduce <b>non-linearity</b> into the neural network.
+    Without them, no matter how many layers we stack, the network could only learn linear transformations.
+    </div>
+    """, unsafe_allow_html=True)
+
+    funcs = {
+        "ReLU": (lambda x: np.maximum(0, x), lambda x: (x > 0).astype(float)),
+        "Sigmoid": (lambda x: 1/(1+np.exp(-np.clip(x,-10,10))),
+                    lambda x: (1/(1+np.exp(-np.clip(x,-10,10)))) * (1 - 1/(1+np.exp(-np.clip(x,-10,10))))),
+        "Tanh": (lambda x: np.tanh(x), lambda x: 1 - np.tanh(x)**2),
+        "Leaky ReLU (α=0.1)": (lambda x: np.where(x>0, x, 0.1*x), lambda x: np.where(x>0, 1, 0.1)),
+        "ELU": (lambda x: np.where(x>0, x, np.exp(np.minimum(x, 0))-1),
+                lambda x: np.where(x>0, 1, np.exp(np.minimum(x, 0)))),
+        # GELU (tanh approximation, as used in BERT/GPT); derivative by central difference
+        "GELU": (lambda x: 0.5*x*(1 + np.tanh(np.sqrt(2/np.pi)*(x + 0.044715*x**3))),
+                 lambda x: ((0.5*(x+1e-4)*(1 + np.tanh(np.sqrt(2/np.pi)*((x+1e-4) + 0.044715*(x+1e-4)**3))))
+                            - (0.5*(x-1e-4)*(1 + np.tanh(np.sqrt(2/np.pi)*((x-1e-4) + 0.044715*(x-1e-4)**3))))) / 2e-4),
+    }
+
+    selected = st.multiselect("Functions to compare", list(funcs.keys()),
+        default=["ReLU", "Sigmoid", "Tanh"])
+
+    x_act = np.linspace(-4, 4, 300)
+    colors = ['#534AB7', '#E24B4A', '#1D9E75', '#EF9F27', '#D4537E', '#3AACC9']
+
+    fig = make_subplots(rows=1, cols=2,
+        subplot_titles=["Function f(x)", "Derivative f'(x)"])
+    for i, name in enumerate(selected):
+        f, df = funcs[name]
+        fig.add_trace(go.Scatter(x=x_act, y=f(x_act), name=name,
+            line=dict(color=colors[i % len(colors)], width=2.5)), row=1, col=1)
+        fig.add_trace(go.Scatter(x=x_act, y=df(x_act), name=f"{name}'",
+            line=dict(color=colors[i % len(colors)], width=2, dash='dash'),
+            showlegend=False), row=1, col=2)
+
+    fig.update_layout(height=380, legend=dict(orientation='h', y=1.12))
+    fig.update_xaxes(title_text="x")
+    fig.update_yaxes(title_text="f(x)", row=1, col=1)
+    fig.update_yaxes(title_text="f'(x)", row=1, col=2)
+    st.plotly_chart(fig, width='stretch')
+
+    st.markdown("### Properties")
+    props = {
+        "ReLU":       ("Simple, fast", "Dead neurons for x<0", "Hidden layers"),
+        "Sigmoid":    ("Output in [0,1]", "Vanishing gradient", "Output (binary classification)"),
+        "Tanh":       ("Zero-centred", "Vanishing gradient", "Hidden layers"),
+        "Leaky ReLU (α=0.1)": ("No dead neurons", "Extra hyperparameter α (libraries default to 0.01)", "Hidden layers"),
+        "ELU":        ("Smooth, faster convergence", "Slower to compute", "Hidden layers"),
+        "GELU":       ("Smooth ReLU; lets small negatives through", "Slightly costlier to compute",
+                       "Transformers (BERT, GPT) - the modern default"),
+    }
+    rows = [(n,) + props[n] for n in selected if n in props]
+    if rows:
+        import pandas as pd
+        df_props = pd.DataFrame(rows, columns=["Function", "Advantage", "Disadvantage", "Use case"])
+        st.dataframe(df_props, width='stretch', hide_index=True)
+    st.caption("Why Sigmoid's gradient vanishes: its derivative is **at most 0.25** (at x = 0, see the right-hand "
+               "plot). Backpropagation multiplies one such factor per layer, so through 10 layers the gradient "
+               "shrinks to at most 0.25¹⁰ ≈ 0.000001. ReLU's derivative is exactly 1 for positive inputs, which is "
+               "why it trains deep networks so much better - see **Vanishing & Exploding Gradients**.")
+
+    st.markdown("### Why non-linearity matters - stacking layers without it")
+    st.markdown("A tiny network: 1 input → 3 hidden neurons → 1 output, with fixed weights. "
+                "The only difference between the two curves is the activation in the hidden layer.")
+    x_nl = np.linspace(-3, 3, 300)
+    W1 = np.array([1.0, -1.0, 0.5]); b1 = np.array([0.0, 1.0, -1.0])
+    W2 = np.array([1.0, 1.0, -2.0]); b2 = 0.0
+    H = np.outer(x_nl, W1) + b1                       # hidden pre-activations, shape (300, 3)
+    out_linear = H @ W2 + b2                          # no activation
+    out_relu = np.maximum(0, H) @ W2 + b2             # with ReLU
+    fig_nl = go.Figure()
+    fig_nl.add_trace(go.Scatter(x=x_nl, y=out_linear, name='No activation (2 layers)',
+        line=dict(color='#888780', width=2.5, dash='dash')))
+    fig_nl.add_trace(go.Scatter(x=x_nl, y=out_relu, name='With ReLU (same weights)',
+        line=dict(color='#534AB7', width=2.5)))
+    fig_nl.update_layout(xaxis_title="Input x", yaxis_title="Network output", height=300,
+        legend=dict(orientation='h', y=1.15))
+    st.plotly_chart(fig_nl, width='stretch')
+    slope_lin = float(W2 @ W1); icpt_lin = float(W2 @ b1 + b2)
+    st.caption(f"Without an activation the two layers collapse into **one straight line**: "
+               f"output = W₂·(W₁x + b₁) + b₂ = {_vout(slope_lin)}·x {'+' if icpt_lin >= 0 else '−'} {_vout(abs(icpt_lin))} - "
+               "adding more layers can never bend it. With ReLU, each hidden neuron switches on at a different x, "
+               "and the output becomes a bent, piecewise-linear curve. More neurons → more bends → any shape.")
+
+    st.markdown("### Interactive example - effect of the activation")
+    x_demo = st.slider("Input x", -4.0, 4.0, 1.5, step=0.1)
+    chosen_fn = st.selectbox("Select function", list(funcs.keys()))
+    f_demo, df_demo = funcs[chosen_fn]
+    out_demo = f_demo(np.array([x_demo]))[0]
+    grad_demo = df_demo(np.array([x_demo]))[0]
+    d1, d2 = st.columns(2)
+    d1.metric(f"{chosen_fn}({x_demo:.1f})", f"{out_demo:.4f}")
+    d2.metric(f"Gradient at x={x_demo:.1f}", f"{grad_demo:.4f}")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# LINEAR REGRESSION
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "linear_reg":
+    st.title("📊 Linear Regression")
+    st.markdown("""
+    <div class="concept-card">
+    Linear regression finds a line <b>y = w·x + b</b> that minimises the MSE
+    between predicted and true values. The weight <code>w</code> and bias <code>b</code>
+    are found via gradient descent or the analytical (closed-form) solution.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Interactive regression", "Gradient descent over w and b"])
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            true_w = st.slider("True w", -3.0, 3.0, 1.5, step=0.1, key="lr_w")
+            true_b = st.slider("True b", -3.0, 3.0, 0.5, step=0.1, key="lr_b")
+            noise_lr = st.slider("Noise", 0.1, 3.0, 1.0, step=0.1, key="lr_n")
+            n_lr = st.slider("Number of points", 10, 60, 25, key="lr_pts")
+
+        np.random.seed(42)
+        x_lr = np.random.uniform(-4, 4, n_lr)
+        y_lr = true_w * x_lr + true_b + np.random.normal(0, noise_lr, n_lr)
+
+        X_mat = np.column_stack([x_lr, np.ones(n_lr)])
+        params = np.linalg.lstsq(X_mat, y_lr, rcond=None)[0]
+        w_hat, b_hat = params
+
+        def _line_label(w, b, fmt=".2f"):
+            """'y = 1.63x − 0.28' - proper sign instead of '+ -0.28'."""
+            return f"y = {format(w, fmt).replace('-', '−')}x {'+' if b >= 0 else '−'} {format(abs(b), fmt)}"
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=x_lr, y=y_lr, mode='markers',
+                name='Data', marker=dict(color='#534AB7', size=7)))
+            x_fit = np.linspace(-4.5, 4.5, 100)
+            fig.add_trace(go.Scatter(x=x_fit, y=w_hat*x_fit + b_hat,
+                name=f'Fitted: {_line_label(w_hat, b_hat)}',
+                line=dict(color='#E24B4A', width=2.5)))
+            fig.add_trace(go.Scatter(x=x_fit, y=true_w*x_fit + true_b,
+                name=f'True: {_line_label(true_w, true_b, "g")}',
+                line=dict(color='#1D9E75', width=1.5, dash='dash')))
+            fig.update_layout(xaxis_title="x", yaxis_title="y",
+                height=360, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, width='stretch')
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Fitted w", f"{w_hat:.3f}", f"{w_hat - true_w:+.3f} vs true", delta_color="off")
+        c2.metric("Fitted b", f"{b_hat:.3f}", f"{b_hat - true_b:+.3f} vs true", delta_color="off")
+        c3.metric("Train MSE", f"{np.mean((w_hat*x_lr+b_hat - y_lr)**2):.3f}")
+        c4.metric("R²", f"{1 - np.var(y_lr - (w_hat*x_lr+b_hat))/np.var(y_lr):.4f}")
+
+        st.markdown("**The closed-form (analytical) solution** - no iterations needed:")
+        x_bar, y_bar = x_lr.mean(), y_lr.mean()
+        st.markdown(f'<div class="formula-box">'
+            f'w = Σ(xᵢ − x̄)(yᵢ − ȳ) / Σ(xᵢ − x̄)²  = {w_hat:.3f}<br>'
+            f'b = ȳ − w·x̄  = {_vout(y_bar)} − ({_vout(w_hat)})·({_vout(x_bar)})  = {_vout(b_hat)}<br><br>'
+            f'Matrix form (any number of features):  θ = (XᵀX)⁻¹ Xᵀy'
+            f'</div>', unsafe_allow_html=True)
+        st.caption("Gradient descent reaches the same answer step by step - see the second tab. The closed form is "
+                   "exact and instant for small problems; gradient descent scales better to huge datasets and is "
+                   "what's used for models without a closed form, like neural networks.")
+
+    with tab2:
+        st.markdown("Loss surface over parameters **w** and **b**, and gradient descent walking down it:")
+        gc1, gc2 = st.columns([1, 2])
+        with gc1:
+            lr_gd = st.select_slider("Learning rate", [0.001, 0.005, 0.01, 0.03, 0.05, 0.1, 0.15, 0.2],
+                                     value=0.03, key="linreg_gd_lr")
+            w0_gd = st.slider("Start w", -6.0, 6.0, -2.5, step=0.5, key="linreg_gd_w0")
+            b0_gd = st.slider("Start b", -6.0, 6.0, 4.0, step=0.5, key="linreg_gd_b0")
+            steps_gd = st.slider("Steps", 5, 300, 60, key="linreg_gd_steps")
+
+        # gradient of MSE: ∂/∂w = 2·mean((wx+b−y)·x), ∂/∂b = 2·mean(wx+b−y)
+        path_gd = [(w0_gd, b0_gd)]
+        div_gd, conv_gd = False, None
+        for k_gd in range(steps_gd):
+            w_c, b_c = path_gd[-1]
+            r_c = w_c * x_lr + b_c - y_lr
+            gw, gb = 2 * np.mean(r_c * x_lr), 2 * np.mean(r_c)
+            if np.hypot(gw, gb) < 1e-3:
+                conv_gd = k_gd; break
+            path_gd.append((w_c - lr_gd * gw, b_c - lr_gd * gb))
+            if max(abs(path_gd[-1][0]), abs(path_gd[-1][1])) > 50:
+                div_gd = True; break
+        path_gd = np.array(path_gd)
+
+        # window centred on the optimum, wide enough to include the start point
+        w_lo, w_hi = min(w_hat, w0_gd) - 2, max(w_hat, w0_gd) + 2
+        b_lo, b_hi = min(b_hat, b0_gd) - 2, max(b_hat, b0_gd) + 2
+        ws = np.linspace(w_lo, w_hi, 80)
+        bs = np.linspace(b_lo, b_hi, 80)
+        WW, BB = np.meshgrid(ws, bs)
+        ZZ = np.mean((WW[..., None] * x_lr + BB[..., None] - y_lr) ** 2, axis=-1)   # vectorised MSE grid
+
+        fig3 = go.Figure(data=[go.Contour(
+            z=ZZ, x=ws, y=bs,
+            colorscale='RdPu',
+            contours=dict(showlabels=True, labelfont=dict(size=10)),
+            colorbar=dict(title='MSE', thickness=12)
+        )])
+        fig3.add_scatter(x=[w_hat], y=[b_hat], mode='markers',
+            marker=dict(color='#1D9E75', size=14, symbol='star'),
+            name='Closed-form minimum')
+        fig3.add_scatter(x=np.clip(path_gd[:, 0], w_lo, w_hi), y=np.clip(path_gd[:, 1], b_lo, b_hi),
+            mode='lines+markers', name='Gradient descent path',
+            line=dict(color='#EF9F27', width=2), marker=dict(size=5, color='#EF9F27'))
+        fig3.add_scatter(x=[w0_gd], y=[b0_gd], mode='markers', name='Start',
+            marker=dict(color='#E24B4A', size=12))
+        fig3.update_layout(xaxis_title='w', yaxis_title='b', xaxis=dict(range=[w_lo, w_hi]),
+            yaxis=dict(range=[b_lo, b_hi]), height=420, legend=dict(orientation='h', y=1.12))
+        with gc2:
+            st.plotly_chart(fig3, width='stretch')
+
+        w_end, b_end = path_gd[-1]
+        if div_gd:
+            st.error(f"Diverged: learning rate {lr_gd} is too large - the steps overshoot further each time "
+                     "(stopped once a parameter passed 50). Here the limit is about 0.19.")
+        elif conv_gd is not None:
+            st.success(f"Converged in {conv_gd} steps to w = {w_end:.3f}, b = {b_end:.3f} - the same point the "
+                       f"closed-form formula gives instantly (w = {w_hat:.3f}, b = {b_hat:.3f}).")
+        else:
+            st.info(f"After {len(path_gd)-1} steps: w = {w_end:.3f}, b = {b_end:.3f}, still heading towards the "
+                    f"minimum (w = {w_hat:.3f}, b = {b_hat:.3f}). Add steps or raise the learning rate.")
+        st.caption("The bowl is stretched: MSE changes faster with w (because x ranges over ±4) than with b, so "
+                   "the path tends to drop quickly onto the valley floor and then slide slowly along it. "
+                   "Near the stability limit (about 0.19 here) the steps overshoot back and forth across the "
+                   "valley; at 0.2 they diverge.")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# REGULARIZATION
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "regularization":
+    st.title("🔒 Regularization")
+    st.markdown("""
+    <div class="concept-card">
+    Regularization adds a <b>penalty term</b> to the loss to discourage the model from fitting
+    noise. It keeps weights small, which generally means a simpler, more generalisable model.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["L1 vs L2 penalty", "Effect on weights"])
+
+    with tab1:
+        st.markdown('<div class="formula-box">L2: Loss + λ·Σw²&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;L1: Loss + λ·Σ|w|</div>', unsafe_allow_html=True)
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            lam = st.slider("Regularization strength λ", 0.0, 2.0, 0.5, step=0.05)
+            reg_type = st.radio("Type", ["L2 (Ridge)", "L1 (Lasso)", "None"])
+            st.markdown("---")
+            st.markdown("**Key difference:**")
+            st.markdown("- **L2** shrinks weights smoothly toward zero")
+            st.markdown("- **L1** drives many weights to exactly zero (sparse model)")
+        with col2:
+            w_vals = np.linspace(-1, 3.5, 901)
+            w_star = 2.0                                   # where the data alone would put the weight
+            base_loss = 0.3 * (w_vals - w_star)**2 + 1
+            if reg_type == "L2 (Ridge)":
+                penalty = lam * w_vals**2
+                pen_label = f"L2 penalty (λ={lam})"
+            elif reg_type == "L1 (Lasso)":
+                penalty = lam * np.abs(w_vals)
+                pen_label = f"L1 penalty (λ={lam})"
+            else:
+                penalty = np.zeros_like(w_vals)
+                pen_label = "No penalty"
+            total = base_loss + penalty
+            opt_w = w_vals[np.argmin(total)]
+
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=w_vals, y=base_loss, name="Base loss",
+                line=dict(color='#AFA9EC', width=2, dash='dash')))
+            fig.add_trace(go.Scatter(x=w_vals, y=penalty, name=pen_label,
+                line=dict(color='#EF9F27', width=2)))
+            fig.add_trace(go.Scatter(x=w_vals, y=total, name="Total loss",
+                line=dict(color='#E24B4A', width=2.5)))
+            fig.add_vline(x=opt_w, line_dash='dot', line_color='#1D9E75',
+                annotation_text=f"optimal w = {opt_w:.2f}")
+            fig.add_vline(x=w_star, line_dash='dash', line_color='#AFA9EC',
+                annotation_text="no penalty: w = 2", annotation_position="bottom right")
+            fig.update_layout(xaxis_title="Weight w", yaxis_title="Loss",
+                yaxis_range=[0, 6], height=380, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, width='stretch')
+        if reg_type == "L2 (Ridge)":
+            st.caption(f"L2 shrinks the optimum smoothly: w = 0.3·2 / (0.3 + λ) = {0.6/(0.3+lam):.2f}. "
+                       "It gets closer to 0 as λ grows but never reaches it exactly.")
+        elif reg_type == "L1 (Lasso)":
+            snap = lam >= 1.2
+            st.caption(f"L1 subtracts a constant pull: w = 2 − λ/0.6 = {max(2 - lam/0.6, 0):.2f} - and once λ ≥ 1.2 "
+                       f"the optimum snaps to **exactly 0** {'(it has here)' if snap else '(push λ past 1.2)'}. "
+                       "The kink in |w| at 0 is what makes L1 produce sparse models.")
+
+    with tab2:
+        st.markdown("Train a small linear model with different regularization - watch the weights:")
+        np.random.seed(42)
+        n_reg = 30
+        X_reg = np.random.randn(n_reg, 8)
+        true_coef = np.array([2.0, -1.5, 0.0, 0.0, 0.8, 0.0, 0.0, -0.3])
+        y_reg = X_reg @ true_coef + np.random.randn(n_reg) * 0.5
+
+        lambdas = np.logspace(-3, 1, 60)
+
+        @st.cache_data(show_spinner=False)
+        def _reg_paths():
+            from sklearn.linear_model import lasso_path
+            # Both use the same scale (mean squared error, scikit-learn's convention):
+            #   Ridge:  (1/2n)·‖y − Xw‖² + (λ/2)·‖w‖²   →  w = (XᵀX + nλI)⁻¹ Xᵀy
+            #   Lasso:  (1/2n)·‖y − Xw‖² +   λ ·‖w‖₁   (exact path via coordinate descent)
+            ridge = np.array([np.linalg.solve(X_reg.T @ X_reg + n_reg * lv * np.eye(8), X_reg.T @ y_reg)
+                              for lv in lambdas])
+            alphas, coefs, _ = lasso_path(X_reg, y_reg, alphas=lambdas[::-1])
+            lasso = coefs.T[::-1]                       # back to increasing λ order
+            return ridge, lasso
+
+        l2_paths, l1_paths = _reg_paths()
+
+        reg_choice = st.radio("Regularization type", ["L2 (Ridge)", "L1 (Lasso)"], horizontal=True)
+        paths = l2_paths if reg_choice == "L2 (Ridge)" else l1_paths
+        colors8 = ['#534AB7','#E24B4A','#1D9E75','#EF9F27','#D4537E','#2196F3','#9C27B0','#FF5722']
+
+        fig2 = go.Figure()
+        for j in range(8):
+            fig2.add_trace(go.Scatter(x=lambdas, y=paths[:, j],
+                name=f"w{j+1} (true={true_coef[j]})",
+                line=dict(color=colors8[j], width=2)))
+        fig2.update_layout(xaxis_type='log', xaxis_title="λ (log scale)",
+            yaxis_title="Weight value", height=360,
+            legend=dict(orientation='h', y=1.15, font=dict(size=11)))
+        st.plotly_chart(fig2, width='stretch')
+        st.caption("As λ increases, weights shrink. L1 drives them to exactly 0 one by one - the weakest "
+                   "(true value 0) go first, the strongest last - giving a sparse model; L2 shrinks them all "
+                   "smoothly towards 0 without reaching it. Both use the same λ scale (mean squared error), so the "
+                   "two charts are directly comparable.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# K-NEAREST NEIGHBORS
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "knn":
+    st.title("🔵 K-Nearest Neighbors (KNN)")
+    st.markdown("""
+    <div class="concept-card">
+    KNN classifies a new point by looking at the <b>K closest training examples</b>
+    and taking a majority vote. No training is needed - all the work happens at prediction time.
+    </div>
+    """, unsafe_allow_html=True)
+
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        k = st.slider("K (number of neighbors)", 1, 15, 3, step=2)
+        n_per_class = st.slider("Points per class", 10, 40, 20)
+        seed_knn = st.slider("Dataset seed", 0, 20, 7)
+        test_x = st.slider("Test point X", -3.0, 3.0, 0.5, step=0.1)
+        test_y = st.slider("Test point Y", -3.0, 3.0, 0.5, step=0.1)
+
+    np.random.seed(seed_knn)
+    X_a = np.random.randn(n_per_class, 2) + np.array([-1.2, 0.8])
+    X_b = np.random.randn(n_per_class, 2) + np.array([1.2, -0.8])
+    X_c = np.random.randn(n_per_class, 2) + np.array([0.0, -1.8])
+    X_all = np.vstack([X_a, X_b, X_c])
+    y_all = np.array([0]*n_per_class + [1]*n_per_class + [2]*n_per_class)
+    class_names = ["Class A", "Class B", "Class C"]
+    class_colors = ['#534AB7', '#E24B4A', '#1D9E75']
+
+    test_pt = np.array([test_x, test_y])
+    dists = np.linalg.norm(X_all - test_pt, axis=1)
+    neighbor_idx = np.argsort(dists)[:k]
+    neighbor_labels = y_all[neighbor_idx]
+    votes = np.bincount(neighbor_labels, minlength=3)
+    tied_classes = [c for c in range(3) if votes[c] == votes.max()]
+    if len(tied_classes) > 1:
+        # standard tie-break: among the tied classes, pick the one whose neighbour is closest
+        prediction = next(int(lbl) for lbl in neighbor_labels if lbl in tied_classes)
+    else:
+        prediction = int(np.argmax(votes))
+
+    with col2:
+        fig = go.Figure()
+        for cls, cname, col in zip([0,1,2], class_names, class_colors):
+            mask = y_all == cls
+            fig.add_trace(go.Scatter(x=X_all[mask,0], y=X_all[mask,1],
+                mode='markers', name=cname,
+                marker=dict(color=col, size=8, opacity=0.7)))
+
+        # draw radius circle
+        radius = dists[neighbor_idx[-1]] * 1.02
+        theta = np.linspace(0, 2*np.pi, 120)
+        fig.add_trace(go.Scatter(x=test_x + radius*np.cos(theta),
+            y=test_y + radius*np.sin(theta),
+            mode='lines', line=dict(color='#EF9F27', width=1.5, dash='dot'),
+            name='KNN radius', showlegend=True))
+
+        # highlight neighbors
+        for ni in neighbor_idx:
+            fig.add_shape(type='line', x0=test_x, y0=test_y,
+                x1=X_all[ni,0], y1=X_all[ni,1],
+                line=dict(color='#EF9F27', width=1, dash='dot'))
+
+        # test point
+        fig.add_trace(go.Scatter(x=[test_x], y=[test_y], mode='markers',
+            name=f'Test point → {class_names[prediction]}',
+            marker=dict(color=class_colors[prediction], size=16,
+                symbol='star', line=dict(color='black', width=1.5))))
+
+        fig.update_layout(xaxis_title="X", yaxis_title="Y", height=420,
+            yaxis=dict(scaleanchor='x', scaleratio=1),      # equal scale, so the circle is a circle
+            legend=dict(orientation='h', y=1.12))
+        st.plotly_chart(fig, width='stretch')
+
+    c1, c2, c3 = st.columns(3)
+    for i, (cname, col) in enumerate(zip(class_names, class_colors)):
+        c = [c1, c2, c3][i]
+        c.metric(f"{cname} votes", votes[i])
+
+    pred_col = class_colors[prediction]
+    st.markdown(f"**Prediction: {class_names[prediction]}** ({votes[prediction]}/{k} votes)")
+    if len(tied_classes) > 1:
+        _tn = [class_names[c] for c in tied_classes]
+        tied_names = ", ".join(_tn[:-1]) + " and " + _tn[-1]
+        st.info(f"Tie: {tied_names} each have {votes.max()} vote{'s' if votes.max() != 1 else ''}. "
+                f"Broken in favour of the tied class with the closest neighbour - {class_names[prediction]}.")
+    st.caption("K moves in odd steps, which prevents ties only with **two** classes. With three classes, "
+               "K = 3 can split 1-1-1 and K = 5 can split 2-2-1.")
+    st.caption("**Scale your features first.** KNN relies entirely on distance, so a feature measured in "
+               "thousands (e.g. income) swamps one measured in single digits (e.g. age). Standardise each "
+               "feature (mean 0, std 1) before using KNN - here both axes are already on the same scale.")
+
+    st.markdown("### Decision boundaries - how K changes the border")
+    st.markdown("Low K → jagged boundaries (high variance). High K → smooth boundaries (high bias).")
+
+    from sklearn.neighbors import KNeighborsClassifier
+    xx, yy = np.meshgrid(np.linspace(-4,4,120), np.linspace(-4,4,120))
+    grid = np.c_[xx.ravel(), yy.ravel()]
+
+    fig2 = make_subplots(rows=1, cols=3, subplot_titles=["K=1", "K=5", "K=15"])
+    for col_idx, kv in enumerate([1, 5, 15]):
+        clf = KNeighborsClassifier(n_neighbors=kv)
+        clf.fit(X_all, y_all)
+        Z = clf.predict(grid).reshape(xx.shape)
+        for cls, c in enumerate(class_colors):
+            mask_g = Z == cls
+            fig2.add_trace(go.Scatter(
+                x=xx.ravel()[mask_g.ravel()], y=yy.ravel()[mask_g.ravel()],
+                mode='markers', marker=dict(color=c, size=3, opacity=0.15),
+                showlegend=False), row=1, col=col_idx+1)
+        for cls, c in enumerate(class_colors):
+            mask = y_all == cls
+            fig2.add_trace(go.Scatter(x=X_all[mask,0], y=X_all[mask,1],
+                mode='markers', marker=dict(color=c, size=6),
+                showlegend=False), row=1, col=col_idx+1)
+    for ax_i in (1, 2, 3):
+        fig2.update_yaxes(scaleanchor=f"x{'' if ax_i == 1 else ax_i}", scaleratio=1, row=1, col=ax_i)
+    fig2.update_layout(height=320)
+    st.plotly_chart(fig2, width='stretch')
+
+    st.markdown("### Which K works best? Train vs test accuracy")
+    rng_kt = np.random.RandomState(1000 + seed_knn)          # fresh points from the same three blobs
+    n_kt = 300
+    X_kt = np.vstack([rng_kt.randn(n_kt, 2) + [-1.2, 0.8], rng_kt.randn(n_kt, 2) + [1.2, -0.8],
+                      rng_kt.randn(n_kt, 2) + [0.0, -1.8]])
+    y_kt = np.repeat([0, 1, 2], n_kt)
+    ks_curve = [kk for kk in range(1, 26, 2) if kk <= len(X_all)]
+    tr_k, te_k = [], []
+    for kk in ks_curve:
+        m_k = KNeighborsClassifier(n_neighbors=kk).fit(X_all, y_all)
+        tr_k.append(m_k.score(X_all, y_all)); te_k.append(m_k.score(X_kt, y_kt))
+    best_k = ks_curve[int(np.argmax(te_k))]
+    fig3 = go.Figure()
+    fig3.add_trace(go.Scatter(x=ks_curve, y=tr_k, mode='lines+markers', name='Train accuracy',
+        line=dict(color='#888780', width=2, dash='dot')))
+    fig3.add_trace(go.Scatter(x=ks_curve, y=te_k, mode='lines+markers', name='Test accuracy (900 new points)',
+        line=dict(color='#534AB7', width=2.5)))
+    fig3.add_vline(x=k, line=dict(color='#EF9F27', dash='dash'), annotation_text=f"K={k}")
+    fig3.add_trace(go.Scatter(x=[best_k], y=[max(te_k)], mode='markers', name=f'Best test K = {best_k}',
+        marker=dict(color='#1D9E75', size=14, symbol='star')))
+    fig3.update_layout(xaxis_title="K", yaxis_title="Accuracy", yaxis_tickformat=".0%", height=280,
+        legend=dict(orientation='h', y=1.2))
+    st.plotly_chart(fig3, width='stretch')
+    st.caption(f"With K = 1 every training point is its own nearest neighbour, so training accuracy is 100% - "
+               f"pure memorisation. Test accuracy peaks at K = {best_k} for this data; much larger K starts "
+               "to blur the boundaries (high bias).")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SUPPORT VECTOR MACHINES
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "svm":
+    st.title("🧱 Support Vector Machines")
+    st.markdown("""
+    <div class="concept-card">
+    Instead of just finding <em>a</em> line that separates two classes, an SVM finds the
+    one that leaves the <b>widest possible margin</b> on both sides. Only the points
+    closest to that boundary - the <b>support vectors</b> - actually determine where it
+    goes. When a straight line can't separate the classes at all, the <b>kernel trick</b>
+    lets the same idea work in a much higher-dimensional space, without ever computing
+    that space directly.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Maximal margin & the C parameter", "The kernel trick"])
+
+    from sklearn.svm import SVC
+    from sklearn.datasets import make_blobs, make_circles, make_moons
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            C_svm = st.slider("C (log scale)", -2.0, 3.0, 0.0, step=0.5, key="svm_c_log",
+                help="Lower C → wider margin, tolerates more violations. Higher C → narrower margin, fits training points more tightly.")
+            C_val = 10 ** C_svm
+            sep_svm = st.slider("Cluster spread (higher = more overlap)", 0.5, 3.0, 1.5, step=0.1, key="svm_sep",
+                help="The standard deviation of each blob. Larger spread pushes the classes into each other.")
+            n_svm = st.slider("Points per class", 15, 60, 30, key="svm_n")
+
+        np.random.seed(7)
+        X_svm, y_svm = make_blobs(n_samples=n_svm * 2, centers=2, cluster_std=sep_svm, random_state=7)
+        clf_svm = SVC(kernel='linear', C=C_val).fit(X_svm, y_svm)
+
+        xx, yy = np.meshgrid(
+            np.linspace(X_svm[:, 0].min() - 1, X_svm[:, 0].max() + 1, 200),
+            np.linspace(X_svm[:, 1].min() - 1, X_svm[:, 1].max() + 1, 200))
+        Z = clf_svm.decision_function(np.c_[xx.ravel(), yy.ravel()]).reshape(xx.shape)
+        w = clf_svm.coef_[0]
+        margin_width = 2 / np.linalg.norm(w)
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Contour(x=xx[0], y=yy[:, 0], z=Z, showscale=False,
+                contours=dict(start=0, end=0, size=1, coloring='lines'),
+                line=dict(color='#534AB7', width=2.5), name='Boundary', hoverinfo='skip'))
+            fig.add_trace(go.Contour(x=xx[0], y=yy[:, 0], z=Z, showscale=False,
+                contours=dict(start=-1, end=1, size=2, coloring='lines'),
+                line=dict(color='#888780', width=1, dash='dash'), hoverinfo='skip', showlegend=False))
+            for cls, c in [(0, '#534AB7'), (1, '#E24B4A')]:
+                m = y_svm == cls
+                fig.add_trace(go.Scatter(x=X_svm[m, 0], y=X_svm[m, 1], mode='markers',
+                    name=f'Class {cls}', marker=dict(color=c, size=8)))
+            fig.add_trace(go.Scatter(x=clf_svm.support_vectors_[:, 0], y=clf_svm.support_vectors_[:, 1],
+                mode='markers', name='Support vectors',
+                marker=dict(color='rgba(0,0,0,0)', size=16, line=dict(color='black', width=2))))
+            fig.update_layout(height=400, legend=dict(orientation='h', y=1.12),
+                yaxis=dict(scaleanchor='x', scaleratio=1))   # equal scale: margins really are perpendicular
+            st.plotly_chart(fig, width='stretch')
+
+        c1, c2s, c3 = st.columns(3)
+        c1.metric("C", f"{C_val:.2g}")
+        c2s.metric("Support vectors", sum(clf_svm.n_support_))
+        c3.metric("Margin width", f"{margin_width:.2f}")
+
+        if C_svm <= -1:
+            st.info("**Low C - soft margin.** The model tolerates points inside or across "
+                    "the margin in exchange for a wider, more stable boundary.")
+        elif C_svm >= 2:
+            st.warning("**High C - hard margin.** The boundary hugs the training data "
+                       "closely, using few support vectors - watch for overfitting.")
+        else:
+            st.success("**Balanced C** - a reasonable tradeoff between margin width and "
+                       "training accuracy.")
+        st.caption("Circled points are the support vectors - the only points that would "
+                   "change the boundary if moved. Every other point could be deleted "
+                   "without affecting the fit at all.")
+
+    with tab2:
+        st.markdown("""
+        When classes aren't linearly separable, a straight-line boundary simply can't work
+        - no choice of C fixes that. The **kernel trick** solves this by implicitly mapping
+        points into a higher-dimensional space where they *are* separable, computing only
+        the similarity between pairs of points rather than the mapping itself:
+        """)
+        st.markdown('<div class="formula-box">K(x, x′) = φ(x) · φ(x′)&nbsp;&nbsp;&nbsp;'
+                    'RBF: K(x, x′) = exp(−γ‖x − x′‖²)</div>', unsafe_allow_html=True)
+        st.markdown("φ is the (possibly infinite-dimensional) mapping - the kernel lets "
+                    "the SVM use it without ever computing φ(x) explicitly.")
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            dataset_svm = st.radio("Dataset", ["Circles", "Moons"], key="svm_dataset")
+            kernel_svm = st.radio("Kernel", ["linear", "poly", "rbf"], key="svm_kernel")
+            gamma_svm = st.slider("gamma (rbf/poly)", 0.1, 5.0, 1.0, step=0.1, key="svm_gamma")
+            noise_svm = st.slider("Noise", 0.05, 0.3, 0.15, step=0.05, key="svm_noise")
+
+        if dataset_svm == "Circles":
+            X_k, y_k = make_circles(n_samples=150, noise=noise_svm, factor=0.4, random_state=7)
+        else:
+            X_k, y_k = make_moons(n_samples=150, noise=noise_svm, random_state=7)
+
+        # coef0=1: the poly kernel (γ·x·x′ + 1)³ includes all terms up to degree 3 - with scikit-learn's
+        # default coef0=0 it has only pure cubic terms and can't express a circle (x² + y²)
+        clf_k = SVC(kernel=kernel_svm, gamma=gamma_svm, C=1.0, degree=3, coef0=1).fit(X_k, y_k)
+        acc_k = clf_k.score(X_k, y_k)
+        if dataset_svm == "Circles":
+            X_k_te, y_k_te = make_circles(n_samples=2000, noise=noise_svm, factor=0.4, random_state=99)
+        else:
+            X_k_te, y_k_te = make_moons(n_samples=2000, noise=noise_svm, random_state=99)
+        acc_k_te = clf_k.score(X_k_te, y_k_te)
+
+        xx2, yy2 = np.meshgrid(np.linspace(X_k[:, 0].min()-0.5, X_k[:, 0].max()+0.5, 150),
+                                np.linspace(X_k[:, 1].min()-0.5, X_k[:, 1].max()+0.5, 150))
+        Z2 = clf_k.predict(np.c_[xx2.ravel(), yy2.ravel()]).reshape(xx2.shape)
+
+        with col2:
+            fig2 = go.Figure()
+            fig2.add_trace(go.Contour(x=xx2[0], y=yy2[:, 0], z=Z2, showscale=False,
+                colorscale=[[0, 'rgba(83,74,183,0.15)'], [1, 'rgba(226,75,74,0.15)']],
+                contours=dict(coloring='fill'), line=dict(width=0)))
+            for cls, c in [(0, '#534AB7'), (1, '#E24B4A')]:
+                m = y_k == cls
+                fig2.add_trace(go.Scatter(x=X_k[m, 0], y=X_k[m, 1], mode='markers',
+                    name=f'Class {cls}', marker=dict(color=c, size=7)))
+            fig2.update_layout(height=380, legend=dict(orientation='h', y=1.1),
+                yaxis=dict(scaleanchor='x', scaleratio=1))
+            st.plotly_chart(fig2, width='stretch')
+
+        mk1, mk2 = st.columns(2)
+        mk1.metric(f"Training accuracy ({kernel_svm} kernel)", f"{acc_k:.1%}")
+        mk2.metric(f"Test accuracy ({kernel_svm} kernel)", f"{acc_k_te:.1%}",
+                   help="On 2,000 fresh points from the same distribution.")
+
+        st.markdown("### Same data, every kernel")
+        rows = []
+        for k in ["linear", "poly", "rbf"]:
+            c = SVC(kernel=k, gamma=gamma_svm, C=1.0, degree=3, coef0=1).fit(X_k, y_k)
+            rows.append((k, c.score(X_k, y_k), c.score(X_k_te, y_k_te)))
+        fig3 = go.Figure()
+        fig3.add_trace(go.Bar(x=[r[0] for r in rows], y=[r[1] for r in rows], name='Train accuracy',
+            marker_color='#888780'))
+        fig3.add_trace(go.Bar(x=[r[0] for r in rows], y=[r[2] for r in rows], name='Test accuracy (2,000 new points)',
+            marker_color=['#888780', '#EF9F27', '#534AB7'], text=[f"{r[2]:.2f}" for r in rows],
+            textposition='outside'))
+        fig3.update_layout(barmode='group', yaxis_title="Accuracy", yaxis_range=[0, 1.1], height=280,
+            legend=dict(orientation='h', y=1.18))
+        st.plotly_chart(fig3, width='stretch')
+        st.caption("On circular or crescent-shaped data the linear kernel is stuck - no straight line helps "
+                   "(on Circles it's near chance). The poly kernel used here is (γ·x·x′ + 1)³, which includes "
+                   "x² and y² terms - enough to draw a circle; RBF recovers a clean boundary too. Judge kernels "
+                   "by **test** accuracy: a large gamma lets RBF fit the training points ever more tightly "
+                   "without doing better on new data.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CONFUSION MATRIX & METRICS
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "confusion":
+    st.title("🔢 Confusion Matrix & Metrics")
+    st.markdown("""
+    <div class="concept-card">
+    A confusion matrix breaks down predictions into <b>TP, FP, FN, TN</b>.
+    From these we derive precision, recall, F1 and accuracy - each tells a different story
+    about where the model succeeds and fails.
+    </div>
+    """, unsafe_allow_html=True)
+
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        threshold = st.slider("Classification threshold", 0.01, 0.99, 0.5, step=0.01)
+        n_conf = st.slider("Dataset size", 50, 300, 150)
+        imbalance = st.slider("Class imbalance (% positive)", 5, 50, 30)
+        seed_c = st.slider("Seed", 0, 20, 3)
+
+    np.random.seed(seed_c)
+    n_pos = int(n_conf * imbalance / 100)
+    n_neg = n_conf - n_pos
+    scores_pos = np.clip(np.random.beta(5, 2, n_pos), 0, 1)
+    scores_neg = np.clip(np.random.beta(2, 5, n_neg), 0, 1)
+    scores = np.concatenate([scores_pos, scores_neg])
+    labels = np.array([1]*n_pos + [0]*n_neg)
+    preds = (scores >= threshold).astype(int)
+
+    TP = np.sum((preds == 1) & (labels == 1))
+    FP = np.sum((preds == 1) & (labels == 0))
+    FN = np.sum((preds == 0) & (labels == 1))
+    TN = np.sum((preds == 0) & (labels == 0))
+
+    no_pos_pred = (TP + FP) == 0                      # nothing predicted positive → precision is 0/0
+    precision = TP / (TP + FP + 1e-9)
+    recall    = TP / (TP + FN + 1e-9)
+    f1        = 2 * precision * recall / (precision + recall + 1e-9)
+    accuracy  = (TP + TN) / n_conf
+
+    with col2:
+        # rows = actual class, columns = predicted class
+        cm = np.array([[TP, FN], [FP, TN]])
+        labels_cm = [["TP", "FN"], ["FP", "TN"]]
+        text = [[f"<b>{labels_cm[i][j]}</b><br>{cm[i,j]}" for j in range(2)] for i in range(2)]
+
+        fig = go.Figure(go.Heatmap(
+            z=cm, x=["Predicted Positive","Predicted Negative"],
+            y=["Actual Positive","Actual Negative"],
+            colorscale=[[0,'#f0effe'],[0.5,'#AFA9EC'],[1,'#534AB7']],
+            text=text, texttemplate="%{text}", textfont=dict(size=18),
+            showscale=False))
+        fig.update_layout(height=320, xaxis_title="Predicted", yaxis_title="Actual",
+            yaxis=dict(autorange='reversed'))      # Actual Positive on top, standard layout
+        st.plotly_chart(fig, width='stretch')
+        st.caption(f"Each row adds up to the true class size: Actual Positive = TP + FN = {TP} + {FN} = {n_pos}; "
+                   f"Actual Negative = FP + TN = {FP} + {TN} = {n_neg}.")
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Precision", "undefined" if no_pos_pred else f"{precision:.3f}",
+              help="TP / (TP+FP) - of all positive predictions, how many were correct?")
+    c2.metric("Recall", f"{recall:.3f}", help="TP / (TP+FN) - of all actual positives, how many did we catch?")
+    c3.metric("F1 Score", "undefined" if no_pos_pred else f"{f1:.3f}", help="Harmonic mean of precision and recall")
+    c4.metric("Accuracy", f"{accuracy:.3f}", help="(TP+TN) / total")
+    if no_pos_pred:
+        st.warning("At this threshold the model predicts no positives at all, so precision = 0/0 is undefined.")
+
+    baseline_acc = n_neg / n_conf
+    b1, b2 = st.columns([1, 3])
+    b1.metric("All-negative baseline accuracy", f"{baseline_acc:.3f}",
+              help="Accuracy of a 'model' that always predicts Negative.")
+    b2.caption(f"**The accuracy trap:** with {imbalance}% positives, a useless model that always says "
+               f"'negative' already scores {baseline_acc:.1%} accuracy while catching zero positives "
+               "(recall = 0). On imbalanced data, accuracy alone is misleading - look at precision, recall "
+               "and F1 instead. Try the imbalance slider at 5%.")
+
+    st.markdown("### Precision–Recall tradeoff across thresholds")
+    thresholds = np.linspace(0.01, 0.99, 200)
+    precs, recs, f1s = [], [], []
+    for t in thresholds:
+        p_ = (scores >= t).astype(int)
+        tp_ = np.sum((p_==1) & (labels==1))
+        fp_ = np.sum((p_==1) & (labels==0))
+        fn_ = np.sum((p_==0) & (labels==1))
+        pr = tp_ / (tp_ + fp_) if (tp_ + fp_) > 0 else np.nan    # undefined when nothing is predicted positive
+        rc = tp_ / (tp_ + fn_ + 1e-9)
+        precs.append(pr); recs.append(rc)
+        f1s.append(2*pr*rc/(pr+rc+1e-9) if not np.isnan(pr) else np.nan)
+
+    fig2 = make_subplots(rows=1, cols=2,
+        subplot_titles=["Precision & Recall vs Threshold", "Precision-Recall curve"])
+    fig2.add_trace(go.Scatter(x=thresholds, y=precs, name='Precision',
+        line=dict(color='#534AB7', width=2)), row=1, col=1)
+    fig2.add_trace(go.Scatter(x=thresholds, y=recs, name='Recall',
+        line=dict(color='#E24B4A', width=2)), row=1, col=1)
+    fig2.add_trace(go.Scatter(x=thresholds, y=f1s, name='F1',
+        line=dict(color='#1D9E75', width=2)), row=1, col=1)
+    fig2.add_vline(x=threshold, line_dash='dash', line_color='#EF9F27',
+        annotation_text=f"t={threshold:.2f}", row=1, col=1)
+    fig2.add_trace(go.Scatter(x=recs, y=precs, mode='lines',
+        name='PR curve', line=dict(color='#534AB7', width=2.5),
+        showlegend=False), row=1, col=2)
+    # mark current threshold on PR curve
+    cur_idx = np.argmin(np.abs(thresholds - threshold))
+    fig2.add_trace(go.Scatter(x=[recs[cur_idx]], y=[precs[cur_idx]],
+        mode='markers', marker=dict(color='#EF9F27', size=12, symbol='circle'),
+        name='Current threshold', showlegend=False), row=1, col=2)
+    fig2.update_xaxes(title_text="Threshold", row=1, col=1)
+    fig2.update_xaxes(title_text="Recall", row=1, col=2)
+    fig2.update_yaxes(title_text="Score", row=1, col=1)
+    fig2.update_yaxes(title_text="Precision", row=1, col=2)
+    fig2.update_layout(height=340, legend=dict(orientation='h', y=1.12))
+    st.plotly_chart(fig2, width='stretch')
+    st.caption("Precision and F1 stop at the highest score in the data: above it nothing is predicted "
+               "positive, so precision is undefined (0/0) and those points are left out.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# BIAS-VARIANCE TRADEOFF
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "bias_var":
+    st.title("🎯 Bias-Variance Tradeoff")
+    st.markdown("""
+    <div class="concept-card">
+    Expected test error at a new point (averaged over possible training sets) =
+    <b>Bias²</b> + <b>Variance</b> + <b>Irreducible noise</b>.<br>
+    A model that is too simple has high bias (underfits). A model that is too complex has
+    high variance (overfits). The goal is to find the sweet spot.
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('<div class="formula-box">MSE = Bias² + Variance + σ²</div>', unsafe_allow_html=True)
+
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        complexity = st.slider("Model complexity", 1, 15, 4,
+            help="Higher = more flexible model (higher degree polynomial)")
+        noise_bv = st.slider("Irreducible noise σ", 0.1, 2.0, 0.8, step=0.1)
+        n_datasets = st.slider("Fits to draw", 5, 20, 10,
+            help="How many of the individual fits are drawn. The numbers below always use 300 "
+                 "simulated training sets, so they don't jump around with this slider.")
+        seed_bv = st.slider("Seed", 0, 10, 0)
+
+    x_eval = np.linspace(-3, 3, 80)
+    true_at_eval = np.sin(x_eval)
+
+    @st.cache_data(show_spinner=False)
+    def _bv_sim(noise, seed, n_sims=300, n_train=25, clip=15):
+        """Fit polynomials of degree 1-15 to n_sims independent training sets.
+        Bias² is corrected for the leftover noise in the average of finitely many fits (var/n_sims)."""
+        rng = np.random.default_rng(seed)
+        X = rng.uniform(-3, 3, (n_sims, n_train))
+        Y = np.sin(X) + rng.normal(0, noise, (n_sims, n_train))
+        preds, comps = {}, {}
+        for d in range(1, 16):
+            P = np.array([np.clip(np.polyval(np.polyfit(X[i], Y[i], d), x_eval), -clip, clip)
+                          for i in range(n_sims)])
+            var_x = P.var(axis=0, ddof=1)
+            bias2_x = (P.mean(axis=0) - true_at_eval) ** 2 - var_x / n_sims
+            preds[d] = P
+            comps[d] = (max(float(bias2_x.mean()), 0.0), float(var_x.mean()))
+        return preds, comps
+
+    preds_all, comps_all = _bv_sim(noise_bv, seed_bv)
+    all_preds = preds_all[complexity][:n_datasets]          # the fits drawn on the chart
+    mean_pred = preds_all[complexity].mean(axis=0)          # expected prediction (over 300 fits)
+
+    avg_bias_sq, avg_variance = comps_all[complexity]
+    avg_noise    = float(noise_bv**2)
+    total_err    = avg_bias_sq + avg_variance + avg_noise
+
+    with col2:
+        fig = go.Figure()
+        for i, pred in enumerate(all_preds):
+            fig.add_trace(go.Scatter(x=x_eval, y=pred, mode='lines',
+                line=dict(color='rgba(83,74,183,0.18)', width=1),
+                showlegend=(i == 0), name='Individual model'))
+        fig.add_trace(go.Scatter(x=x_eval, y=mean_pred, name='Mean prediction (300 fits)',
+            line=dict(color='#534AB7', width=2.5)))
+        fig.add_trace(go.Scatter(x=x_eval, y=true_at_eval, name='True function',
+            line=dict(color='#1D9E75', width=2, dash='dash')))
+        fig.update_layout(xaxis_title="x", yaxis_title="y",
+            yaxis_range=[-4, 4], height=360,
+            legend=dict(orientation='h', y=1.12))
+        st.plotly_chart(fig, width='stretch')
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Bias²", f"{avg_bias_sq:.3f}")
+    c2.metric("Variance", f"{avg_variance:.3f}")
+    c3.metric("Noise σ²", f"{avg_noise:.3f}")
+    c4.metric("Total Error", f"{total_err:.3f}")
+    st.caption("Noise σ² is the floor no model can beat - it's randomness in the data itself. "
+               "All components are estimated from 300 simulated training sets of 25 points each.")
+
+    st.markdown("### How each component changes with model complexity")
+    complexities = list(range(1, 16))
+    bias_vals = [comps_all[c][0] for c in complexities]
+    var_vals  = [comps_all[c][1] for c in complexities]
+
+    noise_line = [noise_bv**2] * len(complexities)
+    total_line = [b + v + noise_bv**2 if b is not None else None
+                  for b, v in zip(bias_vals, var_vals)]
+
+    fig2 = go.Figure()
+    fig2.add_trace(go.Scatter(x=complexities, y=bias_vals, name='Bias²',
+        line=dict(color='#534AB7', width=2.5), mode='lines+markers'))
+    fig2.add_trace(go.Scatter(x=complexities, y=var_vals, name='Variance',
+        line=dict(color='#E24B4A', width=2.5), mode='lines+markers'))
+    fig2.add_trace(go.Scatter(x=complexities, y=noise_line, name='Noise σ²',
+        line=dict(color='#888780', width=1.5, dash='dash')))
+    fig2.add_trace(go.Scatter(x=complexities, y=total_line, name='Total Error',
+        line=dict(color='#1D9E75', width=2.5), mode='lines+markers'))
+    fig2.add_vline(x=complexity, line_dash='dot', line_color='#EF9F27',
+        annotation_text=f"complexity={complexity}")
+    fig2.update_layout(xaxis_title="Model complexity", yaxis_title="Error",
+        yaxis_range=[0, min(max(bias_vals + var_vals + [2]), 8)],
+        height=320, legend=dict(orientation='h', y=1.12))
+    st.plotly_chart(fig2, width='stretch')
+    st.caption("As complexity grows, Bias² falls towards zero and stays there, while Variance keeps rising - "
+               "the total error is U-shaped, with the sweet spot at the bottom. Very complex fits explode near "
+               "the edges, where training points are sparse, so predictions are clipped at ±15 to keep the chart "
+               "readable: the variance shown at high complexity is a lower bound.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# LEARNING RATE SCHEDULERS
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "lr_schedule":
+    st.title("📅 Learning Rate Schedulers")
+    st.markdown("""
+    <div class="concept-card">
+    A fixed learning rate is rarely optimal throughout training. <b>Schedulers</b> reduce
+    the learning rate over time so the model takes large steps early (explore) and
+    small steps later (refine).
+    </div>
+    """, unsafe_allow_html=True)
+
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        lr0 = st.slider("Initial learning rate", 0.01, 1.0, 0.1, step=0.01)
+        total_epochs = st.slider("Total epochs", 20, 200, 100)
+        warmup_epochs = st.slider("Warmup epochs (Warmup + Cosine only)", 0, 20, 5)
+        step_size = st.slider("Step decay - drop every N epochs", 5, 40, 20)
+        step_gamma = st.slider("Step decay - drop factor", 0.1, 0.9, 0.5, step=0.05)
+
+        schedules_sel = st.multiselect("Show schedules",
+            ["Constant", "Step Decay", "Exponential Decay", "Cosine Annealing", "Warmup + Cosine"],
+            default=["Step Decay", "Cosine Annealing", "Warmup + Cosine"])
+
+    epochs = np.arange(total_epochs)
+
+    def step_decay(e):
+        return lr0 * (step_gamma ** (e // step_size))
+
+    def exp_decay(e):
+        return lr0 * np.exp(-3 * e / total_epochs)
+
+    def cosine(e):
+        return lr0 * 0.5 * (1 + np.cos(np.pi * e / total_epochs))
+
+    def warmup_cosine(e):
+        if e < warmup_epochs:
+            return lr0 * (e + 1) / max(warmup_epochs, 1)
+        t = (e - warmup_epochs) / max(total_epochs - warmup_epochs, 1)
+        return lr0 * 0.5 * (1 + np.cos(np.pi * t))
+
+    schedule_fns = {
+        "Constant":           lambda e: lr0,
+        "Step Decay":         step_decay,
+        "Exponential Decay":  exp_decay,
+        "Cosine Annealing":   cosine,
+        "Warmup + Cosine":    warmup_cosine,
+    }
+    sched_colors = {
+        "Constant":          '#888780',
+        "Step Decay":        '#534AB7',
+        "Exponential Decay": '#D85A30',
+        "Cosine Annealing":  '#1D9E75',
+        "Warmup + Cosine":   '#E24B4A',
+    }
+
+    with col2:
+        fig = go.Figure()
+        for name in schedules_sel:
+            fn = schedule_fns[name]
+            lr_vals = [fn(e) for e in epochs]
+            fig.add_trace(go.Scatter(x=epochs, y=lr_vals, name=name,
+                line=dict(color=sched_colors[name], width=2.5)))
+        if warmup_epochs > 0 and "Warmup + Cosine" in schedules_sel:
+            fig.add_vline(x=warmup_epochs, line_dash='dot', line_color='#EF9F27',
+                annotation_text="warmup end")
+        fig.update_layout(xaxis_title="Epoch", yaxis_title="Learning rate",
+            height=380, legend=dict(orientation='h', y=1.12))
+        st.plotly_chart(fig, width='stretch')
+        if "Exponential Decay" in schedules_sel:
+            st.caption("Exponential Decay here uses lr₀·e^(−3·epoch/total), so it always ends at about 5% of the "
+                       "initial rate.")
+
+    st.markdown("### Real training loss with each schedule")
+    st.markdown("Mini-batch SGD on a linear regression (400 points, 10 features, batches of 10). Each "
+                "mini-batch gives a noisy gradient, so with a large learning rate SGD keeps jumping around the "
+                "minimum. The chart shows how far the loss is **above the best achievable loss** (log scale).")
+
+    @st.cache_data
+    def _lr_sched_run(lrs, seed=0):
+        rng = np.random.default_rng(seed); n, d = 400, 10
+        X = rng.normal(size=(n, d)); y = X @ rng.normal(size=d) + rng.normal(0, 1, n)
+        w_best = np.linalg.lstsq(X, y, rcond=None)[0]
+        best = np.mean((X @ w_best - y) ** 2)
+        W = np.zeros(d); out = []
+        for lr in lrs:
+            idx = rng.permutation(n)
+            for b in range(0, n, 10):
+                i = idx[b:b + 10]
+                W = W - lr * X[i].T @ (X[i] @ W - y[i]) / len(i)
+            loss = np.mean((X @ W - y) ** 2)
+            if not np.isfinite(loss) or loss > 1e6:
+                return out, True               # diverged
+            out.append(max(loss - best, 1e-8))
+        return out, False
+
+    fig2 = go.Figure(); finals = {}; diverged = []
+    for name in schedules_sel:
+        fn = schedule_fns[name]
+        curve, div = _lr_sched_run(tuple(float(fn(e)) for e in epochs))
+        if div:
+            diverged.append(name)
+        else:
+            finals[name] = curve[-1]
+        fig2.add_trace(go.Scatter(x=epochs[:len(curve)], y=curve, name=name + (" (diverged)" if div else ""),
+            line=dict(color=sched_colors[name], width=2)))
+    fig2.update_layout(xaxis_title="Epoch", yaxis_title="Loss above best possible", yaxis_type='log',
+        height=320, legend=dict(orientation='h', y=1.12))
+    st.plotly_chart(fig2, width='stretch')
+    if diverged:
+        st.error(f"Diverged: {', '.join(diverged)} - the learning rate {lr0} is too large for this problem, so "
+                 "the loss blew up. Lower the initial learning rate.")
+    if finals:
+        best_name = min(finals, key=finals.get)
+        st.markdown("**Final loss above best:** " +
+                    " · ".join(f"{k}: {v:.2g}" for k, v in sorted(finals.items(), key=lambda kv: kv[1])))
+        if "Constant" in finals and best_name != "Constant":
+            st.success(f"{best_name} ends {finals['Constant'] / finals[best_name]:,.0f}× closer to the best "
+                       "loss than Constant: lowering the learning rate lets SGD settle instead of bouncing around.")
+    st.caption("Real training, cached. Constant flattens at a noise floor set by its learning rate; decaying "
+               "schedules keep going down as their steps shrink.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# NORMALIZATION
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "normalization":
+    st.title("📐 Normalization")
+    st.markdown("""
+    <div class="concept-card">
+    Normalization rescales inputs or activations to keep values in a useful range.
+    This stabilises training, speeds up convergence and reduces sensitivity to weight initialisation.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Feature Scaling", "Batch / Layer Norm"])
+
+    with tab1:
+        st.markdown("### Effect of feature scaling on gradient descent")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            scale_ratio = st.slider("Feature scale ratio (X₂ / X₁)", 1, 50, 20,
+                help="Large ratio = very different feature scales")
+            scaling = st.radio("Normalization method",
+                ["None", "Min-Max [0,1]", "Standardization (z-score)"])
+            lr_norm = st.select_slider("Learning rate", [0.001,0.005,0.01,0.05,0.1,0.5,1.0], value=0.01)
+            steps_norm = st.slider("GD steps", 10, 80, 40)
+
+        np.random.seed(42)
+        n_norm = 60
+        X1 = np.random.randn(n_norm)
+        X2 = np.random.randn(n_norm) * scale_ratio
+        y_norm = 2*X1 + 0.5*X2 + np.random.randn(n_norm)*0.3
+
+        if scaling == "Min-Max [0,1]":
+            X1s = (X1 - X1.min()) / (X1.max() - X1.min() + 1e-9)
+            X2s = (X2 - X2.min()) / (X2.max() - X2.min() + 1e-9)
+        elif scaling == "Standardization (z-score)":
+            X1s = (X1 - X1.mean()) / (X1.std() + 1e-9)
+            X2s = (X2 - X2.mean()) / (X2.std() + 1e-9)
+        else:
+            X1s, X2s = X1, X2
+
+        X_n = np.column_stack([X1s, X2s])
+        # Centre X and y: identical to fitting a bias term that is always at its best value,
+        # so the loss surface stays 2-D in (w1, w2) and Min-Max isn't penalised for being off-centre.
+        X_n = X_n - X_n.mean(axis=0)
+        y_c = y_norm - y_norm.mean()
+        w_opt = np.linalg.lstsq(X_n, y_c, rcond=None)[0]
+        best_mse = float(np.mean((X_n @ w_opt - y_c)**2))
+        H_n = 2 * X_n.T @ X_n / n_norm                     # curvature (Hessian) of the MSE
+        eig_n = np.linalg.eigvalsh(H_n)
+        lr_stable = 2 / eig_n[-1]
+        stretch = eig_n[-1] / eig_n[0]
+
+        # gradient descent trajectory
+        w = np.array([0.0, 0.0])
+        traj = [w.copy()]
+        diverged_n = False
+        for _ in range(steps_norm):
+            grad = 2 * X_n.T @ (X_n @ w - y_c) / n_norm
+            w = w - lr_norm * grad
+            if not np.all(np.isfinite(w)) or np.abs(w).max() > 1e8:
+                diverged_n = True
+                break
+            traj.append(w.copy())
+        traj = np.array(traj)
+        if lr_norm > lr_stable:          # above the limit it always diverges, even if slowly at first
+            diverged_n = True
+        final_mse = float(np.mean((X_n @ traj[-1] - y_c)**2))
+
+        # square plot window centred on the minimum, large enough for the path (equal axis scales)
+        if diverged_n:
+            R = 1.5 * np.abs(w_opt).max() + 0.5
+        else:
+            R = max(1.15 * np.abs(traj - w_opt).max(), 0.5)
+        w1r = np.linspace(w_opt[0] - R, w_opt[0] + R, 80)
+        w2r = np.linspace(w_opt[1] - R, w_opt[1] + R, 80)
+        G1, G2 = np.meshgrid(w1r, w2r)
+        P = G1[..., None] * X_n[:, 0] + G2[..., None] * X_n[:, 1]
+        ZZ2 = np.mean((P - y_c)**2, axis=-1)
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Contour(z=np.log10(ZZ2), x=w1r, y=w2r,
+                colorscale='RdPu', opacity=0.7, ncontours=25,
+                contours=dict(showlabels=False),
+                colorbar=dict(title='log₁₀ MSE', thickness=10)))
+            fig.add_trace(go.Scatter(x=traj[:,0], y=traj[:,1],
+                mode='lines+markers', name='GD path',
+                line=dict(color='#EF9F27', width=2),
+                marker=dict(size=5, color='#EF9F27')))
+            fig.add_trace(go.Scatter(x=[traj[0,0]], y=[traj[0,1]],
+                mode='markers', marker=dict(color='#E24B4A', size=12, symbol='circle'),
+                name='Start'))
+            if not diverged_n:
+                fig.add_trace(go.Scatter(x=[traj[-1,0]], y=[traj[-1,1]],
+                    mode='markers', marker=dict(color='#1D9E75', size=12, symbol='star'),
+                    name='End'))
+            fig.add_trace(go.Scatter(x=[w_opt[0]], y=[w_opt[1]],
+                mode='markers', marker=dict(color='black', size=12, symbol='x'),
+                name='Minimum'))
+            fig.update_layout(xaxis_title='w₁', yaxis_title='w₂',
+                xaxis=dict(range=[w1r[0], w1r[-1]]),
+                yaxis=dict(range=[w2r[0], w2r[-1]], scaleanchor='x', scaleratio=1),
+                height=420, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, width='stretch')
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Final MSE (best possible)", "diverged" if diverged_n else f"{final_mse:.3f}",
+                  delta=None if diverged_n else f"best {best_mse:.3f}", delta_color="off")
+        m2.metric("Largest stable learning rate", f"{lr_stable:.3g}",
+                  help="2 ÷ largest curvature of the loss surface. Above this, gradient descent explodes.")
+        m3.metric("Contour stretch", f"{stretch:.1f}×",
+                  help="Ratio of steepest to flattest curvature. 1× = perfectly round contours.")
+
+        if diverged_n:
+            st.error(f"**Diverged:** learning rate {lr_norm} is above the stable limit {lr_stable:.3g}. The steep "
+                     "direction overshoots further on every step. Lower the learning rate, or normalize the features "
+                     "so the limit rises.")
+        elif final_mse < best_mse * 1.05:
+            st.success(f"Reached the minimum (MSE {final_mse:.3f}, within 5% of the best {best_mse:.3f}) "
+                       f"in {steps_norm} steps.")
+        else:
+            st.info(f"Not there yet after {steps_norm} steps: MSE {final_mse:.3f} vs best {best_mse:.3f}. "
+                    + ("The contours are stretched, so a learning rate that is safe for the steep direction "
+                       "crawls along the flat one." if stretch > 5 else
+                       "The contours are round, so this learning rate is just too small - try a larger one or "
+                       "more steps." + (" Min-Max squeezes features into [0, 1], so it needs a bigger learning "
+                       "rate than z-score." if scaling.startswith("Min-Max") else "")))
+
+        st.markdown("**Without normalization:** stretched contours. The learning rate must stay below a tiny limit "
+                    "set by the large-scale feature, so progress along the other direction is slow - and anything "
+                    "above the limit diverges.  \n"
+                    "**With normalization:** round contours, a much higher stable learning rate, and a straight path "
+                    "to the minimum. The weights change meaning (they now multiply scaled features), so the minimum "
+                    "moves - the plot is centred on it.")
+        st.caption("The data is centred internally, which is the same as fitting a bias term that is always at its "
+                   "best value. That keeps the picture 2-D and treats Min-Max fairly.")
+
+    with tab2:
+        st.markdown("### Batch Norm vs Layer Norm - where they normalise")
+        st.markdown("""
+        | | Batch Norm | Layer Norm |
+        |---|---|---|
+        | Normalises over | the **batch** dimension | the **feature** dimension |
+        | Typical use | CNNs, MLPs | Transformers, RNNs |
+        | Problem with small batches | Yes - statistics are noisy | No |
+        | Works at inference without batch | Needs running stats | Yes |
+        """)
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            batch_size = st.slider("Batch size", 2, 32, 8)
+            n_features = st.slider("Number of features", 2, 16, 6)
+            inp_mean = st.slider("Input mean", -3.0, 3.0, 1.5, step=0.5)
+            inp_std = st.slider("Input std", 0.1, 5.0, 2.0, step=0.1)
+
+        np.random.seed(42)
+        X_bn = np.random.randn(batch_size, n_features) * inp_std + inp_mean
+
+        bn_out = (X_bn - X_bn.mean(axis=0, keepdims=True)) / (X_bn.std(axis=0, keepdims=True) + 1e-5)
+        ln_out = (X_bn - X_bn.mean(axis=1, keepdims=True)) / (X_bn.std(axis=1, keepdims=True) + 1e-5)
+
+        with col2:
+            import pandas as pd
+            fig_bn = make_subplots(rows=1, cols=3,
+                subplot_titles=["Raw input<br>(one box per feature)", "After Batch Norm<br>(one box per feature)",
+                                "After Layer Norm<br>(one box per sample)"])
+            for r, (data, label) in enumerate([(X_bn, "Raw"), (bn_out, "BatchNorm"), (ln_out, "LayerNorm")]):
+                if label == "LayerNorm":                    # Layer Norm works per sample (row)
+                    for i in range(min(batch_size, 12)):
+                        fig_bn.add_trace(go.Box(y=data[i, :], name=f"S{i+1}",
+                            showlegend=False, marker_color='#1D9E75',
+                            opacity=0.7), row=1, col=r+1)
+                else:                                       # per feature (column)
+                    for f in range(min(n_features, 8)):
+                        fig_bn.add_trace(go.Box(y=data[:,f], name=f"F{f+1}",
+                            showlegend=False, marker_color='#534AB7',
+                            opacity=0.7), row=1, col=r+1)
+            fig_bn.update_layout(height=340)
+            st.plotly_chart(fig_bn, width='stretch')
+            st.caption("Batch Norm normalises each **feature** across the batch, so each purple box ends up centred at 0 "
+                       "with spread 1. Layer Norm normalises each **sample** across its features, so it is drawn "
+                       "per sample (S1, S2, …): each green box is centred at 0 with spread 1.")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# LOGISTIC REGRESSION
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "logistic_reg":
+    st.title("🔀 Logistic Regression")
+    st.markdown("""
+    <div class="concept-card">
+    Logistic regression predicts a <b>probability</b> between 0 and 1 by passing a linear
+    combination of inputs through the <b>sigmoid function</b>. It is one of the simplest
+    classifiers and the building block of neural network output layers.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["Sigmoid & decision boundary", "Training with gradient descent", "Multi-feature decision boundary"])
+
+    with tab1:
+        st.markdown('<div class="formula-box">p = σ(w·x + b) = 1 / (1 + e^(−(w·x+b)))</div>', unsafe_allow_html=True)
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            w_lg = st.slider("Weight w", -5.0, 5.0, 2.0, step=0.1, key="lg_w")
+            b_lg = st.slider("Bias b", -5.0, 5.0, 0.0, step=0.1, key="lg_b")
+            threshold_lg = st.slider("Decision threshold", 0.1, 0.9, 0.5, step=0.05)
+            logit_t = np.log(threshold_lg / (1 - threshold_lg))       # σ⁻¹(threshold)
+            no_boundary = abs(w_lg) < 1e-9
+            decision_boundary = None if no_boundary else (logit_t - b_lg) / w_lg
+            st.metric("Decision boundary x*", "none" if no_boundary else f"{decision_boundary:.2f}")
+            if no_boundary:
+                st.warning(f"w = 0: p = σ(b) = {1/(1+np.exp(-b_lg)):.3f} for every x - a flat line, so "
+                           "there is no boundary. Every point gets the same prediction.")
+            else:
+                st.markdown(f'<div class="formula-box">p = threshold  ⟺  w·x + b = logit(t) = ln(t/(1−t))<br>'
+                            f'x* = (logit(t) − b) / w = ({logit_t:.3f} − {_vout(b_lg)}) / {_vout(w_lg)} '
+                            f'= {decision_boundary:.2f}</div>', unsafe_allow_html=True)
+                st.caption("For threshold 0.5, logit(0.5) = 0, so this reduces to the familiar x* = −b/w.")
+
+        with col2:
+            x_lg = np.linspace(-6, 6, 300)
+            p_lg = 1 / (1 + np.exp(-(w_lg * x_lg + b_lg)))
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=x_lg, y=p_lg, name='p(x)',
+                line=dict(color='#534AB7', width=2.5)))
+            fig.add_hline(y=threshold_lg, line_dash='dash', line_color='#EF9F27',
+                annotation_text=f"threshold={threshold_lg}")
+            if not no_boundary:
+                fig.add_vline(x=decision_boundary, line_dash='dot', line_color='#E24B4A',
+                    annotation_text=f"x*={decision_boundary:.2f}")
+            fig.add_hrect(y0=threshold_lg, y1=1.05, fillcolor='rgba(29,158,117,0.08)', line_width=0)
+            fig.add_hrect(y0=-0.05, y1=threshold_lg, fillcolor='rgba(226,75,74,0.08)', line_width=0)
+            fig.update_layout(xaxis_title="x", yaxis_title="Predicted probability p",
+                yaxis_range=[-0.05, 1.05], height=360,
+                legend=dict(orientation='h', y=1.1))
+            st.plotly_chart(fig, width='stretch')
+
+    with tab2:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            n_lg = st.slider("Training points", 20, 100, 50, key="lg_n")
+            sep = st.slider("Class separation", 0.5, 4.0, 2.0, step=0.1)
+            lr_lg = st.select_slider("Learning rate", [0.01, 0.05, 0.1, 0.3, 0.5], value=0.1, key="lg_lr")
+            epochs_lg = st.slider("Epochs", 10, 200, 80, key="lg_ep")
+
+        np.random.seed(42)
+        X_lg = np.concatenate([np.random.randn(n_lg//2) - sep/2,
+                                np.random.randn(n_lg//2) + sep/2])
+        y_lg = np.array([0]*(n_lg//2) + [1]*(n_lg//2), dtype=float)
+
+        def sigmoid(z): return 1 / (1 + np.exp(-np.clip(z, -50, 50)))
+
+        w_t, b_t = 0.0, 0.0
+        loss_hist_lg, w_hist, b_hist = [], [], []
+        for _ in range(epochs_lg):
+            p = sigmoid(w_t * X_lg + b_t)
+            loss_v = -np.mean(y_lg * np.log(p + 1e-9) + (1 - y_lg) * np.log(1 - p + 1e-9))
+            loss_hist_lg.append(loss_v)
+            w_hist.append(w_t); b_hist.append(b_t)
+            dw = np.mean((p - y_lg) * X_lg)
+            db = np.mean(p - y_lg)
+            w_t -= lr_lg * dw
+            b_t -= lr_lg * db
+
+        with col2:
+            fig = make_subplots(rows=1, cols=2,
+                subplot_titles=["Training loss", "Final decision boundary"])
+            fig.add_trace(go.Scatter(y=loss_hist_lg, name='BCE Loss',
+                line=dict(color='#E24B4A', width=2)), row=1, col=1)
+
+            x_range_lg = np.linspace(X_lg.min()-0.5, X_lg.max()+0.5, 200)
+            p_final = sigmoid(w_t * x_range_lg + b_t)
+            fig.add_trace(go.Scatter(x=X_lg[y_lg==0], y=np.zeros(n_lg//2),
+                mode='markers', name='Class 0',
+                marker=dict(color='#534AB7', size=8, symbol='circle'), showlegend=True), row=1, col=2)
+            fig.add_trace(go.Scatter(x=X_lg[y_lg==1], y=np.ones(n_lg//2),
+                mode='markers', name='Class 1',
+                marker=dict(color='#E24B4A', size=8, symbol='circle'), showlegend=True), row=1, col=2)
+            fig.add_trace(go.Scatter(x=x_range_lg, y=p_final,
+                name='p(x)', line=dict(color='#1D9E75', width=2.5)), row=1, col=2)
+            fig.add_hline(y=0.5, line_dash='dash', line_color='#EF9F27', row=1, col=2)
+            fig.update_xaxes(title_text="Epoch", row=1, col=1)
+            fig.update_xaxes(title_text="x", row=1, col=2)
+            fig.update_yaxes(title_text="Loss", row=1, col=1)
+            fig.update_yaxes(title_text="p(x)", row=1, col=2)
+            fig.update_layout(height=360, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, width='stretch')
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Final w", f"{w_t:.3f}")
+        c2.metric("Final b", f"{b_t:.3f}")
+        final_acc = np.mean(((sigmoid(w_t * X_lg + b_t) >= 0.5).astype(float)) == y_lg)
+        c3.metric("Accuracy", f"{final_acc:.1%}")
+        st.caption("When the two classes can be split perfectly (try a large separation), the loss can always be "
+                   "pushed a little lower by making w bigger - so with enough epochs the weights grow without "
+                   "limit and the curve becomes a step. In practice this is prevented with **regularization**.")
+
+    with tab3:
+        st.markdown("Decision boundary with **two features** - a line in 2D space.")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            sep2 = st.slider("Class separation (2D)", 0.5, 3.0, 1.5, step=0.1, key="lg2_sep")
+            n_2d = st.slider("Points per class", 20, 80, 40, key="lg2_n")
+            epochs_2d = st.slider("Training epochs", 50, 500, 200, key="lg2_ep")
+            lr_2d = st.select_slider("Learning rate", [0.01,0.05,0.1,0.3], value=0.1, key="lg2_lr")
+
+        np.random.seed(7)
+        X0 = np.random.randn(n_2d, 2) - sep2/2
+        X1 = np.random.randn(n_2d, 2) + sep2/2
+        X2d = np.vstack([X0, X1])
+        y2d = np.array([0]*n_2d + [1]*n_2d, dtype=float)
+
+        w2d = np.zeros(2); b2d = 0.0
+        for _ in range(epochs_2d):
+            z = X2d @ w2d + b2d
+            p2 = sigmoid(z)
+            dw = X2d.T @ (p2 - y2d) / len(y2d)
+            db = np.mean(p2 - y2d)
+            w2d -= lr_2d * dw
+            b2d -= lr_2d * db
+
+        with col2:
+            xx2, yy2 = np.meshgrid(np.linspace(-4,4,100), np.linspace(-4,4,100))
+            grid2 = np.c_[xx2.ravel(), yy2.ravel()]
+            Z2 = sigmoid(grid2 @ w2d + b2d).reshape(xx2.shape)
+
+            fig = go.Figure()
+            fig.add_trace(go.Contour(x=np.linspace(-4,4,100), y=np.linspace(-4,4,100),
+                z=Z2, colorscale=[[0,'rgba(83,74,183,0.15)'],[0.5,'white'],[1,'rgba(226,75,74,0.15)']],
+                showscale=False, contours=dict(showlabels=False)))
+            fig.add_trace(go.Scatter(x=X0[:,0], y=X0[:,1], mode='markers',
+                name='Class 0', marker=dict(color='#534AB7', size=8)))
+            fig.add_trace(go.Scatter(x=X1[:,0], y=X1[:,1], mode='markers',
+                name='Class 1', marker=dict(color='#E24B4A', size=8)))
+            if abs(w2d[1]) > 1e-9:
+                x_bd = np.linspace(-4, 4, 100)
+                y_bd = -(w2d[0]*x_bd + b2d) / w2d[1]
+                mask = (y_bd > -4) & (y_bd < 4)
+                fig.add_trace(go.Scatter(x=x_bd[mask], y=y_bd[mask],
+                    name='Decision boundary', line=dict(color='#1D9E75', width=2.5)))
+            fig.update_layout(xaxis_title="Feature 1", yaxis_title="Feature 2",
+                xaxis_range=[-4,4], yaxis=dict(range=[-4,4], scaleanchor='x', scaleratio=1),
+                height=400, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, width='stretch')
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# LDA & QDA
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "lda_qda":
+    st.title("🔮 LDA & QDA")
+    st.markdown("""
+    <div class="concept-card">
+    Both methods model each class as a <b>Gaussian blob</b> and classify a new point by
+    which blob it's most likely to have come from. The only difference is what they
+    assume about the blobs' shapes: <b>LDA</b> forces every class to share the same
+    covariance - the exact assumption that makes its boundary a straight line. <b>QDA</b>
+    lets each class have its own covariance, which is what curves the boundary.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["LDA vs. QDA vs. Logistic Regression", "Why the boundary shape differs"])
+
+    from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
+    from sklearn.linear_model import LogisticRegression
+
+    def _gen_two_class(n_per_class, cov_diff, sep, seed):
+        rng = np.random.RandomState(seed)
+        mean0 = np.array([-sep, 0.0])
+        mean1 = np.array([sep, 0.0])
+        cov0 = np.array([[1.0, 0.0], [0.0, 1.0]])
+        theta = cov_diff * np.pi / 3
+        stretch = 1 + cov_diff * 4
+        R = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+        D = np.diag([stretch, 1 / np.sqrt(stretch)])
+        cov1 = R @ D @ cov0 @ D @ R.T
+        X0 = rng.multivariate_normal(mean0, cov0, n_per_class)
+        X1 = rng.multivariate_normal(mean1, cov1, n_per_class)
+        X = np.vstack([X0, X1])
+        y = np.array([0] * n_per_class + [1] * n_per_class)
+        return X, y
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            cov_diff_lq = st.slider("How different are the class covariances?", 0.0, 1.0, 0.7,
+                step=0.1, key="lq_covdiff")
+            sep_lq = st.slider("Class separation", 0.5, 3.0, 1.5, step=0.1, key="lq_sep")
+            n_lq = st.slider("Points per class", 20, 150, 60, key="lq_n")
+            method_lq = st.radio("Show boundary for", ["LDA", "QDA", "Logistic Regression"], key="lq_method")
+
+        X_lq, y_lq = _gen_two_class(n_lq, cov_diff_lq, sep_lq, seed=7)
+        models = {
+            "LDA": LinearDiscriminantAnalysis().fit(X_lq, y_lq),
+            "QDA": QuadraticDiscriminantAnalysis().fit(X_lq, y_lq),
+            "Logistic Regression": LogisticRegression().fit(X_lq, y_lq),
+        }
+        clf_lq = models[method_lq]
+
+        xx, yy = np.meshgrid(np.linspace(X_lq[:,0].min()-1, X_lq[:,0].max()+1, 200),
+                              np.linspace(X_lq[:,1].min()-1, X_lq[:,1].max()+1, 200))
+        Z = clf_lq.predict(np.c_[xx.ravel(), yy.ravel()]).reshape(xx.shape)
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Contour(x=xx[0], y=yy[:,0], z=Z, showscale=False,
+                colorscale=[[0,'rgba(83,74,183,0.15)'],[1,'rgba(226,75,74,0.15)']],
+                contours=dict(coloring='fill'), line=dict(width=0)))
+            for cls, c in [(0,'#534AB7'), (1,'#E24B4A')]:
+                m = y_lq == cls
+                fig.add_trace(go.Scatter(x=X_lq[m,0], y=X_lq[m,1], mode='markers',
+                    name=f'Class {cls}', marker=dict(color=c, size=7)))
+            fig.update_layout(height=400, legend=dict(orientation='h', y=1.12),
+                yaxis=dict(scaleanchor='x', scaleratio=1),     # equal scale - the blob shapes matter here
+                title=f"{method_lq} decision boundary")
+            st.plotly_chart(fig, width='stretch')
+
+        st.markdown("### All three methods, same data")
+        X_lq_te, y_lq_te = _gen_two_class(1000, cov_diff_lq, sep_lq, seed=1234)   # 2,000 fresh points
+        names_lq = list(models.keys())
+        tr_lq = [models[nm].score(X_lq, y_lq) for nm in names_lq]
+        te_lq = [models[nm].score(X_lq_te, y_lq_te) for nm in names_lq]
+        fig_bar = go.Figure()
+        fig_bar.add_trace(go.Bar(x=names_lq, y=tr_lq, name='Train accuracy', marker_color='#888780'))
+        fig_bar.add_trace(go.Bar(x=names_lq, y=te_lq, name='Test accuracy (2,000 new points)',
+            marker_color=['#534AB7','#E24B4A','#1D9E75'], text=[f"{v:.3f}" for v in te_lq],
+            textposition='outside'))
+        fig_bar.update_layout(barmode='group', yaxis_title="Accuracy", yaxis_range=[0, 1.08], height=280,
+            legend=dict(orientation='h', y=1.18))
+        st.plotly_chart(fig_bar, width='stretch')
+        st.caption("Judge the methods by **test** accuracy - training accuracy can rank them the wrong way round. "
+                   "With covariance difference 0 all three tie; push it up and QDA's curved boundary pulls ahead "
+                   "on new data - that gap is what QDA's extra flexibility buys when the classes really do have "
+                   "different shapes.")
+        st.caption("**Logistic Regression vs LDA:** both draw a straight-line boundary, but they get there "
+                   "differently. LDA is *generative* - it assumes each class is a Gaussian blob with a shared "
+                   "covariance and derives the line from that. Logistic regression is *discriminative* - it fits "
+                   "the line directly, with no assumption about the class shapes. LDA is slightly more efficient "
+                   "when the Gaussian assumption holds; logistic regression is more robust when it doesn't.")
+
+    with tab2:
+        st.markdown("Both methods classify using Bayes' rule on Gaussian class densities, "
+                     "but the assumption about **Σ** (the covariance matrix) changes everything:")
+        st.markdown('<div class="formula-box">LDA: δₖ(x) = xᵀΣ⁻¹μₖ − ½μₖᵀΣ⁻¹μₖ + log πₖ&nbsp;&nbsp;(linear in x - one shared Σ)</div>',
+            unsafe_allow_html=True)
+        st.markdown('<div class="formula-box">QDA: δₖ(x) = −½log|Σₖ| − ½(x−μₖ)ᵀΣₖ⁻¹(x−μₖ) + log πₖ&nbsp;&nbsp;(quadratic in x - one Σₖ per class)</div>',
+            unsafe_allow_html=True)
+        st.markdown("""
+        Because LDA shares one Σ, the quadratic terms **cancel** when you compare two
+        classes' discriminant scores, leaving a straight line. QDA keeps a separate Σₖ per
+        class, so those quadratic terms survive - giving a curved (elliptical or
+        hyperbolic) boundary. This is the same generative-classifier idea as **Naive
+        Bayes**, minus the assumption that features are independent.
+        """)
+
+        st.markdown("### The cost of flexibility: QDA needs more data")
+        st.markdown("""
+        QDA estimates a full covariance matrix **per class** - far more parameters than
+        LDA's single shared one. With few training points, those extra parameters are
+        estimated poorly, and QDA's flexibility works against it.
+        """)
+
+        cov_diff_lc = st.slider("How different are the class covariances? (this chart)", 0.0, 1.0, 0.2,
+            step=0.1, key="lq_lc_covdiff",
+            help="0 = identical shapes, so LDA's assumption is exactly right. Higher = more different shapes.")
+        n_range = [3, 4, 6, 10, 20, 35, 50, 80]
+
+        @st.cache_data(show_spinner=False)
+        def _lq_learning_curve(cov_diff):
+            import warnings
+            Xtest_lq, ytest_lq = _gen_two_class(500, cov_diff=cov_diff, sep=1.0, seed=999)
+            lda_c, qda_c = [], []
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")      # QDA warns about near-singular covariances at tiny n
+                for n_pc in n_range:
+                    ls, qs = [], []
+                    for rep in range(25):
+                        Xtr, ytr = _gen_two_class(n_pc, cov_diff=cov_diff, sep=1.0, seed=rep)
+                        ls.append(LinearDiscriminantAnalysis().fit(Xtr, ytr).score(Xtest_lq, ytest_lq))
+                        qs.append(QuadraticDiscriminantAnalysis().fit(Xtr, ytr).score(Xtest_lq, ytest_lq))
+                    lda_c.append(float(np.mean(ls))); qda_c.append(float(np.mean(qs)))
+            return lda_c, qda_c
+
+        lda_curve, qda_curve = _lq_learning_curve(cov_diff_lc)
+        qda_ahead = [n for n, l_, q_ in zip(n_range, lda_curve, qda_curve) if q_ > l_ + 0.002]
+
+        fig2 = go.Figure()
+        fig2.add_trace(go.Scatter(x=n_range, y=lda_curve, name='LDA', mode='lines+markers',
+            line=dict(color='#534AB7', width=2.5)))
+        fig2.add_trace(go.Scatter(x=n_range, y=qda_curve, name='QDA', mode='lines+markers',
+            line=dict(color='#E24B4A', width=2.5)))
+        fig2.update_layout(xaxis_title="Training points per class", yaxis_title="Test accuracy",
+            xaxis_type='log', height=320, legend=dict(orientation='h', y=1.14))
+        st.plotly_chart(fig2, width='stretch')
+        if not qda_ahead:
+            verdict_lc = ("LDA wins (or ties) at every sample size: the shapes are the same, so QDA's extra "
+                          "covariance parameters only add noise.")
+        elif qda_ahead[0] <= 4:
+            verdict_lc = ("QDA pulls ahead almost immediately: the shapes are so different that LDA's "
+                          "shared-covariance assumption costs more than QDA's extra parameters.")
+        else:
+            verdict_lc = (f"The crossover: LDA wins with few points, but QDA pulls ahead from about "
+                          f"{qda_ahead[0]} points per class, once there's enough data to estimate its extra "
+                          "parameters reliably.")
+        st.caption(f"{verdict_lc} Average test accuracy over 25 training sets per size. The same bias-variance "
+                   "logic as **Regularization** and **Cross-Validation**, applied to model *assumptions* instead "
+                   "of model *complexity*. Try 0, 0.2 and 0.9.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# NEURAL NETWORK ARCHITECTURE
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "neural_net":
+    st.title("🧬 Neural Network Architecture")
+    st.markdown("""
+    <div class="concept-card">
+    A neural network is a stack of <b>layers</b>, each performing a linear transformation
+    followed by an activation function. The number of layers and neurons determines
+    the model's capacity - and its parameter count.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Architecture explorer", "Forward pass visualised"])
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.markdown("**Design your network**")
+            input_size = st.slider("Input features", 1, 16, 4)
+            n_hidden = st.slider("Number of hidden layers", 1, 6, 3)
+            hidden_sizes = []
+            for i in range(n_hidden):
+                h = st.slider(f"Hidden layer {i+1} neurons", 1, 128, [64,32,16,8,4,2][min(i,5)])
+                hidden_sizes.append(h)
+            output_size = st.slider("Output neurons", 1, 10, 1)
+            activation_nn = st.selectbox("Activation (used in the Forward pass tab)", ["ReLU", "Sigmoid", "Tanh"])
+
+        layer_sizes = [input_size] + hidden_sizes + [output_size]
+        total_params = sum(layer_sizes[i]*layer_sizes[i+1] + layer_sizes[i+1]
+                           for i in range(len(layer_sizes)-1))
+
+        with col2:
+            # Draw network diagram as SVG-like plotly figure
+            fig = go.Figure()
+            max_neurons = max(min(n, 8) for n in layer_sizes)
+            n_layers = len(layer_sizes)
+            x_positions = np.linspace(0.1, 0.9, n_layers)
+            layer_colors = ['#1D9E75'] + ['#534AB7']*n_hidden + ['#E24B4A']
+
+            node_positions = []
+            for li, (lx, n_neurons) in enumerate(zip(x_positions, layer_sizes)):
+                display_n = min(n_neurons, 8)
+                y_positions = np.linspace(0.1, 0.9, display_n) if display_n > 1 else np.array([0.5])
+                node_positions.append((lx, y_positions, n_neurons, display_n))
+
+                # draw connections to next layer
+                if li < n_layers - 1:
+                    next_lx, next_ypos, _, next_dn = x_positions[li+1], \
+                        np.linspace(0.1, 0.9, min(layer_sizes[li+1], 8)), \
+                        layer_sizes[li+1], min(layer_sizes[li+1], 8)
+                    for yi in y_positions:
+                        for yj in (next_ypos if next_dn > 1 else [0.5]):
+                            fig.add_shape(type='line', x0=lx, y0=yi, x1=next_lx, y1=yj,
+                                line=dict(color='rgba(150,150,150,0.15)', width=1))
+
+                # draw neurons
+                for yi in y_positions:
+                    fig.add_shape(type='circle',
+                        x0=lx-0.03, y0=yi-0.035, x1=lx+0.03, y1=yi+0.035,
+                        fillcolor=layer_colors[li], line=dict(color='white', width=1.5))
+                if n_neurons > 8:
+                    fig.add_annotation(x=lx, y=0.02, text=f"+{n_neurons-8} more",
+                        showarrow=False, font=dict(size=9, color='gray'))
+
+                # layer label
+                lname = "Input" if li == 0 else ("Output" if li == n_layers-1 else f"Hidden {li}")
+                fig.add_annotation(x=lx, y=1.0, text=f"<b>{lname}</b><br>{n_neurons}",
+                    showarrow=False, font=dict(size=11))
+
+            fig.update_layout(xaxis=dict(visible=False, range=[0,1]),
+                yaxis=dict(visible=False, range=[-0.05,1.1]),
+                height=400, plot_bgcolor='white',
+                margin=dict(l=10, r=10, t=40, b=10))
+            st.plotly_chart(fig, width='stretch')
+
+        st.markdown("### Parameter count breakdown")
+        param_data = []
+        _lnames = ["Input"] + [f"Hidden {k+1}" for k in range(n_hidden)] + ["Output"]
+        for i in range(len(layer_sizes)-1):
+            w_count = layer_sizes[i] * layer_sizes[i+1]
+            b_count = layer_sizes[i+1]
+            param_data.append({
+                "Layer": f"{_lnames[i]} → {_lnames[i+1]}",
+                "Input neurons": layer_sizes[i],
+                "Output neurons": layer_sizes[i+1],
+                "Weights": w_count,
+                "Biases": b_count,
+                "Total": w_count + b_count
+            })
+        import pandas as pd
+        df_params = pd.DataFrame(param_data)
+        st.dataframe(df_params, width='stretch', hide_index=True)
+        st.metric("Total trainable parameters", f"{total_params:,}")
+
+    with tab2:
+        st.markdown("Watch a single input flow through the network layer by layer.")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            inp_vals = []
+            for i in range(min(input_size, 4)):
+                v = st.slider(f"Input x{i+1}", -3.0, 3.0, float(i*0.5 - 0.5), step=0.1, key=f"nn_inp_{i}")
+                inp_vals.append(v)
+            while len(inp_vals) < input_size:
+                inp_vals.append(0.0)
+            inp_arr = np.array(inp_vals)
+            if input_size > 4:
+                st.caption(f"Inputs x5-x{input_size} are fixed at 0 (only the first 4 have sliders).")
+
+        def act_fn(x, name):
+            if name == "ReLU": return np.maximum(0, x)
+            if name == "Sigmoid": return 1/(1+np.exp(-np.clip(x,-50,50)))
+            return np.tanh(x)
+
+        np.random.seed(99)
+        activations = [inp_arr]
+        layer_inputs = []
+        cur = inp_arr
+        for i in range(len(layer_sizes)-1):
+            W = np.random.randn(layer_sizes[i], layer_sizes[i+1]) * 0.5
+            b_layer = np.zeros(layer_sizes[i+1])
+            z = W.T @ cur + b_layer
+            layer_inputs.append(z)
+            cur = act_fn(z, activation_nn) if i < len(layer_sizes)-2 else z
+            activations.append(cur)
+
+        with col2:
+            fig = go.Figure()
+            for li, (act, lsize) in enumerate(zip(activations, layer_sizes)):
+                display = act[:min(len(act), 12)]
+                lname = "Input" if li == 0 else ("Output" if li == len(layer_sizes)-1 else f"H{li}")
+                fig.add_trace(go.Bar(
+                    x=[f"{lname}[{j}]" for j in range(len(display))],
+                    y=display,
+                    name=lname,
+                    marker_color=['#1D9E75' if li==0 else '#E24B4A' if li==len(layer_sizes)-1 else '#534AB7']*len(display),
+                    opacity=0.8
+                ))
+            fig.update_layout(barmode='group', height=380,
+                xaxis_title="Neuron", yaxis_title="Activation value",
+                legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, width='stretch')
+        st.caption(f"Weights are random (seed=99). Hidden layers use {activation_nn}; the output layer is linear "
+                   "(no activation), as is usual for regression. Change inputs to see activations shift.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# OPTIMIZERS
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "optimizers":
+    st.title("🚀 Optimizers")
+    st.markdown("""
+    <div class="concept-card">
+    Optimizers determine <em>how</em> the gradient is used to update weights.
+    Plain SGD can be slow and noisy; modern optimizers like <b>Adam</b> adapt the
+    learning rate per-parameter and add momentum to accelerate convergence.
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    | Optimizer | Update rule | Key idea |
+    |---|---|---|
+    | **SGD** | w ← w − lr·g | Plain gradient step |
+    | **Momentum** | v ← β·v + g, w ← w − lr·v | Accumulate velocity |
+    | **RMSProp** | s ← β·s + (1-β)·g², w ← w − lr·g/√s | Adapt per-parameter lr |
+    | **Adam** | Momentum + RMSProp with bias correction | Best of both worlds |
+    """)
+
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        lr_opt = st.select_slider("Learning rate", [0.001,0.005,0.01,0.05,0.1,0.2], value=0.05)
+        n_opt_steps = st.slider("Steps", 20, 150, 60)
+        beta1 = st.slider("β₁ (Momentum decay)", 0.5, 0.99, 0.9, step=0.01)
+        beta2 = st.slider("β₂ (RMSProp decay)", 0.9, 0.999, 0.999, step=0.001)
+        surface_type = st.selectbox("Loss surface",
+            ["Elongated bowl", "Ravine (ill-conditioned)", "Saddle point"])
+        optimizers_sel = st.multiselect("Show optimizers",
+            ["SGD", "Momentum", "RMSProp", "Adam"],
+            default=["SGD", "Momentum", "Adam"])
+        start_w1 = st.slider("Start w₁", -3.0, 3.0, 2.5, step=0.1)
+        start_w2 = st.slider("Start w₂", -3.0, 3.0, 2.5, step=0.1)
+
+    if surface_type == "Elongated bowl":
+        def loss_surf(w): return w[0]**2 * 0.2 + w[1]**2 * 5.0
+        def grad_surf(w): return np.array([0.4*w[0], 10.0*w[1]])
+    elif surface_type == "Ravine (ill-conditioned)":
+        # narrow valley tilted 20° from the w₁ axis: steep across it (a), almost flat along it (b)
+        _S, _C = np.sin(np.deg2rad(20)), np.cos(np.deg2rad(20))
+        def loss_surf(w):
+            a = w[0]*_S - w[1]*_C; b = w[0]*_C + w[1]*_S
+            return 15*a**2 + 0.1*b**2
+        def grad_surf(w):
+            a = w[0]*_S - w[1]*_C; b = w[0]*_C + w[1]*_S
+            return np.array([30*a*_S + 0.2*b*_C, -30*a*_C + 0.2*b*_S])
+    else:  # saddle
+        def loss_surf(w): return w[0]**2 - w[1]**2 + 0.1*(w[0]**3)
+        def grad_surf(w): return np.array([2*w[0] + 0.3*w[0]**2, -2*w[1]])
+
+    opt_colors = {"SGD": '#E24B4A', "Momentum": '#534AB7', "RMSProp": '#EF9F27', "Adam": '#1D9E75'}
+
+    def run_optimizer(name, steps):
+        w = np.array([start_w1, start_w2], dtype=float)
+        path = [w.copy()]
+        losses = []
+        v = np.zeros(2); s = np.zeros(2); t = 0
+        eps = 1e-8
+        status = None
+        for _ in range(steps):
+            g = grad_surf(w)
+            losses.append(loss_surf(w))
+            t += 1
+            if name == "SGD":
+                w = w - lr_opt * g
+            elif name == "Momentum":
+                v = beta1 * v + g
+                w = w - lr_opt * v
+            elif name == "RMSProp":
+                s = beta2 * s + (1-beta2) * g**2
+                w = w - lr_opt * g / (np.sqrt(s) + eps)
+            elif name == "Adam":
+                v = beta1 * v + (1-beta1) * g
+                s = beta2 * s + (1-beta2) * g**2
+                v_hat = v / (1 - beta1**t)
+                s_hat = s / (1 - beta2**t)
+                w = w - lr_opt * v_hat / (np.sqrt(s_hat) + eps)
+            path.append(w.copy())
+            if not np.all(np.isfinite(w)) or np.abs(w).max() > 1e3:
+                status = f"diverged at step {t}"; break
+            if surface_type == "Saddle point" and np.abs(w).max() > 4:
+                status = f"escaped downhill (left the plot) at step {t}"; break   # no minimum to return to
+        losses.append(loss_surf(w))
+        return np.array(path), losses, status
+
+    trajectories = {name: run_optimizer(name, n_opt_steps) for name in optimizers_sel}
+
+    w1r = np.linspace(-4, 4, 80)
+    w2r = np.linspace(-4, 4, 80)
+    WW, BB = np.meshgrid(w1r, w2r)
+    ZZ = np.array([[loss_surf(np.array([w, b])) for w in w1r] for b in w2r])
+
+    with col2:
+        fig = make_subplots(rows=1, cols=2,
+            subplot_titles=["Trajectories on loss surface", "Loss over steps"])
+
+        fig.add_trace(go.Contour(x=w1r, y=w2r, z=ZZ,
+            colorscale='RdPu', opacity=0.6, showscale=False,
+            contours=dict(showlabels=False)), row=1, col=1)
+
+        for name, (path, losses, _st) in trajectories.items():
+            c = opt_colors[name]
+            fig.add_trace(go.Scatter(x=path[:,0], y=path[:,1],
+                mode='lines+markers', name=name,
+                line=dict(color=c, width=2),
+                marker=dict(size=4, color=c)), row=1, col=1)
+            fig.add_trace(go.Scatter(y=losses, name=name,
+                line=dict(color=c, width=2), showlegend=False), row=1, col=2)
+
+        fig.update_xaxes(title_text="w₁", range=[-4, 4], row=1, col=1)
+        fig.update_yaxes(title_text="w₂", range=[-4, 4], row=1, col=1)
+        fig.update_xaxes(title_text="Step", row=1, col=2)
+        fig.update_yaxes(title_text="Loss" + ("" if surface_type == "Saddle point" else " (log scale)"),
+                         type="linear" if surface_type == "Saddle point" else "log", row=1, col=2)
+        fig.update_layout(height=420, legend=dict(orientation='h', y=1.12))
+        st.plotly_chart(fig, width='stretch')
+
+    if trajectories:
+        st.dataframe(pd.DataFrame([{
+            "Optimizer": name,
+            "Steps run": len(losses) - 1,
+            "Final loss": round(float(losses[-1]), 4),
+            "Status": _st or "ran all steps",
+        } for name, (path, losses, _st) in trajectories.items()]), hide_index=True, width='stretch')
+
+    if surface_type == "Ravine (ill-conditioned)":
+        st.markdown("**Tip:** the valley is steep across and almost flat along. At learning rate 0.05, SGD "
+                    "zigzags across it and crawls along it; Momentum builds up speed along the floor. At 0.1, "
+                    "SGD's steps across the valley overshoot more each time and it diverges.")
+    elif surface_type == "Saddle point":
+        st.markdown("**Tip:** this surface has no minimum - it goes downhill forever along w₂. Set **Start w₂ "
+                    "to 0.1** (close to the saddle) and learning rate 0.01: the gradient along w₂ is tiny there, "
+                    "so plain SGD lingers near the saddle, while RMSProp and Momentum escape much sooner.")
+    else:
+        st.markdown("**Tip:** the bowl is 25× steeper along w₂ than along w₁. SGD must use a step small enough "
+                    "for w₂, so it is slow along w₁; Adam and RMSProp rescale each direction separately.")
+    if "RMSProp" in optimizers_sel:
+        st.caption(f"RMSProp has no bias correction, so its running average s starts near 0 and the first step is "
+                   f"about 1/√(1−β₂) = {1/np.sqrt(1-beta2):.1f}× the learning rate - you can see it jump at the "
+                   "start. Adam's bias correction is exactly what removes this jump.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DROPOUT
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "dropout":
+    st.title("💧 Dropout")
+    st.markdown("""
+    <div class="concept-card">
+    During training, dropout <b>randomly sets a fraction of neurons to zero</b> at each step.
+    This forces the network to learn redundant representations and acts as a strong
+    regularizer, significantly reducing overfitting.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["How dropout works", "Effect on overfitting"])
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            dropout_rate = st.slider("Dropout rate p", 0.0, 0.9, 0.5, step=0.05,
+                help="Fraction of neurons set to zero")
+            n_neurons_do = st.slider("Neurons in layer", 8, 32, 16)
+            seed_do = st.slider("Random seed (= one training step)", 0, 20, 3)
+            st.markdown("---")
+            st.markdown(f"**Expected active neurons:** {n_neurons_do * (1-dropout_rate):.1f} / {n_neurons_do}")
+            st.markdown(f"**Scale during training (inverted dropout):** ×{1/(1-dropout_rate+1e-9):.2f}")
+            st.info("**Inverted dropout** (what PyTorch and TensorFlow do): during training the surviving "
+                    "activations are multiplied by 1/(1−p), so their expected total stays the same. At "
+                    "**inference** dropout is simply switched off - no scaling needed.")
+            st.caption("The original 2014 dropout did it the other way round: no scaling during training, then "
+                       "weights multiplied by (1−p) at inference. Both give the same expected activations.")
+
+        np.random.seed(seed_do)
+        activations_do = np.random.randn(n_neurons_do) * 2
+        mask = (np.random.rand(n_neurons_do) > dropout_rate).astype(float)
+        dropped = activations_do * mask
+        # inverted dropout scaling (as used in practice)
+        scaled = dropped / (1 - dropout_rate + 1e-9)
+
+        with col2:
+            fig = go.Figure()
+            colors_do = ['#E24B4A' if m == 0 else '#534AB7' for m in mask]
+            fig.add_trace(go.Bar(x=list(range(n_neurons_do)), y=activations_do,
+                name='Original', marker_color='#AFA9EC', opacity=0.5))
+            fig.add_trace(go.Bar(x=list(range(n_neurons_do)), y=scaled,
+                name='After dropout + scale',
+                marker_color=colors_do, opacity=0.9))
+            fig.update_layout(barmode='overlay', xaxis_title="Neuron index",
+                yaxis_title="Activation value", height=360,
+                legend=dict(orientation='h', y=1.1))
+            st.plotly_chart(fig, width='stretch')
+            active = int(mask.sum())
+            st.markdown(f"🔴 **{n_neurons_do - active} neurons dropped** &nbsp;|&nbsp; 🟣 **{active} neurons active**")
+
+    with tab2:
+        st.markdown("A **real** small network trained on 20 noisy points from sin(x) - a setup that overfits "
+                    "easily - once without dropout and once with your dropout rate.")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            do_rate_sim = st.slider("Dropout rate p", 0.0, 0.8, 0.4, step=0.05, key="do_sim")
+            epochs_do = st.select_slider("Training steps", [500, 1000, 2000, 3000, 4000], value=3000, key="do_ep")
+            capacity = st.select_slider("Hidden neurons (more = more overfit risk)", [25, 50, 100, 200, 400],
+                                        value=200, key="do_cap")
+
+        @st.cache_data(show_spinner="Training the network…")
+        def _dropout_run(p_drop, steps, H, seed=0, lr=0.01):
+            """1-hidden-layer ReLU net, full-batch Adam, inverted dropout on the hidden layer."""
+            rng = np.random.default_rng(seed)
+            x = np.sort(rng.uniform(-3, 3, 20))[:, None]
+            y = np.sin(x) + rng.normal(0, 0.3, x.shape)
+            xt = np.linspace(-3, 3, 300)[:, None]; yt = np.sin(xt)
+            W1 = rng.normal(0, 1, (1, H)); b1 = rng.normal(0, 1, H)
+            W2 = rng.normal(0, 1 / np.sqrt(H), (H, 1)); b2 = np.zeros(1)
+            params = [W1, b1, W2, b2]
+            m_ = [np.zeros_like(a) for a in params]; v_ = [np.zeros_like(a) for a in params]
+            step_ax, tr, te = [], [], []
+            for k in range(1, steps + 1):
+                h = np.maximum(0, x @ W1 + b1)
+                mask = (rng.random(h.shape) > p_drop) / (1 - p_drop) if p_drop > 0 else 1.0
+                hd = h * mask
+                g = 2 * (hd @ W2 + b2 - y) / len(x)
+                gh = g @ W2.T * mask * (h > 0)
+                grads = [x.T @ gh, gh.sum(0), hd.T @ g, g.sum(0)]
+                for i, (P, G) in enumerate(zip(params, grads)):
+                    m_[i] = 0.9 * m_[i] + 0.1 * G; v_[i] = 0.999 * v_[i] + 0.001 * G * G
+                    P -= lr * (m_[i] / (1 - 0.9 ** k)) / (np.sqrt(v_[i] / (1 - 0.999 ** k)) + 1e-8)
+                if k % 25 == 0:                  # evaluate with dropout OFF (inference mode)
+                    step_ax.append(k)
+                    tr.append(float(np.mean((np.maximum(0, x @ W1 + b1) @ W2 + b2 - y) ** 2)))
+                    te.append(float(np.mean((np.maximum(0, xt @ W1 + b1) @ W2 + b2 - yt) ** 2)))
+            pred = (np.maximum(0, xt @ W1 + b1) @ W2 + b2).ravel()
+            return step_ax, tr, te, pred, x.ravel(), y.ravel(), xt.ravel()
+
+        st_no, tr_no, te_no, pred_no, x_dd, y_dd, xt_dd = _dropout_run(0.0, epochs_do, capacity)
+        st_do, tr_do, te_do, pred_do, _, _, _ = _dropout_run(do_rate_sim, epochs_do, capacity)
+
+        with col2:
+            fig = make_subplots(rows=1, cols=2, subplot_titles=["Loss during training", "What the network learned"])
+            fig.add_trace(go.Scatter(x=st_no, y=tr_no, name='Train (no dropout)',
+                line=dict(color='#534AB7', width=2, dash='dash')), row=1, col=1)
+            fig.add_trace(go.Scatter(x=st_no, y=te_no, name='Test (no dropout)',
+                line=dict(color='#E24B4A', width=2, dash='dash')), row=1, col=1)
+            fig.add_trace(go.Scatter(x=st_do, y=tr_do, name=f'Train (p={do_rate_sim})',
+                line=dict(color='#534AB7', width=2.5)), row=1, col=1)
+            fig.add_trace(go.Scatter(x=st_do, y=te_do, name=f'Test (p={do_rate_sim})',
+                line=dict(color='#1D9E75', width=2.5)), row=1, col=1)
+            fig.add_trace(go.Scatter(x=x_dd, y=y_dd, mode='markers', name='Training points',
+                marker=dict(color='#333', size=7), showlegend=False), row=1, col=2)
+            fig.add_trace(go.Scatter(x=xt_dd, y=np.sin(xt_dd), name='True sin(x)',
+                line=dict(color='#888780', width=1.5, dash='dot'), showlegend=False), row=1, col=2)
+            fig.add_trace(go.Scatter(x=xt_dd, y=pred_no, name='Fit, no dropout',
+                line=dict(color='#E24B4A', width=2, dash='dash'), showlegend=False), row=1, col=2)
+            fig.add_trace(go.Scatter(x=xt_dd, y=pred_do, name=f'Fit, p={do_rate_sim}',
+                line=dict(color='#1D9E75', width=2.5), showlegend=False), row=1, col=2)
+            fig.update_xaxes(title_text="Training step", row=1, col=1)
+            fig.update_xaxes(title_text="x", row=1, col=2)
+            fig.update_yaxes(title_text="MSE", type='log', row=1, col=1)
+            fig.update_yaxes(range=[-2, 2], row=1, col=2)
+            fig.update_layout(height=380, legend=dict(orientation='h', y=1.18))
+            st.plotly_chart(fig, width='stretch')
+
+        m1, m2 = st.columns(2)
+        m1.metric("Test error, no dropout", f"{te_no[-1]:.3f}")
+        m2.metric(f"Test error, p = {do_rate_sim}", f"{te_do[-1]:.3f}", delta=f"{te_do[-1]-te_no[-1]:+.3f}",
+                  delta_color="inverse")
+        if do_rate_sim == 0:
+            st.info("p = 0 - the two runs are identical. Raise the dropout rate.")
+        elif te_do[-1] < te_no[-1] * 0.9:
+            st.success(f"Dropout helps: test error {te_no[-1]:.3f} → {te_do[-1]:.3f}. Without dropout the network "
+                       "bends to pass through the noisy points (red dashed fit); dropout keeps it closer to the true curve.")
+        elif tr_do[-1] > tr_no[-1] * 3 and te_do[-1] > te_no[-1]:
+            st.warning(f"Too much dropout - underfitting: with p = {do_rate_sim} the network can't even fit the "
+                       f"training data well (train error {tr_do[-1]:.3f}), so test error gets worse too.")
+        else:
+            st.info("Little difference at this setting - try a larger network or a moderate p (0.2-0.5).")
+        st.caption("Real training, evaluated with dropout switched off (inference mode). Test error is measured against "
+                   "the true sin(x) curve. Moderate dropout usually helps; too much stops the network learning. "
+                   "Results are cached, so returning to a setting is instant.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# BATCH SIZE & GRADIENT NOISE
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "batch_size":
+    st.title("🎲 Batch Size & Gradient Noise")
+    st.markdown("""
+    <div class="concept-card">
+    A <b>batch</b> is the subset of training data used to compute one gradient update.
+    Large batches give accurate, smooth gradients. Small batches are noisy but can
+    generalise better and require less memory.
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    | Batch size | Gradient quality | Memory | Generalisation | Typical use |
+    |---|---|---|---|---|
+    | 1 (SGD) | Very noisy | Minimal | Often good | Online learning |
+    | 8–64 | Moderate noise | Low | Good | Standard DL |
+    | 256–2048 | Smooth | High | Can be worse | Large-scale / TPUs |
+    | Full dataset | Exact | Huge | Sometimes poor | Classical ML |
+    """)
+
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        n_total = st.slider("Total training samples", 100, 500, 200)
+        batch_size_sim = st.select_slider("Batch size",
+            [1, 4, 8, 16, 32, 64, 128, 200], value=16)
+        lr_batch = st.select_slider("Learning rate", [0.001,0.005,0.01,0.05,0.1], value=0.01)
+        n_epochs_b = st.slider("Epochs", 5, 50, 20)
+        seed_b = st.slider("Seed", 0, 10, 0)
+
+    np.random.seed(seed_b)
+    X_b = np.random.randn(n_total, 2)
+    true_w_b = np.array([1.5, -0.8])
+    y_b = X_b @ true_w_b + np.random.randn(n_total) * 0.5
+
+    def run_batch_gd(batch_sz, lr, epochs):
+        w = np.zeros(2)
+        loss_per_step = []
+        for ep in range(epochs):
+            idx = np.random.permutation(n_total)
+            X_sh, y_sh = X_b[idx], y_b[idx]
+            for start in range(0, n_total, batch_sz):
+                Xb = X_sh[start:start+batch_sz]
+                yb = y_sh[start:start+batch_sz]
+                g = 2 * Xb.T @ (Xb @ w - yb) / len(yb)
+                w = w - lr * g
+                loss_per_step.append(np.mean((X_b @ w - y_b)**2))
+        return w, loss_per_step
+
+    np.random.seed(seed_b)
+    w_final, losses_b = run_batch_gd(batch_size_sim, lr_batch, n_epochs_b)
+    w_ols_b = np.linalg.lstsq(X_b, y_b, rcond=None)[0]
+    best_mse_b = float(np.mean((X_b @ w_ols_b - y_b) ** 2))      # the lowest MSE any w can reach
+
+    # compare multiple batch sizes
+    batch_sizes_cmp = [1, 16, 64, n_total]
+    all_losses = {}
+    for bs in batch_sizes_cmp:
+        np.random.seed(seed_b)
+        _, ls = run_batch_gd(bs, lr_batch, n_epochs_b)
+        all_losses[bs] = ls
+
+    with col2:
+        fig = make_subplots(rows=1, cols=2,
+            subplot_titles=[f"Loss trajectory (batch={batch_size_sim})",
+                            "All batch sizes, same number of epochs"])
+
+        fig.add_trace(go.Scatter(y=losses_b, name=f'batch={batch_size_sim}',
+            line=dict(color='#534AB7', width=1.5)), row=1, col=1)
+
+        cmp_colors = ['#E24B4A', '#534AB7', '#EF9F27', '#1D9E75']
+        max_steps = max(len(v) for v in all_losses.values())
+        for (bs, ls), col_c in zip(all_losses.items(), cmp_colors):
+            steps_per_ep = int(np.ceil(n_total / bs))
+            ep_axis = (np.arange(len(ls)) + 1) / steps_per_ep          # x in epochs, so all lines span the same range
+            fig.add_trace(go.Scatter(x=ep_axis, y=ls,
+                name=f'B={bs}' if bs < n_total else 'Full batch',
+                line=dict(color=col_c, width=1.8)), row=1, col=2)
+        for col_i in (1, 2):
+            fig.add_hline(y=best_mse_b, line=dict(color='#333', dash='dot', width=1), row=1, col=col_i)
+
+        fig.update_xaxes(title_text="Gradient step", row=1, col=1)
+        fig.update_xaxes(title_text="Epoch", row=1, col=2)
+        fig.update_yaxes(title_text="MSE", row=1, col=1)
+        fig.update_yaxes(title_text="MSE", row=1, col=2)
+        fig.update_layout(height=380, legend=dict(orientation='h', y=1.12))
+        st.plotly_chart(fig, width='stretch')
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Steps per epoch", int(np.ceil(n_total / batch_size_sim)))
+    c2.metric("Total gradient steps", len(losses_b))
+    c3.metric("Final MSE", f"{losses_b[-1]:.4f}" if losses_b else "-",
+              delta=f"{losses_b[-1] - best_mse_b:+.4f} vs best possible" if losses_b else None, delta_color="off")
+
+    final_cmp = {bs: ls[-1] for bs, ls in all_losses.items()}
+    st.caption(f"Dotted line = best possible MSE ({best_mse_b:.4f}). **Same epochs ≠ same number of updates:** "
+               f"in {n_epochs_b} epochs, batch size 1 makes {len(all_losses[1]):,} updates but full batch only "
+               f"{len(all_losses[n_total])}. That - not bad gradients - is why full batch ends highest here "
+               f"(MSE {final_cmp[n_total]:.3f}). Its gradient is actually the most accurate; in practice large "
+               "batches are paired with a proportionally larger learning rate.")
+    st.caption(f"**The noise floor:** with a fixed learning rate, small batches never fully settle - batch size 1 "
+               f"ends at {final_cmp[1]:.4f}, jittering just above the minimum because every step uses a different, "
+               "noisy gradient. Decaying the learning rate over time removes that jitter - see **Learning Rate "
+               "Schedulers**.")
+
+    st.markdown("**Noise in small batches can actually help** - in deep networks it acts like implicit "
+                "regularization, helping the optimizer escape sharp minima that generalise poorly. (The linear "
+                "model on this page has a single minimum, so here the noise only costs a little accuracy.)")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# VANISHING & EXPLODING GRADIENTS
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "vanishing_grad":
+    st.title("⚡ Vanishing & Exploding Gradients")
+    st.markdown("""
+    <div class="concept-card">
+    During backpropagation through many layers, gradients are multiplied together.
+    If weights are small, the gradient <b>vanishes</b> (→ 0) and early layers stop learning.
+    If weights are large, the gradient <b>explodes</b> (→ ∞) and training becomes unstable.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Gradient magnitude through layers", "Fixes: initialisation & residuals"])
+
+    @st.cache_data
+    def _vg_backprop(L, gain, act, residual=False, n=64, batch=32, seed=0):
+        """Real backprop through a random deep MLP. Weights ~ N(0, gain²/n).
+        Returns the mean gradient norm at each layer, ordered from output to input."""
+        rng = np.random.default_rng(seed)
+        if act == "Sigmoid":
+            f = lambda z: 1/(1+np.exp(-z)); d = lambda z: f(z)*(1-f(z))
+        elif act == "Tanh":
+            f = np.tanh; d = lambda z: 1 - np.tanh(z)**2
+        else:
+            f = lambda z: np.maximum(0, z); d = lambda z: (z > 0).astype(float)
+        h = rng.normal(size=(batch, n)); Ws, zs = [], []
+        for _ in range(L):                                   # forward pass
+            W = rng.normal(0, gain/np.sqrt(n), (n, n)); z = h @ W
+            Ws.append(W); zs.append(z)
+            h = h + f(z) if residual else f(z)
+        g = rng.normal(size=(batch, n)); g /= np.linalg.norm(g, axis=1, keepdims=True)   # output gradient, norm 1
+        out = []
+        for l in reversed(range(L)):                         # backward pass
+            g_in = (g * d(zs[l])) @ Ws[l].T
+            g = g + g_in if residual else g_in               # skip connection passes g through unchanged
+            out.append(float(np.linalg.norm(g, axis=1).mean()))
+        return out
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            n_layers_vg = st.slider("Number of layers", 2, 30, 10)
+            weight_scale = st.slider("Weight scale (weights ~ N(0, scale²/width))", 0.1, 3.0, 1.0, step=0.05,
+                help="Scale 1 = Xavier-style for a square layer; scale √2 ≈ 1.41 = He initialisation.")
+            act_vg = st.selectbox("Activation", ["Sigmoid", "Tanh", "ReLU"], key="vg_act")
+            st.markdown("---")
+            layer_grad_mags = _vg_backprop(n_layers_vg, weight_scale, act_vg)
+            ratio_vg = layer_grad_mags[-1]          # output gradient has norm 1
+            if ratio_vg < 1e-2:
+                st.error(f"🔴 **Vanishing gradient** - the first layer gets {ratio_vg:.1e} of the output gradient")
+            elif ratio_vg < 0.1:
+                st.warning(f"🟠 **Shrinking** - the first layer gets {ratio_vg:.2f}× the output gradient")
+            elif ratio_vg > 100:
+                st.error(f"🟡 **Exploding gradient** - the first layer gets {ratio_vg:.1e}× the output gradient")
+            elif ratio_vg > 10:
+                st.warning(f"🟠 **Growing** - the first layer gets {ratio_vg:.1f}× the output gradient")
+            else:
+                st.success(f"🟢 **Stable** - the first layer gets {ratio_vg:.2f}× the output gradient")
+            st.caption("Try ReLU at scale 1.41 (He) and Tanh at scale 1.0 (Xavier). Sigmoid vanishes at "
+                       "every scale: its slope is at most 0.25.")
+
+        layers_axis = list(range(1, n_layers_vg + 1))
+
+        with col2:
+            fig = go.Figure()
+            colors_vg = ['#E24B4A' if g < 1e-3 else '#EF9F27' if g > 100 else '#1D9E75'
+                         for g in layer_grad_mags]
+            fig.add_trace(go.Bar(x=layers_axis, y=layer_grad_mags,
+                marker_color=colors_vg, name='Gradient magnitude'))
+            fig.add_hline(y=1e-3, line_dash='dash', line_color='#E24B4A',
+                annotation_text="vanishing zone")
+            fig.add_hline(y=100, line_dash='dash', line_color='#EF9F27',
+                annotation_text="exploding zone")
+            fig.update_layout(xaxis_title=f"Layer, counted from the output (layer {n_layers_vg} = closest to input)",
+                yaxis_title="Gradient norm ‖∂L/∂h‖",
+                yaxis_type='log', height=380)
+            st.plotly_chart(fig, width='stretch')
+            st.caption("Real backpropagation through a random network (64 neurons per layer, batch of 32). "
+                       "The gradient arriving from the output has norm 1.")
+
+        n_show = min(10, n_layers_vg)
+        st.markdown(f"### Gradient magnitude - the {n_show} layers closest to the input")
+        st.markdown("These are the layers that stop learning when gradients vanish.")
+        df_vg = pd.DataFrame({
+            "Layer (from output)": layers_axis[-n_show:],
+            "Gradient magnitude": [f"{g:.2e}" for g in layer_grad_mags[-n_show:]],
+            "Status": ["🔴 Vanished" if g < 1e-3 else "🟡 Exploding" if g > 100 else "🟢 OK"
+                       for g in layer_grad_mags[-n_show:]]
+        })
+        st.dataframe(df_vg, width='stretch', hide_index=True)
+
+    with tab2:
+        st.markdown("### How to fix vanishing/exploding gradients")
+        st.markdown("""
+        **1. Weight Initialisation**
+        - **Xavier/Glorot** (for Sigmoid, Tanh): initialise weights with std = √(2 / (n_in + n_out))
+        - **He initialisation** (for ReLU): initialise weights with std = √(2 / n_in)
+        """)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**Xavier vs He vs Naive initialisation**")
+            n_in_init = st.slider("Layer input size", 4, 512, 64)
+            n_out_init = st.slider("Layer output size", 4, 512, 64)
+
+            naive_std  = 1.0
+            xavier_std = np.sqrt(2 / (n_in_init + n_out_init))
+            he_std     = np.sqrt(2 / n_in_init)
+
+            np.random.seed(42)
+            w_naive  = np.random.randn(n_in_init, n_out_init) * naive_std
+            w_xavier = np.random.randn(n_in_init, n_out_init) * xavier_std
+            w_he     = np.random.randn(n_in_init, n_out_init) * he_std
+
+            fig2 = go.Figure()
+            for w_arr, name, col_c in [(w_naive.ravel(), 'Naive (std=1)', '#E24B4A'),
+                                       (w_xavier.ravel(), f'Xavier (std={xavier_std:.3f})', '#534AB7'),
+                                       (w_he.ravel(), f'He (std={he_std:.3f})', '#1D9E75')]:
+                fig2.add_trace(go.Histogram(x=w_arr, name=name, opacity=0.6,
+                    marker_color=col_c, nbinsx=40))
+            fig2.update_layout(barmode='overlay', xaxis_title="Weight value",
+                yaxis_title="Count", height=300, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig2, width='stretch')
+
+        with col2:
+            st.markdown("**2. Residual connections (skip connections)**")
+            st.markdown("""
+            ResNets add a shortcut that bypasses one or more layers:
+
+            ```
+            output = F(x, W) + x
+            ```
+
+            The gradient can now flow directly through the skip connection,
+            bypassing the non-linearity entirely - solving vanishing gradients
+            in very deep networks (100+ layers).
+            """)
+
+            n_res_layers = st.slider("Network depth", 2, 20, 8, key="res_layers")
+            with_residual = st.checkbox("Show with residual connections", value=True)
+
+            g_no_res = [1.0] + _vg_backprop(n_res_layers, 1.0, "Sigmoid")
+            g_with_res = [1.0] + _vg_backprop(n_res_layers, 1.0, "Sigmoid", residual=True)
+            fig3 = go.Figure()
+            fig3.add_trace(go.Scatter(y=g_no_res, name='Without residual',
+                line=dict(color='#E24B4A', width=2.5), mode='lines+markers'))
+            if with_residual:
+                fig3.add_trace(go.Scatter(y=g_with_res, name='With residual',
+                    line=dict(color='#1D9E75', width=2.5), mode='lines+markers'))
+            fig3.update_layout(xaxis_title="Layer (from output)",
+                yaxis_title="Gradient norm (log scale)", yaxis_type='log',
+                height=280, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig3, width='stretch')
+            st.caption(f"Real backprop, sigmoid network, scale 1. At the first layer: without residual "
+                       f"{g_no_res[-1]:.1e}, with residual {g_with_res[-1]:.2f}. The skip adds the identity "
+                       "to every layer's Jacobian (∂(F(x)+x)/∂x = ∂F/∂x + I), so the gradient can't shrink to 0.")
+
+        st.markdown("""
+        **3. Other fixes:**
+        - **Gradient clipping** - cap gradient norm at a threshold (common in RNNs)
+        - **Batch Normalisation** - keeps activations well-scaled at each layer
+        - **ReLU** instead of Sigmoid/Tanh - derivative is 1 for x>0, not squashed
+        """)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SINGLE NEURON / PERCEPTRON
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "neuron":
+    st.title("🔬 Neuron (Perceptron)")
+    st.markdown("""
+    <div class="concept-card">
+    A single neuron is the fundamental building block of every neural network.
+    It takes a set of inputs, multiplies each by a learned <b>weight</b>, adds a <b>bias</b>,
+    then passes the result through an <b>activation function</b> to produce an output.
+    Everything in deep learning is just many of these stacked together.<br><br>
+    Strictly, the original perceptron (Rosenblatt, 1958) used a <b>step function</b> (output 0 or 1);
+    the modern neuron replaces it with a smooth activation so it can be trained with gradients.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs([
+        "Live computation diagram",
+        "What weights and bias do",
+        "One learning step"
+    ])
+
+    # ── TAB 1: live computation diagram ──────────────────────────────────
+    with tab1:
+        st.markdown("Adjust the inputs, weights and bias - watch every value in the equation update live.")
+
+        col_ctrl, col_diag = st.columns([1, 2])
+        with col_ctrl:
+            st.markdown("**Inputs**")
+            x1 = st.slider("x₁", -3.0, 3.0, 1.0, step=0.1, key="n_x1")
+            x2 = st.slider("x₂", -3.0, 3.0, 0.5, step=0.1, key="n_x2")
+            x3 = st.slider("x₃", -3.0, 3.0, -1.0, step=0.1, key="n_x3")
+            st.markdown("**Weights**")
+            w1 = st.slider("w₁", -3.0, 3.0, 0.8, step=0.1, key="n_w1")
+            w2 = st.slider("w₂", -3.0, 3.0, -0.5, step=0.1, key="n_w2")
+            w3 = st.slider("w₃", -3.0, 3.0, 1.2, step=0.1, key="n_w3")
+            st.markdown("**Bias & activation**")
+            bias = st.slider("bias b", -3.0, 3.0, 0.8, step=0.1, key="n_b")
+            act_n = st.selectbox("Activation", ["ReLU", "Sigmoid", "Tanh", "None (linear)"], key="n_act")
+
+        # compute
+        z = w1*x1 + w2*x2 + w3*x3 + bias
+        act_fns = {
+            "ReLU":          lambda v: max(0.0, v),
+            "Sigmoid":       lambda v: 1/(1+np.exp(-v)),
+            "Tanh":          lambda v: float(np.tanh(v)),
+            "None (linear)": lambda v: v,
+        }
+        output_n = act_fns[act_n](z)
+        z = 0.0 if abs(z) < 1e-9 else z                     # avoid showing −0.0000
+        output_n = 0.0 if abs(output_n) < 1e-9 else output_n
+        act_lbl = "z" if act_n == "None (linear)" else f"{act_n}(z)"
+
+        with col_diag:
+            # ── build the diagram with plotly shapes + annotations ──
+            fig = go.Figure()
+            fig.update_layout(
+                xaxis=dict(visible=False, range=[0, 10]),
+                yaxis=dict(visible=False, range=[0, 10]),
+                height=460, margin=dict(l=10, r=10, t=10, b=10),
+                plot_bgcolor="white",
+            )
+
+            inputs  = [(x1,"x₁",w1,"w₁"), (x2,"x₂",w2,"w₂"), (x3,"x₃",w3,"w₃")]
+            ys_in   = [7.5, 5.0, 2.5]
+            x_in, x_sum, x_act, x_out = 1.0, 4.2, 6.8, 9.2
+
+            node_style  = dict(fillcolor="#eeedfe", line=dict(color="#534AB7", width=2))
+            sum_style   = dict(fillcolor="#fff8e8", line=dict(color="#EF9F27", width=2))
+            act_style   = dict(fillcolor="#e8f8f2", line=dict(color="#1D9E75", width=2))
+            out_style   = dict(fillcolor="#fdecea", line=dict(color="#E24B4A", width=2.5))
+
+            r = 0.55  # node radius
+
+            # input nodes
+            for (xv, xl, wv, wl), yi in zip(inputs, ys_in):
+                fig.add_shape(type="circle", x0=x_in-r, y0=yi-r, x1=x_in+r, y1=yi+r, **node_style)
+                fig.add_annotation(x=x_in, y=yi, text=f"<b>{xl}</b><br>{xv:.1f}",
+                    showarrow=False, font=dict(size=11))
+
+                # connection line to summation node
+                contrib = xv * wv
+                lw = min(abs(contrib)*1.5 + 0.5, 5)
+                lc = "#534AB7" if contrib >= 0 else "#E24B4A"
+                fig.add_shape(type="line", x0=x_in+r, y0=yi, x1=x_sum-r, y1=5.0,
+                    line=dict(color=lc, width=lw))
+                # weight label on the line
+                mx, my = (x_in+r + x_sum-r)/2, (yi + 5.0)/2
+                fig.add_annotation(x=mx, y=my,
+                    text=f"{wl}={wv:.1f}<br>→{contrib:.2f}",
+                    showarrow=False, font=dict(size=9, color=lc),
+                    bgcolor="rgba(255,255,255,0.75)", borderpad=2)
+
+            # summation node  Σ
+            fig.add_shape(type="circle", x0=x_sum-r, y0=5.0-r, x1=x_sum+r, y1=5.0+r, **sum_style)
+            fig.add_annotation(x=x_sum, y=5.5, text="<b>Σ</b>", showarrow=False,
+                font=dict(size=18, color="#b8860b"))
+            fig.add_annotation(x=x_sum, y=4.6,
+                text=f"z={z:.3f}", showarrow=False, font=dict(size=10, color="#5a4a00"))
+
+            # bias arrow (comes from below)
+            fig.add_shape(type="line", x0=x_sum, y0=5.0-r-1.0, x1=x_sum, y1=5.0-r,
+                line=dict(color="#888", width=1.5, dash="dot"))
+            fig.add_annotation(x=x_sum, y=5.0-r-1.2,
+                text=f"b={bias:.1f}", showarrow=False, font=dict(size=10, color="#555"))
+
+            # line: Σ → activation
+            fig.add_shape(type="line", x0=x_sum+r, y0=5.0, x1=x_act-r, y1=5.0,
+                line=dict(color="#EF9F27", width=2))
+            fig.add_annotation(x=(x_sum+r+x_act-r)/2, y=5.35,
+                text=f"z={z:.2f}", showarrow=False, font=dict(size=9, color="#b8860b"))
+
+            # activation node
+            short = {"ReLU":"ReLU","Sigmoid":"σ","Tanh":"tanh","None (linear)":"-"}
+            fig.add_shape(type="rect", x0=x_act-r*1.3, y0=5.0-r, x1=x_act+r*1.3, y1=5.0+r, **act_style)
+            fig.add_annotation(x=x_act, y=5.0,
+                text=f"<b>{short[act_n]}</b>", showarrow=False, font=dict(size=14, color="#0f6e56"))
+
+            # line: activation → output
+            fig.add_shape(type="line", x0=x_act+r*1.3, y0=5.0, x1=x_out-r, y1=5.0,
+                line=dict(color="#E24B4A", width=2.5))
+
+            # output node
+            fig.add_shape(type="circle", x0=x_out-r, y0=5.0-r, x1=x_out+r, y1=5.0+r, **out_style)
+            fig.add_annotation(x=x_out, y=5.5, text="<b>ŷ</b>", showarrow=False,
+                font=dict(size=15, color="#a32d2d"))
+            fig.add_annotation(x=x_out, y=4.6,
+                text=f"{output_n:.4f}", showarrow=False, font=dict(size=10, color="#a32d2d"))
+
+            st.plotly_chart(fig, width='stretch')
+
+        # live equation below the diagram
+        st.markdown("**Equation for this neuron right now:**")
+        eq_parts = f"w₁·x₁ + w₂·x₂ + w₃·x₃ + b = ({w1:.1f})({x1:.1f}) + ({w2:.1f})({x2:.1f}) + ({w3:.1f})({x3:.1f}) + ({bias:.1f}) = {z:.4f}"
+        st.markdown(f'<div class="formula-box">z = {eq_parts}</div>', unsafe_allow_html=True)
+        _out_rhs = (f"z = <b>{output_n:.4f}</b>" if act_n == "None (linear)"
+                    else f"{act_n}(z) = {act_n}({z:.4f}) = <b>{output_n:.4f}</b>")
+        st.markdown(f'<div class="formula-box">output = {_out_rhs}</div>', unsafe_allow_html=True)
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Weighted sum z", f"{z:.4f}")
+        m2.metric(f"Output = {act_lbl}", f"{output_n:.4f}")
+        m3.metric("Contributions",
+            f"x₁:{w1*x1:.2f}  x₂:{w2*x2:.2f}  x₃:{w3*x3:.2f}  b:{bias:.2f}")
+
+    # ── TAB 2: what weights and bias do ──────────────────────────────────
+    with tab2:
+        st.markdown("### Weight = slope of sensitivity. Bias = where the neuron 'turns on'.")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**Effect of weight magnitude and sign (single input)**")
+            x_range = np.linspace(-3, 3, 200)
+            weights_demo = [2.0, 1.0, 0.3, -1.0, -2.0]
+            fig = go.Figure()
+            colors_w = ['#534AB7','#1D9E75','#888780','#EF9F27','#E24B4A']
+            for wv, cv in zip(weights_demo, colors_w):
+                z_line = wv * x_range + 0.0
+                out_line = np.array([float(np.tanh(zv)) for zv in z_line])
+                fig.add_trace(go.Scatter(x=x_range, y=out_line,
+                    name=f"w={wv}", line=dict(color=cv, width=2)))
+            fig.update_layout(xaxis_title="Input x", yaxis_title="Output (tanh)",
+                title="Changing weight - same bias (b=0)",
+                height=300, legend=dict(orientation='h', y=1.15))
+            st.plotly_chart(fig, width='stretch')
+
+        with col2:
+            st.markdown("**Effect of bias - shifts the activation threshold**")
+            biases_demo = [-2.0, -1.0, 0.0, 1.0, 2.0]
+            fig = go.Figure()
+            for bv, cv in zip(biases_demo, colors_w):
+                z_line = 1.5 * x_range + bv
+                out_line = np.array([1/(1+np.exp(-zv)) for zv in z_line])
+                fig.add_trace(go.Scatter(x=x_range, y=out_line,
+                    name=f"b={bv}", line=dict(color=cv, width=2)))
+            fig.add_hline(y=0.5, line_dash="dash", line_color="gray",
+                annotation_text="threshold p=0.5")
+            fig.update_layout(xaxis_title="Input x", yaxis_title="Output (sigmoid)",
+                title="Changing bias - same weight (w=1.5)",
+                height=300, legend=dict(orientation='h', y=1.15))
+            st.plotly_chart(fig, width='stretch')
+
+        st.markdown("""
+        - A **large positive weight** makes the neuron very sensitive to that input - it fires strongly when x is high.  
+        - A **negative weight** makes the neuron *inhibited* by that input - like an "off switch."  
+        - The **bias** shifts the curve left or right, controlling the threshold at which the neuron activates, independently of any input.
+        """)
+
+    # ── TAB 3: how learning connects to backprop ─────────────────────────
+    with tab3:
+        st.markdown("### How a single neuron connects to the full training loop")
+        st.markdown("""
+        A single neuron already contains all the ingredients of training:
+
+        1. **Forward pass** - compute z = w·x + b, then ŷ = activation(z)
+        2. **Loss** - measure how wrong ŷ is: e.g. L = ½(ŷ − y)²
+        3. **Backward pass** - use the chain rule to find dL/dw and dL/db
+        4. **Update** - nudge each weight opposite to its gradient: w ← w − η·dL/dw
+
+        When you stack many neurons into layers, step 3 becomes **backpropagation** -
+        the chain rule applied recursively from the output layer back to the input layer.
+        """)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**The chain rule for one neuron:**")
+            st.markdown('<div class="formula-box">'
+                'dL/dw = dL/dŷ &middot; dŷ/dz &middot; dz/dw<br><br>'
+                '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= (ŷ−y) &middot; f&#39;(z) &middot; x'
+                '</div>', unsafe_allow_html=True)
+            st.markdown("""
+            Each factor has a clear role:
+            - **(ŷ−y)** - how wrong is the output?
+            - **f'(z)** - how sensitive is the activation to z?
+            - **x** - how much did this input contribute to z?
+            """)
+        with col2:
+            st.markdown("**The learning loop:**")
+            st.code("""
+for each batch:
+    # 1. Forward
+    z    = w @ x + b
+    y_hat = activation(z)
+    loss  = criterion(y_hat, y)
+
+    # 2. Backward
+    loss.backward()   # chain rule
+
+    # 3. Update
+    with torch.no_grad():      # don't track the update itself
+        w -= lr * w.grad
+        b -= lr * b.grad
+    w.grad.zero_()             # gradients add up unless cleared
+    b.grad.zero_()
+
+# In practice: optimizer.step() and optimizer.zero_grad()
+# do these update and clearing lines for you.
+""", language="python")
+
+        st.info("👉 For the full interactive step-by-step breakdown with a 2-layer network, "
+                "see the **Backpropagation** concept in Deep Learning.")
+
+        st.markdown("---")
+        st.markdown("### Worked example: one gradient step on the neuron from tab 1")
+        st.caption("Uses the inputs, weights, bias and activation you set in the first tab.")
+        c1, c2 = st.columns(2)
+        y_target = c1.slider("Target y", -3.0, 3.0, 1.0, step=0.1, key="n_ytgt")
+        eta_n = c2.select_slider("Learning rate η", [0.01, 0.05, 0.1, 0.2, 0.5], value=0.1, key="n_eta")
+
+        _derivs = {
+            "ReLU":          lambda v: 1.0 if v > 0 else 0.0,
+            "Sigmoid":       lambda v: float(1/(1+np.exp(-v)) * (1 - 1/(1+np.exp(-v)))),
+            "Tanh":          lambda v: float(1 - np.tanh(v)**2),
+            "None (linear)": lambda v: 1.0,
+        }
+        f_prime = _derivs[act_n](z)
+        err_n = output_n - y_target
+        loss_old = 0.5 * err_n**2
+        delta_n = err_n * f_prime                       # dL/dz
+        xs_n = [x1, x2, x3, 1.0]                        # bias acts like an input fixed at 1
+        old_p = [w1, w2, w3, bias]
+        grads_n = [delta_n * xv for xv in xs_n]
+        new_p = [pv - eta_n * gv for pv, gv in zip(old_p, grads_n)]
+        z_new = sum(pv * xv for pv, xv in zip(new_p[:3], xs_n[:3])) + new_p[3]
+        out_new = act_fns[act_n](z_new)
+        loss_new = 0.5 * (out_new - y_target)**2
+        f_lbl = "1 (linear)" if act_n == "None (linear)" else f"{act_n}′({z:.3f})"
+
+        st.markdown(
+            f'<div class="formula-box">'
+            f'1. Forward: z = {_vout(z)}, ŷ = {_vout(output_n)}<br>'
+            f'2. Loss: L = ½(ŷ − y)² = ½({_vin(output_n)} − {_vin(y_target)})² = <b>{_vout(loss_old)}</b><br>'
+            f'3. Backward: (ŷ − y) = {_vout(err_n)}, f′(z) = {f_lbl} = {_vout(f_prime)} '
+            f'→ dL/dz = {_vin(err_n)}·{_vin(f_prime)} = {_vout(delta_n)}<br>'
+            f'&nbsp;&nbsp;&nbsp;&nbsp;each dL/dwᵢ = dL/dz · xᵢ, and dL/db = dL/dz · 1'
+            f'</div>', unsafe_allow_html=True)
+
+        st.dataframe(pd.DataFrame({
+            "Parameter": ["w₁", "w₂", "w₃", "b"],
+            "Old value": [round(v, 4) for v in old_p],
+            "Input it multiplies": [round(v, 4) for v in xs_n],
+            "Gradient dL/d·": [round(g, 4) for g in grads_n],
+            f"New = old − {eta_n}·gradient": [round(v, 4) for v in new_p],
+        }), hide_index=True, width='stretch')
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("ŷ before → after", f"{output_n:.4f} → {out_new:.4f}")
+        m2.metric("Loss after one step", f"{loss_new:.4f}", delta=f"{loss_new - loss_old:+.4f}", delta_color="inverse")
+        m3.metric("Target y", f"{y_target:.1f}")
+        if abs(err_n) < 1e-9:
+            st.info("ŷ already equals the target - the loss is 0, so every gradient is 0 and nothing changes.")
+        elif f_prime == 0:
+            st.warning(f"**Dead ReLU:** z = {_vout(z)} is negative, so ReLU′(z) = 0 and every gradient is 0. "
+                       "The neuron is wrong but cannot learn from this example. Try Tanh, or raise the bias.")
+        elif loss_new < loss_old:
+            st.success(f"One step lowered the loss from {_vout(loss_old)} to {_vout(loss_new)}. Each weight moved "
+                       "opposite to its gradient; inputs that were 0 leave their weight unchanged.")
+        else:
+            st.warning(f"The loss went up ({_vout(loss_old)} → {_vout(loss_new)}): the learning rate η = {eta_n} "
+                       "overshot. Try a smaller η.")
+
+        st.markdown("---")
+        st.markdown("### Why activation functions must be differentiable")
+        st.markdown("""
+        The backward pass requires computing f'(z) - the derivative of the activation.
+        This is why step functions (which have zero gradient almost everywhere) can't be
+        used in deep networks: the gradient signal vanishes completely.
+
+        | Activation | f'(z) | Vanishing gradient risk |
+        |---|---|---|
+        | ReLU | 1 if z>0 else 0 | Low (but "dead ReLU" for z<0) |
+        | Sigmoid | σ(z)·(1−σ(z)) | High - max 0.25, shrinks fast |
+        | Tanh | 1 − tanh²(z) | Moderate - max 1.0 at z=0 |
+        | Linear | 1 | None - but no non-linearity |
+
+        > 📖 See **Vanishing Gradients** in Deep Learning for the full treatment.
+        """)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# VECTORS
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "vectors":
+    st.title("➡️ Vectors")
+    st.markdown("""
+    <div class="concept-card">
+    A <b>vector</b> is an ordered list of numbers representing a point or direction in space.
+    In ML every data sample, every weight layer output, and every gradient is a vector.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["2D visualisation", "Dot product & similarity", "Vector operations"])
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            ax = st.slider("a - x", -4.0, 4.0,  2.0, step=0.1, key="v_ax")
+            ay = st.slider("a - y", -4.0, 4.0,  1.0, step=0.1, key="v_ay")
+            bx = st.slider("b - x", -4.0, 4.0, -1.0, step=0.1, key="v_bx")
+            by = st.slider("b - y", -4.0, 4.0,  3.0, step=0.1, key="v_by")
+            show_sum = st.checkbox("Show a + b", value=True)
+            show_diff= st.checkbox("Show a − b", value=False)
+
+        mag_a = np.sqrt(ax**2 + ay**2)
+        mag_b = np.sqrt(bx**2 + by**2)
+        dot   = ax*bx + ay*by
+        cos_t = dot / (mag_a * mag_b + 1e-9)
+        angle = np.degrees(np.arccos(np.clip(cos_t, -1, 1)))
+
+        with col2:
+            fig = go.Figure()
+            fig.add_shape(type="line", x0=0, y0=0, x1=ax, y1=ay,
+                line=dict(color="#534AB7", width=3))
+            fig.add_annotation(x=ax, y=ay, text=f"<b>a</b> [{ax:.1f}, {ay:.1f}]",
+                showarrow=True, arrowhead=2, arrowcolor="#534AB7",
+                font=dict(color="#534AB7", size=12), ax=15, ay=-15)
+
+            fig.add_shape(type="line", x0=0, y0=0, x1=bx, y1=by,
+                line=dict(color="#E24B4A", width=3))
+            fig.add_annotation(x=bx, y=by, text=f"<b>b</b> [{bx:.1f}, {by:.1f}]",
+                showarrow=True, arrowhead=2, arrowcolor="#E24B4A",
+                font=dict(color="#E24B4A", size=12), ax=-15, ay=-15)
+
+            if show_sum:
+                sx, sy = ax+bx, ay+by
+                fig.add_shape(type="line", x0=0, y0=0, x1=sx, y1=sy,
+                    line=dict(color="#1D9E75", width=2.5, dash="dash"))
+                fig.add_annotation(x=sx, y=sy, text=f"<b>a+b</b> [{sx:.1f},{sy:.1f}]",
+                    showarrow=True, arrowhead=2, arrowcolor="#1D9E75",
+                    font=dict(color="#1D9E75", size=11), ax=20, ay=10)
+                fig.add_shape(type="line", x0=ax, y0=ay, x1=sx, y1=sy,
+                    line=dict(color="#E24B4A", width=1, dash="dot"))
+                fig.add_shape(type="line", x0=bx, y0=by, x1=sx, y1=sy,
+                    line=dict(color="#534AB7", width=1, dash="dot"))
+
+            if show_diff:
+                dx2, dy2 = ax-bx, ay-by
+                fig.add_shape(type="line", x0=0, y0=0, x1=dx2, y1=dy2,
+                    line=dict(color="#EF9F27", width=2.5, dash="dash"))
+                fig.add_annotation(x=dx2, y=dy2, text=f"<b>a−b</b>",
+                    showarrow=True, arrowhead=2, arrowcolor="#EF9F27",
+                    font=dict(color="#EF9F27", size=11), ax=20, ay=10)
+
+            # angle arc
+            theta_a = np.arctan2(ay, ax)
+            theta_b = np.arctan2(by, bx)
+            arc_r = 0.6
+            d_theta = (theta_b - theta_a + np.pi) % (2*np.pi) - np.pi   # signed shortest turn from a to b
+            thetas = theta_a + np.linspace(0, d_theta, 40)
+            fig.add_trace(go.Scatter(x=arc_r*np.cos(thetas), y=arc_r*np.sin(thetas),
+                mode='lines', line=dict(color='gray', width=1, dash='dot'),
+                showlegend=False))
+            mid_t = theta_a + d_theta/2
+            fig.add_annotation(x=arc_r*1.4*np.cos(mid_t), y=arc_r*1.4*np.sin(mid_t),
+                text=f"{angle:.1f}°", showarrow=False, font=dict(size=11, color='gray'))
+
+            lim = max(abs(ax),abs(ay),abs(bx),abs(by),abs(ax+bx),abs(ay+by)) + 1
+            if show_diff:
+                lim = max(lim, abs(ax-bx) + 1, abs(ay-by) + 1)
+            fig.update_layout(xaxis=dict(range=[-lim,lim], zeroline=True, zerolinecolor='#ccc'),
+                yaxis=dict(range=[-lim,lim], zeroline=True, zerolinecolor='#ccc',
+                    scaleanchor='x', scaleratio=1),
+                height=420, plot_bgcolor='white',
+                showlegend=False, margin=dict(l=10,r=10,t=10,b=10))
+            st.plotly_chart(fig, width='stretch')
+
+        c1,c2,c3,c4 = st.columns(4)
+        c1.metric("|a|  magnitude", f"{mag_a:.3f}")
+        c2.metric("|b|  magnitude", f"{mag_b:.3f}")
+        c3.metric("a·b  dot product", f"{dot:.3f}")
+        c4.metric("Angle between", f"{angle:.1f}°" if min(mag_a, mag_b) > 1e-9 else "undefined")
+        if min(mag_a, mag_b) <= 1e-9:
+            st.warning("One of the vectors is the zero vector - it has no direction, "
+                       "so the angle between a and b is undefined.")
+
+    with tab2:
+        st.markdown('<div class="formula-box">a · b = Σ aᵢbᵢ = |a||b|cos θ</div>', unsafe_allow_html=True)
+        st.markdown("The dot product measures **how aligned** two vectors are.")
+        col1, col2 = st.columns([1,2])
+        with col1:
+            angle_deg = st.slider("Angle between vectors (degrees)", 0, 180, 45)
+            mag_demo  = st.slider("Magnitude of both vectors", 0.5, 3.0, 1.5, step=0.1)
+        angle_rad = np.radians(angle_deg)
+        dp = mag_demo**2 * np.cos(angle_rad)
+        with col2:
+            fig = go.Figure()
+            fig.add_shape(type="line", x0=0,y0=0, x1=mag_demo,y1=0,
+                line=dict(color="#534AB7",width=3))
+            fig.add_annotation(x=mag_demo,y=0.15, text="a", font=dict(color="#534AB7",size=14), showarrow=False)
+            fig.add_shape(type="line", x0=0,y0=0,
+                x1=mag_demo*np.cos(angle_rad), y1=mag_demo*np.sin(angle_rad),
+                line=dict(color="#E24B4A",width=3))
+            fig.add_annotation(x=mag_demo*np.cos(angle_rad),
+                y=mag_demo*np.sin(angle_rad)+0.15,
+                text="b", font=dict(color="#E24B4A",size=14), showarrow=False)
+            # projection of b onto a
+            proj = mag_demo*np.cos(angle_rad)
+            fig.add_shape(type="line", x0=proj,y0=0,
+                x1=mag_demo*np.cos(angle_rad), y1=mag_demo*np.sin(angle_rad),
+                line=dict(color="#EF9F27",width=1.5,dash="dot"))
+            fig.add_annotation(x=proj/2, y=-0.2, text=f"projection = {proj:.2f}",
+                showarrow=False, font=dict(color="#EF9F27",size=11))
+            fig.update_layout(xaxis=dict(range=[-mag_demo-0.5,mag_demo+0.5],zeroline=True),
+                yaxis=dict(range=[-0.5,mag_demo+0.5],scaleanchor='x',scaleratio=1,zeroline=True),
+                height=320, plot_bgcolor='white', showlegend=False,
+                margin=dict(l=10,r=10,t=10,b=10))
+            st.plotly_chart(fig, width='stretch')
+        st.metric("Dot product a·b", f"{dp:.3f}")
+        if angle_deg < 90:   st.success(f"Angle < 90° → positive dot product → vectors point in similar direction")
+        elif angle_deg == 90: st.info("Angle = 90° → dot product = 0 → vectors are orthogonal (perpendicular)")
+        elif angle_deg < 180: st.warning("Angle > 90° → negative dot product → vectors point away from each other")
+        else:                 st.error("Angle = 180° → most negative dot product (−|a||b|) → vectors point in exactly opposite directions")
+        st.markdown("> **In ML:** cosine similarity between two embedding vectors uses exactly this - dot product divided by magnitudes.")
+
+    with tab3:
+        st.markdown("### Common vector operations")
+        st.caption("a and b are the vectors from the **2D visualisation** tab - change them with the sliders there.")
+        col1, col2 = st.columns(2)
+        v = np.array([ax, ay])
+        u = np.array([bx, by])
+        with col1:
+            st.markdown("**Scalar multiplication**")
+            scalar = st.slider("scalar s", -3.0, 3.0, 2.0, step=0.1)
+            sv = scalar * v
+            st.markdown(f'<div class="formula-box">s·a = {_vin(scalar)}·[{_vin(ax)}, {_vin(ay)}] = [{_vout(sv[0])}, {_vout(sv[1])}]</div>', unsafe_allow_html=True)
+            st.markdown("**Unit vector (normalise)**")
+            if np.linalg.norm(v) > 1e-9:
+                unit = v / np.linalg.norm(v)
+                st.markdown(f'<div class="formula-box">â = a/|a| = [{_vout(unit[0])}, {_vout(unit[1])}] &nbsp; |â| = {_vout(np.linalg.norm(unit))}</div>', unsafe_allow_html=True)
+            else:
+                st.warning("a is the zero vector - it has no direction, so its unit vector is undefined.")
+        with col2:
+            st.markdown("**L1 and L2 norms**")
+            l1 = np.sum(np.abs(v)); l2 = np.linalg.norm(v)
+            st.markdown(f'<div class="formula-box">‖a‖₁ = |{_vin(ax)}| + |{_vin(ay)}| = {_vout(l1)}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="formula-box">‖a‖₂ = √({_vin(ax)}² + {_vin(ay)}²) = {_vout(l2)}</div>', unsafe_allow_html=True)
+            st.markdown("**Cross product magnitude (2D)**")
+            cross = abs(ax*by - ay*bx)
+            st.markdown(f'<div class="formula-box">|a×b| = |{_vin(ax)}·{_vin(by)} − {_vin(ay)}·{_vin(bx)}| = {_vout(cross)}</div>', unsafe_allow_html=True)
+            st.caption("= area of parallelogram formed by a and b")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MATRIX OPERATIONS
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "matrix_ops":
+    st.title("🔲 Matrix Operations")
+    st.markdown("""
+    <div class="concept-card">
+    A <b>matrix</b> is a 2D array of numbers. Every layer in a neural network applies a
+    matrix multiplication. Understanding what matrices <em>do geometrically</em> builds
+    strong intuition for weights, transformations and embeddings.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab0, tab1, tab2, tab3 = st.tabs(["Addition & subtraction", "Multiplication", "Geometric transformation", "Transpose, determinant & norms"])
+
+    with tab0:
+        st.markdown("### Matrix addition and subtraction")
+        st.markdown("""
+        Matrices add and subtract **element-by-element** - both matrices must have the
+        same shape. This is the simplest matrix operation, but it's everywhere: combining
+        gradients, accumulating updates, residual connections.
+        """)
+        st.markdown('<div class="formula-box">(A ± B)ᵢⱼ = Aᵢⱼ ± Bᵢⱼ</div>', unsafe_allow_html=True)
+
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            st.markdown("**Matrix A (2×2)**")
+            Aas = np.array([[st.number_input(f"A[{i+1},{j+1}]", value=float([[2,1],[0,3]][i][j]),
+                step=0.5, key=f"as_A{i}{j}") for j in range(2)] for i in range(2)])
+            st.markdown("**Matrix B (2×2)**")
+            Bas = np.array([[st.number_input(f"B[{i+1},{j+1}]", value=float([[1,4],[2,1]][i][j]),
+                step=0.5, key=f"as_B{i}{j}") for j in range(2)] for i in range(2)])
+            op = st.radio("Operation", ["A + B", "A − B"], horizontal=True)
+
+        with col2:
+            result = Aas + Bas if op == "A + B" else Aas - Bas
+            symbol = "+" if op == "A + B" else "−"
+
+            st.markdown(f"**Result  A {symbol} B**")
+            st.markdown(f'<div class="formula-box">'
+                f'[ {result[0,0]:.1f} , {result[0,1]:.1f} ]<br>'
+                f'[ {result[1,0]:.1f} , {result[1,1]:.1f} ]'
+                f'</div>', unsafe_allow_html=True)
+
+            st.markdown("**Element-by-element breakdown:**")
+            for i in range(2):
+                for j in range(2):
+                    st.markdown(f"(A{symbol}B)[{i+1},{j+1}] = "
+                                f"{Aas[i,j]:.1f} {symbol} {Bas[i,j]:.1f} = **{result[i,j]:.2f}**")
+
+            st.markdown("---")
+            st.markdown("**Note:** addition/subtraction require identical shapes - "
+                        "unlike multiplication, there's no inner-dimension rule to satisfy.")
+            st.caption("In ML: gradient accumulation (summing gradients across a batch), "
+                      "residual/skip connections (x + F(x)), and weight updates "
+                      "(W ← W − η·∇W) are all matrix addition/subtraction in disguise.")
+
+
+    with tab1:
+        st.markdown("### Matrix × Matrix and Matrix × Vector")
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            st.markdown("**Matrix A (2×3)**")
+            A = np.array([[st.number_input(f"A[{i+1},{j+1}]", value=float([[1,2,0],[0,1,3]][i][j]),
+                step=0.5, key=f"A{i}{j}") for j in range(3)] for i in range(2)])
+            st.markdown("**Matrix B (3×2)**")
+            B = np.array([[st.number_input(f"B[{i+1},{j+1}]", value=float([[1,0],[2,1],[0,3]][i][j]),
+                step=0.5, key=f"B{i}{j}") for j in range(2)] for i in range(3)])
+
+        with col2:
+            C = A @ B
+            st.markdown("**Result C = A × B  (2×2)**")
+            st.markdown(f'<div class="formula-box">'
+                f'[ {C[0,0]:.1f} , {C[0,1]:.1f} ]<br>'
+                f'[ {C[1,0]:.1f} , {C[1,1]:.1f} ]'
+                f'</div>', unsafe_allow_html=True)
+            st.markdown("**How C[i,j] is computed - dot product of row i of A with column j of B:**")
+            for i in range(2):
+                for j in range(2):
+                    terms = " + ".join([f"{A[i,k]:.1f}·{B[k,j]:.1f}" for k in range(3)])
+                    st.markdown(f"C[{i+1},{j+1}] = {terms} = **{C[i,j]:.2f}**")
+
+            st.markdown("**Matrix × vector** (A applied to a 3D input):")
+            vx = st.number_input("v₁", value=1.0, step=0.5, key="mv1")
+            vy = st.number_input("v₂", value=0.0, step=0.5, key="mv2")
+            vz = st.number_input("v₃", value=2.0, step=0.5, key="mv3")
+            v_in = np.array([vx, vy, vz])
+            v_out = A @ v_in
+            st.markdown(f'<div class="formula-box">A · v = [{v_out[0]:.2f}, {v_out[1]:.2f}]</div>',
+                unsafe_allow_html=True)
+            st.caption(f"Input: 3D → Output: 2D  (A maps the vector into a lower-dimensional space)")
+
+    with tab2:
+        st.markdown("### What a 2×2 matrix does to space")
+        st.markdown("Every 2×2 matrix is a geometric transformation - rotation, scaling, shearing or reflection.")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            preset = st.selectbox("Preset transformation", [
+                "Custom", "Rotate 45°", "Scale x2", "Shear", "Reflection (y-axis)", "Stretch x, squash y"],
+                key="m_preset")
+            presets = {
+                "Rotate 45°":            [[np.cos(np.pi/4),-np.sin(np.pi/4)],[np.sin(np.pi/4),np.cos(np.pi/4)]],
+                "Scale x2":              [[2,0],[0,2]],
+                "Shear":                 [[1,1],[0,1]],
+                "Reflection (y-axis)":   [[-1,0],[0,1]],
+                "Stretch x, squash y":   [[2,0],[0,0.5]],
+            }
+            # Push the chosen preset into the input boxes (keyed widgets ignore a changed value=)
+            m_keys = ["m00", "m01", "m10", "m11"]
+            if st.session_state.get("m_preset_prev") != preset:
+                if preset in presets:
+                    pm = presets[preset]
+                    for k, v in zip(m_keys, [pm[0][0], pm[0][1], pm[1][0], pm[1][1]]):
+                        st.session_state[k] = float(v)
+                st.session_state["m_preset_prev"] = preset
+            for k, v in zip(m_keys, [1.0, 0.0, 0.0, 1.0]):   # identity as the starting "Custom" matrix
+                st.session_state.setdefault(k, v)
+            m00 = st.number_input("M[1,1]", step=0.1, key="m00")
+            m01 = st.number_input("M[1,2]", step=0.1, key="m01")
+            m10 = st.number_input("M[2,1]", step=0.1, key="m10")
+            m11 = st.number_input("M[2,2]", step=0.1, key="m11")
+            M = np.array([[m00,m01],[m10,m11]])
+            det = np.linalg.det(M)
+            st.metric("Determinant", f"{det:.3f}")
+            st.caption("det=0 → matrix collapses space (not invertible). |det|>1 → expands. |det|<1 → shrinks.")
+
+        with col2:
+            # unit square and transformed square
+            square = np.array([[0,0],[1,0],[1,1],[0,1],[0,0]]).T
+            t_square = M @ square
+            # basis vectors
+            e1 = M @ np.array([1,0])
+            e2 = M @ np.array([0,1])
+
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=square[0], y=square[1], fill='toself',
+                fillcolor='rgba(83,74,183,0.15)', line=dict(color='#534AB7',width=2),
+                name='Original unit square'))
+            fig.add_trace(go.Scatter(x=t_square[0], y=t_square[1], fill='toself',
+                fillcolor='rgba(226,75,74,0.15)', line=dict(color='#E24B4A',width=2),
+                name='Transformed square'))
+            # original basis
+            for v, col, lbl in [([1,0],'#534AB7','e₁'),([0,1],'#1D9E75','e₂')]:
+                fig.add_shape(type='line',x0=0,y0=0,x1=v[0],y1=v[1],
+                    line=dict(color=col,width=2,dash='dash'))
+            # transformed basis
+            for v, col, lbl in [(e1,'#E24B4A','Me₁'),(e2,'#EF9F27','Me₂')]:
+                fig.add_shape(type='line',x0=0,y0=0,x1=v[0],y1=v[1],
+                    line=dict(color=col,width=2.5))
+                fig.add_annotation(x=v[0],y=v[1],text=lbl,showarrow=True,
+                    arrowhead=2,arrowcolor=col,font=dict(color=col,size=11))
+            lim = max(3, float(np.abs(t_square).max())+0.5)
+            fig.update_layout(xaxis=dict(range=[-lim,lim],zeroline=True),
+                yaxis=dict(range=[-lim,lim],zeroline=True,scaleanchor='x',scaleratio=1),
+                height=420, plot_bgcolor='white',
+                legend=dict(orientation='h',y=1.1),
+                margin=dict(l=10,r=10,t=10,b=10))
+            st.plotly_chart(fig, width='stretch')
+
+    with tab3:
+        st.markdown("### Transpose and key properties")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**Transpose:** flip rows and columns")
+            Tm = np.array([[1,2,3],[4,5,6]])
+            st.markdown(f'<div class="formula-box">'
+                f'A = [[1,2,3],[4,5,6]]<br>Aᵀ = [[1,4],[2,5],[3,6]]</div>',
+                unsafe_allow_html=True)
+            st.markdown("**Shape rule for multiplication:**")
+            st.markdown(f'<div class="formula-box">(m×n) · (n×p) → (m×p)</div>', unsafe_allow_html=True)
+            st.caption("The inner dimensions must match. This is why layer shapes in neural networks must align.")
+        with col2:
+            st.markdown("**Identity matrix:** A·I = A")
+            st.markdown(f'<div class="formula-box">I = [[1,0],[0,1]]</div>', unsafe_allow_html=True)
+            st.markdown("**Inverse:** A·A⁻¹ = I  (only if det ≠ 0)")
+            st.caption("M is the matrix from the *Geometric transformation* tab - change it there.")
+            M2 = np.array([[m00,m01],[m10,m11]])
+            if abs(np.linalg.det(M2)) > 1e-6:
+                inv = np.linalg.inv(M2) + 0.0   # + 0.0 turns −0.0 into 0.0 for display
+                st.markdown(f'<div class="formula-box">M⁻¹ = [[{inv[0,0]:.2f},{inv[0,1]:.2f}],<br>[{inv[1,0]:.2f},{inv[1,1]:.2f}]]</div>',
+                    unsafe_allow_html=True)
+            else:
+                st.error("This matrix is singular (det=0) - no inverse exists.")
+
+        st.markdown("---")
+        st.markdown("### Determinant - how much a matrix scales area/volume")
+        st.markdown("""
+        The **determinant** measures how a matrix scales area (2D) or volume (3D), with
+        sign indicating whether orientation flips. It's the single number that tells you
+        whether a matrix is invertible at all.
+        """)
+        st.markdown('<div class="formula-box">det([[a,b],[c,d]]) = ad − bc</div>', unsafe_allow_html=True)
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            d00 = st.number_input("D[1,1]", value=2.0, step=0.5, key="det00")
+            d01 = st.number_input("D[1,2]", value=1.0, step=0.5, key="det01")
+            d10 = st.number_input("D[2,1]", value=0.0, step=0.5, key="det10")
+            d11 = st.number_input("D[2,2]", value=1.5, step=0.5, key="det11")
+            Dm = np.array([[d00,d01],[d10,d11]])
+            det_val = np.linalg.det(Dm)
+
+            st.markdown(f'<div class="formula-box">det(D) = {d00}·{d11} − {d01}·{d10} = {det_val:.3f}</div>',
+                unsafe_allow_html=True)
+
+            if abs(det_val) < 1e-6:
+                st.error("det = 0 → matrix collapses space onto a line or point. Not invertible (singular).")
+            elif det_val < 0:
+                st.warning(f"det < 0 ({det_val:.2f}) → orientation flips (reflection) and area scales by {abs(det_val):.2f}×")
+            elif abs(det_val - 1) < 1e-6:
+                st.success("det = 1 → area is preserved (e.g. a rotation or a shear) - same size, possibly a different shape")
+            elif det_val < 1:
+                st.info(f"0 < det < 1 ({det_val:.2f}) → area shrinks to {det_val:.2f}× original")
+            else:
+                st.success(f"det > 1 ({det_val:.2f}) → area expands to {det_val:.2f}× original")
+
+        with col2:
+            unit_sq = np.array([[0,0],[1,0],[1,1],[0,1],[0,0]]).T
+            t_sq = Dm @ unit_sq
+            area = abs(det_val)
+
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=unit_sq[0], y=unit_sq[1], fill='toself',
+                fillcolor='rgba(83,74,183,0.15)', line=dict(color='#534AB7', width=2),
+                name='Unit square (area=1)'))
+            fig.add_trace(go.Scatter(x=t_sq[0], y=t_sq[1], fill='toself',
+                fillcolor='rgba(226,75,74,0.15)', line=dict(color='#E24B4A', width=2),
+                name=f'D × square (area={area:.2f})'))
+            lim = max(3, float(np.abs(t_sq).max()) + 0.5)
+            fig.update_layout(
+                xaxis=dict(range=[-lim,lim], zeroline=True, zerolinecolor="#ccc"),
+                yaxis=dict(range=[-lim,lim], zeroline=True, zerolinecolor="#ccc", scaleanchor='x'),
+                height=380, plot_bgcolor='white',
+                legend=dict(orientation='h', y=1.1),
+                margin=dict(l=10,r=10,t=30,b=10))
+            st.plotly_chart(fig, width='stretch')
+            st.caption("The determinant is exactly the ratio of transformed area to original area "
+                      "(unsigned). Sign tells you if the square also got flipped.")
+
+        st.markdown("""
+        **In ML:** determinant = 0 means a weight matrix has collapsed information into a
+        lower-dimensional subspace (rank deficiency) - a sign of redundant features or a
+        degenerate transformation. Normalizing flows use the determinant of the Jacobian
+        to track how probability density changes under a transformation.
+        """)
+
+        st.markdown("---")
+        st.markdown("### Frobenius norm - the magnitude of a whole matrix")
+        st.markdown("""
+        The **Frobenius norm** generalises the Euclidean (L2) vector norm to matrices -
+        treat every entry as if it were one long vector and take its L2 norm.
+        """)
+        st.markdown('<div class="formula-box">‖A‖_F = √(Σᵢ Σⱼ Aᵢⱼ²)  =  √(trace(AᵀA))</div>', unsafe_allow_html=True)
+
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            f00 = st.number_input("F[1,1]", value=3.0, step=0.5, key="frob00")
+            f01 = st.number_input("F[1,2]", value=1.0, step=0.5, key="frob01")
+            f10 = st.number_input("F[2,1]", value=0.0, step=0.5, key="frob10")
+            f11 = st.number_input("F[2,2]", value=4.0, step=0.5, key="frob11")
+            Fm = np.array([[f00,f01],[f10,f11]])
+            frob = np.linalg.norm(Fm, 'fro')
+
+            terms = " + ".join([f"{Fm[i,j]:.1f}²" for i in range(2) for j in range(2)])
+            st.markdown(f'<div class="formula-box">‖F‖_F = √({terms})<br>= √({np.sum(Fm**2):.2f}) = {frob:.3f}</div>',
+                unsafe_allow_html=True)
+
+        with col2:
+            st.markdown("**Used for:**")
+            st.markdown("""
+            - **Weight decay / L2 regularization** on whole weight matrices: λ‖W‖_F²
+            - **Matrix approximation error** - how close is à to A? Use ‖A − Ã‖_F
+            - **Low-rank approximation (SVD)** - the Eckart-Young theorem says the best
+              rank-k approximation under Frobenius norm comes from truncating the SVD
+            - **Gradient clipping** - clip the Frobenius norm of a weight gradient matrix
+              to prevent exploding gradients
+            """)
+            st.markdown('<div class="formula-box">Loss + λ‖W‖_F²<br><small>matrix analogue of L2 weight regularization</small></div>',
+                unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DERIVATIVE
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "derivative":
+    st.title("📐 Derivative")
+    st.markdown("""
+    <div class="concept-card">
+    The <b>derivative</b> f'(x) is the instantaneous rate of change of f at x -
+    the slope of the tangent line at that point. It answers: <em>"if x increases by a tiny
+    amount, how much does f change?"</em>. This is the engine behind every gradient update in ML.
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('<div class="formula-box">f\'(x) = lim<sub>h→0</sub> [f(x+h) − f(x)] / h</div>',
+        unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["Tangent line explorer", "Numerical vs analytical", "Common rules"])
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            fn_choice = st.selectbox("Function", ["x²", "x³", "sin(x)", "cos(x)", "eˣ", "ln(x)", "x² + 2x − 3"])
+            x0 = st.slider("Point x₀", -3.0, 3.0, 1.0, step=0.05)
+            show_limit = st.checkbox("Show secant → tangent (h shrinks)", value=False)
+            h_val = st.select_slider("h (secant step)", [2.0,1.0,0.5,0.2,0.1,0.01], value=0.5) if show_limit else 0.01
+
+        fn_map = {
+            "x²":        (lambda x: x**2,          lambda x: 2*x,           "2x"),
+            "x³":        (lambda x: x**3,          lambda x: 3*x**2,        "3x²"),
+            "sin(x)":    (lambda x: np.sin(x),     lambda x: np.cos(x),     "cos(x)"),
+            "cos(x)":    (lambda x: np.cos(x),     lambda x: -np.sin(x),    "−sin(x)"),
+            "eˣ":        (lambda x: np.exp(np.clip(x,-10,5)), lambda x: np.exp(np.clip(x,-10,5)), "eˣ"),
+            "ln(x)":     (lambda x: np.log(np.abs(x)+1e-9), lambda x: 1/(x+1e-9), "1/x"),
+            "x² + 2x − 3": (lambda x: x**2+2*x-3, lambda x: 2*x+2,         "2x + 2"),
+        }
+        f, df, df_str = fn_map[fn_choice]
+
+        x_range = np.linspace(-3.5, 3.5, 400)
+        y_range = np.array([f(xi) for xi in x_range])
+        ln_invalid = fn_choice == "ln(x)" and x0 <= 0
+        if fn_choice == "ln(x)":
+            y_range = np.where(x_range > 0, y_range, np.nan)  # ln(x) only exists for x > 0
+        slope = df(x0)
+        y0_val = f(x0)
+        tangent_y = slope*(x_range - x0) + y0_val
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=x_range, y=np.clip(y_range,-8,8), name=fn_choice,
+                line=dict(color='#534AB7', width=2.5)))
+            if not ln_invalid:
+                fig.add_trace(go.Scatter(x=x_range, y=np.clip(tangent_y,-8,8),
+                    name=f"Tangent at x={x0:.2f}", line=dict(color='#E24B4A', width=2, dash='dash')))
+                fig.add_scatter(x=[x0], y=[y0_val], mode='markers',
+                    marker=dict(color='#E24B4A', size=12), name='Point', showlegend=False)
+            if show_limit and not ln_invalid:
+                x1_s = x0 + h_val
+                y1_s = f(x1_s)
+                sec_slope = (y1_s - y0_val) / (h_val + 1e-12)
+                sec_y = sec_slope*(x_range - x0) + y0_val
+                fig.add_trace(go.Scatter(x=x_range, y=np.clip(sec_y,-8,8),
+                    name=f"Secant (h={h_val})", line=dict(color='#EF9F27', width=2)))
+                fig.add_scatter(x=[x1_s], y=[y1_s], mode='markers',
+                    marker=dict(color='#EF9F27', size=10), showlegend=False)
+            fig.update_layout(xaxis_title="x", yaxis_title="y",
+                yaxis_range=[-8, 8], height=400, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, width='stretch')
+
+        if ln_invalid:
+            st.warning(f"ln(x) is only defined for x > 0, so there is no derivative at x₀ = {x0:.2f}. "
+                       "Move x₀ to the right of 0.")
+        else:
+            st.markdown(f'<div class="formula-box">f(x) = {fn_choice} &nbsp;→&nbsp; f\'(x) = {df_str} &nbsp;→&nbsp; f\'({x0:.2f}) = {slope:.4f}</div>',
+                unsafe_allow_html=True)
+        st.caption("The tangent slope equals the derivative. As h→0, the orange secant converges to the red tangent.")
+
+    with tab2:
+        st.markdown("### Numerical approximation vs analytical formula")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            fn2 = st.selectbox("Function", ["x²", "sin(x)", "eˣ"], key="d_fn2")
+            x_num = st.slider("x", -3.0, 3.0, 1.5, step=0.1, key="d_xnum")
+            h_num = st.select_slider("h (step size)", [1.0,0.5,0.1,0.01,0.001,0.0001], value=0.1)
+        f2, df2, df2_str = fn_map[fn2]
+        analytical = df2(x_num)
+        forward  = (f2(x_num+h_num) - f2(x_num)) / h_num
+        central  = (f2(x_num+h_num) - f2(x_num-h_num)) / (2*h_num)
+        with col2:
+            st.markdown(f'<div class="formula-box">Analytical f\'(x) = {df2_str} = {analytical:.6f}</div>',
+                unsafe_allow_html=True)
+            import pandas as pd
+            df_num = pd.DataFrame({
+                "Method": ["Forward difference", "Central difference", "Analytical"],
+                "Formula": [f"[f(x+h)−f(x)]/h", f"[f(x+h)−f(x−h)]/2h", f"{df2_str}"],
+                "Value": [f"{forward:.6f}", f"{central:.6f}", f"{analytical:.6f}"],
+                "Error": [f"{abs(forward-analytical):.2e}", f"{abs(central-analytical):.2e}", "0"],
+            })
+            st.dataframe(df_num, width='stretch', hide_index=True)
+        st.caption("Central difference is more accurate for the same h - error is O(h²) vs O(h) for forward.")
+
+    with tab3:
+        st.markdown("### Key differentiation rules")
+        rules = [
+            ("Power rule",     "f(x) = xⁿ",       "f'(x) = n·xⁿ⁻¹",              "x³ → 3x²"),
+            ("Sum rule",       "f+g",               "(f+g)' = f'+g'",               "x²+sin(x) → 2x+cos(x)"),
+            ("Product rule",   "f·g",               "(fg)' = f'g + fg'",            "x·sin(x) → sin(x)+x·cos(x)"),
+            ("Quotient rule",  "f/g",               "(f/g)' = (f'g − fg')/g²",  "x/sin(x) → (sin(x)−x·cos(x))/sin²(x)"),
+            ("Chain rule",     "f(g(x))",           "f'(g(x))·g'(x)",               "sin(x²) → cos(x²)·2x"),
+            ("Exponential",    "eˣ",                "eˣ",                           "e³ˣ → 3e³ˣ"),
+            ("Logarithm",      "ln(x)",             "1/x",                          "ln(2x) → 1/x"),
+        ]
+        import pandas as pd
+        st.dataframe(pd.DataFrame(rules, columns=["Rule","f(x)","f'(x)","Example"]),
+            width='stretch', hide_index=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PARTIAL DERIVATIVES
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "partial_deriv":
+    st.title("∂ Partial Derivatives")
+    st.markdown("""
+    <div class="concept-card">
+    A <b>partial derivative</b> ∂f/∂x measures how f changes when only one variable moves,
+    holding all others fixed. The vector of all partial derivatives is the <b>gradient</b> ∇f -
+    the direction of steepest ascent used in every ML optimiser.
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('<div class="formula-box">∇f(x,y) = [∂f/∂x , ∂f/∂y]</div>', unsafe_allow_html=True)
+
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        fn_p = st.selectbox("Function f(x,y)", [
+            "x² + y²", "sin(x)·cos(y)", "x²·y + y³", "eˣ⁺ʸ", "x² − y²"])
+        x_p = st.slider("x₀", -2.0, 2.0, 1.0, step=0.1, key="pd_x")
+        y_p = st.slider("y₀", -2.0, 2.0, 0.5, step=0.1, key="pd_y")
+        show_grad_arrows = st.checkbox("Show gradient arrows on surface", value=True)
+
+    fn_p_map = {
+        "x² + y²":      (lambda x,y: x**2+y**2,     lambda x,y: 2*x,             lambda x,y: 2*y,           "2x","2y"),
+        "sin(x)·cos(y)":(lambda x,y: np.sin(x)*np.cos(y), lambda x,y: np.cos(x)*np.cos(y), lambda x,y: -np.sin(x)*np.sin(y), "cos(x)cos(y)","-sin(x)sin(y)"),
+        "x²·y + y³":    (lambda x,y: x**2*y+y**3,   lambda x,y: 2*x*y,          lambda x,y: x**2+3*y**2,   "2xy","x²+3y²"),
+        "eˣ⁺ʸ":         (lambda x,y: np.exp(np.clip(x+y,-10,5)), lambda x,y: np.exp(np.clip(x+y,-10,5)), lambda x,y: np.exp(np.clip(x+y,-10,5)), "eˣ⁺ʸ","eˣ⁺ʸ"),
+        "x² − y²":      (lambda x,y: x**2-y**2,     lambda x,y: 2*x,             lambda x,y: -2*y,          "2x","-2y"),
+    }
+    f_p, dfdx_fn, dfdy_fn, dfdx_str, dfdy_str = fn_p_map[fn_p]
+    dfdx_val = dfdx_fn(x_p, y_p)
+    dfdy_val = dfdy_fn(x_p, y_p)
+    f_val = f_p(x_p, y_p)
+
+    with col2:
+        xs = np.linspace(-2.5, 2.5, 60)
+        ys = np.linspace(-2.5, 2.5, 60)
+        X, Y = np.meshgrid(xs, ys)
+        Z = f_p(X, Y)   # no extra clipping - the surface shows the function's true shape
+        fig = go.Figure(data=[go.Surface(x=X, y=Y, z=Z, colorscale='RdPu',
+            opacity=0.85, showscale=False)])
+        # mark the point
+        fig.add_trace(go.Scatter3d(x=[x_p], y=[y_p], z=[f_val], mode='markers',
+            marker=dict(color='#E24B4A', size=6), name='(x₀,y₀)'))
+        # gradient arrow in xy-plane (projected)
+        grad_len = 0.5
+        if show_grad_arrows:
+            fig.add_trace(go.Scatter3d(
+                x=[x_p, x_p + grad_len*dfdx_val/(np.sqrt(dfdx_val**2+dfdy_val**2)+1e-9)],
+                y=[y_p, y_p + grad_len*dfdy_val/(np.sqrt(dfdx_val**2+dfdy_val**2)+1e-9)],
+                z=[f_val, f_val], mode='lines',
+                line=dict(color='#EF9F27', width=6), name='Gradient direction'))
+        fig.update_layout(scene=dict(xaxis_title='x', yaxis_title='y', zaxis_title='f(x,y)',
+            camera=dict(eye=dict(x=1.5, y=1.5, z=1.2))),
+            height=430, margin=dict(l=0,r=0,b=0,t=0))
+        st.plotly_chart(fig, width='stretch')
+
+    st.markdown(f'<div class="formula-box">'
+        f'∂f/∂x = {dfdx_str} = {dfdx_val:.4f} &nbsp;&nbsp; ∂f/∂y = {dfdy_str} = {dfdy_val:.4f}'
+        f'</div>', unsafe_allow_html=True)
+    c1,c2,c3 = st.columns(3)
+    c1.metric("f(x₀,y₀)", f"{f_val:.4f}")
+    c2.metric("∂f/∂x at point", f"{dfdx_val:.4f}")
+    c3.metric("∂f/∂y at point", f"{dfdy_val:.4f}")
+    st.markdown(f"**Gradient vector:** ∇f = [{dfdx_val:.4f}, {dfdy_val:.4f}] - points in direction of steepest ascent. "
+        f"Gradient descent moves in the **opposite** direction: −∇f.")
+    if np.hypot(dfdx_val, dfdy_val) < 1e-9:
+        st.info("∇f = [0, 0] here - this is a **stationary point** (a minimum, maximum or saddle point), "
+                "so the gradient arrow vanishes and gradient descent would stop here. "
+                "Try x² + y² (minimum) and x² − y² (saddle) at (0, 0).")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# INTEGRAL
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "integral":
+    st.title("∫ Integral")
+    st.markdown("""
+    <div class="concept-card">
+    The <b>integral</b> accumulates the <b>signed</b> area between a function and the x-axis -
+    parts below the axis count as negative.
+    In ML it appears in probability (area under a PDF = 1), expected values,
+    and understanding continuous loss landscapes.
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('<div class="formula-box">∫ₐᵇ f(x) dx = lim<sub>n→∞</sub> Σ f(xᵢ)·Δx</div>',
+        unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Riemann sum visualisation", "Common integrals"])
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            fn_i = st.selectbox("Function", ["x²", "sin(x)", "eˣ", "x³−2x", "cos(x)"])
+            a_i, b_i = st.slider("Limits [a, b]", -3.0, 3.0, (0.0, 2.0), step=0.1,
+                                 help="Drag the two handles - a is always left of b.")
+            n_rect = st.slider("Number of rectangles n", 2, 100, 10)
+            method = st.radio("Method", ["Left", "Right", "Midpoint"], horizontal=True)
+
+        fn_i_map = {   # (f, antiderivative F, F as text)
+            "x²":      (lambda x: x**2,         lambda x: x**3/3,          "x³/3"),
+            "sin(x)":  (lambda x: np.sin(x),    lambda x: -np.cos(x),      "−cos(x)"),
+            "eˣ":      (lambda x: np.exp(x),    lambda x: np.exp(x),       "eˣ"),
+            "x³−2x":   (lambda x: x**3 - 2*x,   lambda x: x**4/4 - x**2,   "x⁴/4 − x²"),
+            "cos(x)":  (lambda x: np.cos(x),    lambda x: np.sin(x),       "sin(x)"),
+        }
+        f_i, F_i, antideriv_str = fn_i_map[fn_i]
+        if b_i - a_i < 1e-9:   # zero-width interval: integral is 0, widen slightly so the demo still draws
+            st.info("a and b are equal - the integral over a zero-width interval is 0. "
+                    "Showing a 0.1-wide interval instead; move the handles apart.")
+            if b_i < 3.0: b_i = a_i + 0.1
+            else:         a_i = b_i - 0.1
+
+        x_plot = np.linspace(a_i-0.3, b_i+0.3, 400)
+        y_plot = np.array([f_i(xi) for xi in x_plot])
+
+        dx = (b_i - a_i) / n_rect
+        if method == "Left":     xs_rect = np.linspace(a_i, b_i-dx, n_rect)
+        elif method == "Right":  xs_rect = np.linspace(a_i+dx, b_i, n_rect)
+        else:                    xs_rect = np.linspace(a_i+dx/2, b_i-dx/2, n_rect)
+        heights = np.array([f_i(xi) for xi in xs_rect])
+        riemann_sum = float(np.sum(heights) * dx)
+
+        # exact integral from the antiderivative: F(b) − F(a)
+        true_integral = float(F_i(b_i) - F_i(a_i))
+
+        with col2:
+            fig = go.Figure()
+            for xi, hi in zip(xs_rect, heights):
+                fig.add_shape(type='rect',
+                    x0=xi-dx/2 if method=="Midpoint" else (xi if method=="Left" else xi-dx),
+                    y0=0, x1=xi+dx/2 if method=="Midpoint" else (xi+dx if method=="Left" else xi),
+                    y1=hi,
+                    fillcolor='rgba(83,74,183,0.35)', line=dict(color='#534AB7', width=0.5))
+            fig.add_trace(go.Scatter(x=x_plot, y=y_plot, name=fn_i,
+                line=dict(color='#E24B4A', width=2.5)))
+            fig.add_vline(x=a_i, line_dash='dot', line_color='gray')
+            fig.add_vline(x=b_i, line_dash='dot', line_color='gray')
+            fig.update_layout(xaxis_title="x", yaxis_title="f(x)",
+                height=400, showlegend=False)
+            st.plotly_chart(fig, width='stretch')
+
+        c1,c2,c3 = st.columns(3)
+        c1.metric("Riemann sum", f"{riemann_sum:.5f}")
+        c2.metric("True integral", f"{true_integral:.5f}")
+        c3.metric("Error", f"{abs(riemann_sum-true_integral):.2e}")
+        st.caption(f"Antiderivative: F(x) = {antideriv_str}  →  F({b_i:.1f}) − F({a_i:.1f}) = {true_integral:.5f}")
+
+    with tab2:
+        import pandas as pd
+        integrals = [
+            ("xⁿ  (n≠−1)",   "xⁿ⁺¹/(n+1) + C",  "Power rule - every polynomial term"),
+            ("1/x",           "ln|x| + C",         "Appears in log-loss, entropy"),
+            ("eˣ",            "eˣ + C",            "Its own antiderivative - unique up to a constant multiple"),
+            ("sin(x)",        "−cos(x) + C",       "Oscillating functions, Fourier"),
+            ("cos(x)",        "sin(x) + C",        "Oscillating functions"),
+            ("1/(1+x²)",      "arctan(x) + C",     "Cauchy distribution (heavy-tailed)"),
+        ]
+        st.dataframe(pd.DataFrame(integrals, columns=["f(x)","∫f(x)dx","Where it appears"]),
+            width='stretch', hide_index=True)
+        st.markdown("**Fundamental Theorem of Calculus** connects derivatives and integrals:")
+        st.markdown('<div class="formula-box">d/dx ∫ₐˣ f(t)dt = f(x)</div>', unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CHAIN RULE
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "chain_rule":
+    st.title("🔗 Chain Rule")
+    st.markdown("""
+    <div class="concept-card">
+    The <b>chain rule</b> tells us how to differentiate a <em>composition</em> of functions:
+    if y = f(g(x)), then dy/dx = f'(g(x)) · g'(x). This is the mathematical heart of
+    backpropagation - every gradient in a neural network is computed via repeated chain rule.
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('<div class="formula-box">dy/dx = (dy/du) · (du/dx)&nbsp;&nbsp; where u = g(x)</div>',
+        unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Step-by-step decomposition", "Chain rule in a neural network"])
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            outer = st.selectbox("Outer function f(u)", ["u²", "sin(u)", "eᵘ", "ln(u)", "√u"])
+            inner = st.selectbox("Inner function g(x)", ["2x+1", "x²", "cos(x)", "x³−x"])
+            x_cr  = st.slider("x₀", -2.0, 2.0, 1.0, step=0.1, key="cr_x")
+
+        outer_map = {
+            "u²":   (lambda u: u**2,                          lambda u: 2*u,                    "2u"),
+            "sin(u)":(lambda u: np.sin(u),                    lambda u: np.cos(u),              "cos(u)"),
+            "eᵘ":   (lambda u: np.exp(np.clip(u,-10,20)),    lambda u: np.exp(np.clip(u,-10,20)),"eᵘ"),
+            "ln(u)":(lambda u: np.log(np.abs(u)+1e-9),       lambda u: 1/(u+1e-9),             "1/u"),
+            "√u":   (lambda u: np.sqrt(np.abs(u)),           lambda u: np.sign(u)*0.5/np.sqrt(np.abs(u)+1e-9),"1/(2√u)"),
+        }
+        inner_map = {
+            "2x+1":   (lambda x: 2*x+1,   lambda x: 2.0,  "2"),
+            "x²":     (lambda x: x**2,    lambda x: 2*x,           "2x"),
+            "cos(x)": (lambda x: np.cos(x), lambda x: -np.sin(x), "−sin(x)"),
+            "x³−x":   (lambda x: x**3-x,  lambda x: 3*x**2-1,     "3x²−1"),
+        }
+        f_out, df_out, df_out_str = outer_map[outer]
+        g_in,  dg_in,  dg_in_str  = inner_map[inner]
+
+        u_val   = g_in(x_cr)
+        y_val   = f_out(u_val)
+        du_dx   = dg_in(x_cr)
+        dy_du   = df_out(u_val)
+        dy_dx   = dy_du * du_dx
+
+        if outer in ("ln(u)", "√u") and u_val <= 0:
+            st.warning(f"{outer} is undefined for u ≤ 0 (here u = {u_val:.3f}). "
+                       "The plot uses |u| so it can still draw.")
+
+        with col2:
+            st.markdown("**Decomposition at x₀ = {:.2f}**".format(x_cr))
+            st.code(f"""
+Step 1 - Evaluate inner function g(x):
+   u = g({x_cr:.2f}) = {inner} = {u_val:.4f}
+
+Step 2 - Evaluate outer function f(u):
+   y = f(u) = f({u_val:.4f}) = {outer} = {y_val:.4f}
+
+Step 3 - Derivative of inner:
+   du/dx = g'(x) = {dg_in_str} = {du_dx:.4f}
+
+Step 4 - Derivative of outer (at u):
+   dy/du = f'(u) = {df_out_str} = {dy_du:.4f}
+
+Step 5 - Chain rule:
+   dy/dx = (dy/du)·(du/dx)
+         = {dy_du:.4f} × {du_dx:.4f}
+         = {dy_dx:.4f}
+""", language="text")
+
+        # plot f(g(x)) and its derivative
+        x_range_cr = np.linspace(-2.5, 2.5, 300)
+        y_comp = np.array([f_out(g_in(xi)) for xi in x_range_cr])
+        dy_comp = np.array([df_out(g_in(xi))*dg_in(xi) for xi in x_range_cr])
+        tangent_cr = dy_dx*(x_range_cr - x_cr) + y_val
+
+        fig = make_subplots(rows=1, cols=2,
+            subplot_titles=[f"f(g(x)) = {outer}({inner})", "Derivative via chain rule"])
+        fig.add_trace(go.Scatter(x=x_range_cr, y=np.clip(y_comp,-8,8), name='f(g(x))',
+            line=dict(color='#534AB7',width=2.5)), row=1, col=1)
+        fig.add_trace(go.Scatter(x=x_range_cr, y=np.clip(tangent_cr,-8,8),
+            name='Tangent', line=dict(color='#E24B4A',width=1.5,dash='dash')), row=1, col=1)
+        fig.add_scatter(x=[x_cr], y=[y_val], mode='markers',
+            marker=dict(color='#E24B4A',size=10), showlegend=False, row=1, col=1)
+        fig.add_trace(go.Scatter(x=x_range_cr, y=np.clip(dy_comp,-8,8), name="d/dx f(g(x))",
+            line=dict(color='#1D9E75',width=2.5)), row=1, col=2)
+        fig.add_scatter(x=[x_cr], y=[dy_dx], mode='markers',
+            marker=dict(color='#1D9E75',size=10), showlegend=False, row=1, col=2)
+        fig.update_xaxes(title_text="x"); fig.update_yaxes(title_text="y")
+        fig.update_yaxes(title_text="dy/dx", row=1, col=2)
+        fig.update_layout(height=360, legend=dict(orientation='h',y=1.12))
+        st.plotly_chart(fig, width='stretch')
+
+    with tab2:
+        st.markdown("### Why the chain rule *is* backpropagation")
+        st.markdown("""
+        Consider a 3-layer network: input x → layer 1 → layer 2 → layer 3 → loss L.
+
+        To update w₁ we need dL/dw₁. We never have a direct formula, but the chain rule gives:
+        """)
+        st.markdown('<div class="formula-box">dL/dw₁ = (dL/da₂)·(da₂/da₁)·(da₁/dw₁)</div>',
+            unsafe_allow_html=True)
+        st.markdown("""
+        Each term is easy to compute locally at each layer.
+        Backpropagation is just the chain rule applied efficiently from output → input,
+        reusing intermediate values so nothing is computed twice.
+        """)
+
+        # simulate a tiny network chain rule numerically
+        st.markdown("**Numerical demonstration - 3-layer chain:**")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            x_nn = st.slider("Input x", -2.0, 2.0, 1.0, step=0.1, key="cr_nn_x")
+            w1_c = st.slider("Weight w₁", -2.0, 2.0, 0.5, step=0.1, key="cr_w1")
+            w2_c = st.slider("Weight w₂", -2.0, 2.0, 1.5, step=0.1, key="cr_w2")
+            w3_c = st.slider("Weight w₃", -2.0, 2.0,-0.8, step=0.1, key="cr_w3")
+            y_tgt= st.slider("Target y",  -2.0, 2.0, 1.0, step=0.1, key="cr_y")
+
+        z1 = w1_c * x_nn;         a1 = np.tanh(z1)
+        z2 = w2_c * a1;           a2 = np.tanh(z2)
+        z3 = w3_c * a2;           y_hat_c = z3
+        L  = 0.5*(y_hat_c - y_tgt)**2
+        dL_dyhat = y_hat_c - y_tgt
+        dyhat_dw3 = a2
+        da2_dz2 = 1 - np.tanh(z2)**2
+        dz2_dw2 = a1
+        da1_dz1 = 1 - np.tanh(z1)**2
+        dz1_dw1 = x_nn
+        grad_w3 = dL_dyhat * dyhat_dw3
+        grad_w2 = dL_dyhat * w3_c * da2_dz2 * dz2_dw2
+        grad_w1 = dL_dyhat * w3_c * da2_dz2 * w2_c * da1_dz1 * dz1_dw1
+
+        with col2:
+            st.code(f"""
+Forward:  x={x_nn} → z1={z1:.3f} → a1=tanh={a1:.3f}
+          → z2={z2:.3f} → a2=tanh={a2:.3f}
+          → z3=ŷ={y_hat_c:.3f}   Loss={L:.4f}
+
+Backward (chain rule):
+  dL/dw3 = {grad_w3:.4f}
+  dL/dw2 = {grad_w2:.4f}
+  dL/dw1 = {grad_w1:.4f}   ← gradient flows back through 3 layers
+""", language="text")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DOT PRODUCT
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "dot_product":
+    st.title("· Dot Product")
+    st.markdown("""
+    <div class="concept-card">
+    The <b>dot product</b> multiplies corresponding elements of two vectors and sums them.
+    It is the single most repeated operation in ML: every neuron computes a dot product,
+    every attention score is a dot product, every cosine similarity is a normalised dot product.
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('<div class="formula-box">a · b = Σ aᵢbᵢ = |a||b|cos θ</div>', unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Interactive calculator", "Applications in ML"])
+
+    with tab1:
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            dim = st.slider("Vector dimension", 2, 6, 3)
+            st.markdown("**Vector a**")
+            a_dp = np.array([st.slider(f"a[{i+1}]", -3.0, 3.0,
+                [1.0,2.0,-1.0,0.5,1.5,-0.5][i], step=0.1, key=f"dp_a{i}") for i in range(dim)])
+            st.markdown("**Vector b**")
+            b_dp = np.array([st.slider(f"b[{i+1}]", -3.0, 3.0,
+                [2.0,-1.0,1.0,1.5,-0.5,0.5][i], step=0.1, key=f"dp_b{i}") for i in range(dim)])
+
+        dp_val   = float(np.dot(a_dp, b_dp))
+        mag_a_dp = float(np.linalg.norm(a_dp))
+        mag_b_dp = float(np.linalg.norm(b_dp))
+        cos_sim  = dp_val / (mag_a_dp * mag_b_dp + 1e-9)
+        angle_dp = float(np.degrees(np.arccos(np.clip(cos_sim, -1, 1))))
+
+        with col2:
+            st.markdown("**Element-wise multiplication:**")
+            terms = [f"({a_dp[i]:.1f})×({b_dp[i]:.1f}) = {a_dp[i]*b_dp[i]:.2f}" for i in range(dim)]
+            for t in terms:
+                st.markdown(f"&nbsp;&nbsp;&nbsp;{t}")
+            st.markdown(f"**Sum = {dp_val:.4f}**")
+            st.divider()
+            c1, c2, c3, c4, c5 = st.columns(5)
+            c1.metric("|a|", f"{mag_a_dp:.3f}")
+            c2.metric("|b|", f"{mag_b_dp:.3f}")
+            c3.metric("a·b", f"{dp_val:.4f}")
+            c4.metric("cos θ", f"{cos_sim:.4f}")
+            c5.metric("Angle θ", f"{angle_dp:.1f}°")
+
+            if mag_a_dp < 1e-9 or mag_b_dp < 1e-9:
+                st.warning("One of the vectors is the zero vector - it has no direction, "
+                           "so cos θ and the angle are undefined.")
+            elif cos_sim > 0.9:          st.success("Vectors are nearly identical in direction")
+            elif abs(cos_sim) < 1e-9:    st.warning("Vectors are orthogonal (perpendicular)")
+            elif cos_sim > 0.0:          st.info("Vectors point in a similar direction")
+            else:                        st.error("Vectors point in opposite directions")
+
+        # bar chart of contributions
+        fig = go.Figure()
+        contribs = a_dp * b_dp
+        colors_dp = ['#1D9E75' if c >= 0 else '#E24B4A' for c in contribs]
+        fig.add_trace(go.Bar(x=[f"a[{i+1}]·b[{i+1}]" for i in range(dim)],
+            y=contribs, marker_color=colors_dp, name='Element contribution'))
+        fig.add_hline(y=0, line_color='gray', line_width=0.5)
+        fig.update_layout(xaxis_title="Component", yaxis_title="aᵢ·bᵢ",
+            title=f"Element contributions to dot product (sum = {dp_val:.3f})",
+            height=280, showlegend=False)
+        st.plotly_chart(fig, width='stretch')
+
+    with tab2:
+        st.markdown("""
+        ### Where the dot product appears in ML
+
+        **1. Single neuron output:**
+        """)
+        st.markdown('<div class="formula-box">z = w · x + b = Σ wᵢxᵢ + b</div>', unsafe_allow_html=True)
+        st.markdown("""
+        **2. Cosine similarity** (used in embeddings, NLP, recommendation):
+        """)
+        st.markdown('<div class="formula-box">cos_sim(a,b) = a·b / (|a|·|b|)</div>', unsafe_allow_html=True)
+        st.markdown("""
+        **3. Attention score** (transformers):
+        """)
+        st.markdown('<div class="formula-box">score(Q,K) = Q·Kᵀ / √dₖ</div>', unsafe_allow_html=True)
+        st.markdown("""
+        **4. Projection** - how much of a lies along b (scalar: a·b̂; vector: (a·b/|b|²)·b).
+        For the full interactive treatment including perpendicular components and the
+        connection to PCA and attention, see **Vector Spaces** in Math Foundations.
+        """)
+
+        st.markdown("### Interactive cosine similarity between two word embeddings (simulated)")
+        col1, col2 = st.columns(2)
+        with col1:
+            np.random.seed(42)
+            words = ["king","queen","man","woman","cat","dog","Paris","France"]
+            w1_sel = st.selectbox("Word 1", words, index=0)
+            w2_sel = st.selectbox("Word 2", words, index=1)
+            # simple fake embeddings
+            embeddings = {w: np.random.randn(8) for w in words}
+            embeddings["queen"] = embeddings["king"] + np.array([0.1,-0.2,0.8,0.1,-0.1,0.2,-0.1,0.1])
+            embeddings["woman"] = embeddings["man"]  + np.array([0.1,-0.2,0.8,0.1,-0.1,0.2,-0.1,0.1])
+            embeddings["dog"]   = embeddings["cat"]  + np.random.randn(8)*0.3
+            embeddings["France"]= embeddings["Paris"]+ np.random.randn(8)*0.3
+            e1, e2 = embeddings[w1_sel], embeddings[w2_sel]
+            cs = float(np.dot(e1,e2)/(np.linalg.norm(e1)*np.linalg.norm(e2)+1e-9))
+        with col2:
+            st.metric(f"cos_sim({w1_sel}, {w2_sel})", f"{cs:.4f}")
+            st.progress(float((cs+1)/2))
+            st.caption("Simulated 8-dim embeddings. Related words cluster together.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# EIGENVALUES & EIGENVECTORS
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "eigenvalues":
+    st.title("λ Eigenvalues & Eigenvectors")
+    st.markdown("""
+    <div class="concept-card">
+    An <b>eigenvector</b> of a matrix A is a special direction that doesn't rotate under A -
+    it only stretches, shrinks or flips (when λ is negative). The <b>eigenvalue</b> λ tells you by how much.
+    They appear in PCA (dimensionality reduction), understanding covariance, and stability analysis.
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('<div class="formula-box">A · v = λ · v</div>', unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Visual explorer", "PCA connection"])
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            preset_e = st.selectbox("Matrix preset", [
+                "Custom", "Scaling", "Rotation 30°", "Shear", "Symmetric"], key="e_preset")
+            presets_e = {
+                "Scaling":      [[3,0],[0,1.5]],
+                "Rotation 30°": [[np.cos(np.pi/6),-np.sin(np.pi/6)],[np.sin(np.pi/6),np.cos(np.pi/6)]],
+                "Shear":        [[1,2],[0,1]],
+                "Symmetric":    [[3,1],[1,2]],
+            }
+            # Push the chosen preset into the input boxes (keyed widgets ignore a changed value=)
+            e_keys = ["e00", "e01", "e10", "e11"]
+            if st.session_state.get("e_preset_prev") != preset_e:
+                if preset_e in presets_e:
+                    m = presets_e[preset_e]
+                    for k, v in zip(e_keys, [m[0][0], m[0][1], m[1][0], m[1][1]]):
+                        st.session_state[k] = float(v)
+                st.session_state["e_preset_prev"] = preset_e
+            for k, v in zip(e_keys, [2.0, 1.0, 1.0, 2.0]):   # starting matrix for "Custom"
+                st.session_state.setdefault(k, v)
+            e00 = st.number_input("A[1,1]", step=0.5, key="e00")
+            e01 = st.number_input("A[1,2]", step=0.5, key="e01")
+            e10 = st.number_input("A[2,1]", step=0.5, key="e10")
+            e11 = st.number_input("A[2,2]", step=0.5, key="e11")
+            A_e = np.array([[e00,e01],[e10,e11]])
+
+        try:
+            eigenvalues, eigenvectors = np.linalg.eig(A_e)
+            real_eigs = np.isreal(eigenvalues).all()
+        except Exception:
+            real_eigs = False
+
+        with col2:
+            fig = go.Figure()
+            # show many vectors before/after transformation
+            angles = np.linspace(0, 2*np.pi, 24, endpoint=False)
+            for ang in angles:
+                v_orig = np.array([np.cos(ang), np.sin(ang)])
+                v_trans = A_e @ v_orig
+                fig.add_shape(type='line', x0=0,y0=0, x1=v_orig[0],y1=v_orig[1],
+                    line=dict(color='rgba(83,74,183,0.3)',width=1))
+                fig.add_shape(type='line', x0=0,y0=0, x1=v_trans[0],y1=v_trans[1],
+                    line=dict(color='rgba(226,75,74,0.25)',width=1))
+
+            # highlight eigenvectors
+            if real_eigs:
+                ev_colors = ['#EF9F27','#1D9E75']
+                for i, (lam, ev, col_ev) in enumerate(zip(eigenvalues, eigenvectors.T, ev_colors)):
+                    if np.isreal(lam):
+                        ev_r = ev.real / (np.linalg.norm(ev.real)+1e-9)
+                        fig.add_shape(type='line', x0=0,y0=0,
+                            x1=ev_r[0], y1=ev_r[1],
+                            line=dict(color=col_ev, width=3))
+                        transformed = (A_e @ ev_r)
+                        fig.add_shape(type='line', x0=0,y0=0,
+                            x1=transformed[0], y1=transformed[1],
+                            line=dict(color=col_ev, width=3, dash='dash'))
+                        fig.add_annotation(x=ev_r[0]*1.2, y=ev_r[1]*1.2,
+                            text=f"v{i+1} (λ={lam.real:.2f})",
+                            font=dict(color=col_ev, size=12), showarrow=False)
+
+            lim_e = max(3.0, float(np.linalg.norm(A_e, 2))*1.2)   # largest stretch of any unit vector
+            fig.update_layout(
+                xaxis=dict(range=[-lim_e,lim_e], zeroline=True, zerolinecolor='#ccc'),
+                yaxis=dict(range=[-lim_e,lim_e], zeroline=True, zerolinecolor='#ccc',
+                    scaleanchor='x', scaleratio=1),
+                height=420, plot_bgcolor='white', showlegend=False,
+                margin=dict(l=10,r=10,t=30,b=10),
+                title="Blue=original vectors, Red=transformed. Gold/Green=eigenvectors (solid→dashed after A)")
+            st.plotly_chart(fig, width='stretch')
+
+        if real_eigs:
+            c1,c2 = st.columns(2)
+            for i, (lam, ev) in enumerate(zip(eigenvalues, eigenvectors.T)):
+                col_c = [c1,c2][i]
+                col_c.metric(f"λ{i+1}", f"{lam.real:.4f}")
+                col_c.markdown(f"v{i+1} = [{ev[0].real:.3f}, {ev[1].real:.3f}]")
+            st.markdown(f"**Trace** (sum of eigenvalues) = {np.trace(A_e):.3f} &nbsp;|&nbsp; "
+                f"**Determinant** (product of eigenvalues) = {np.linalg.det(A_e):.3f}")
+            if abs(np.linalg.det(eigenvectors.real)) < 1e-6:
+                st.info("Repeated eigenvalue with only **one** eigenvector direction - v1 and v2 "
+                        "above lie on the same line. A matrix like this is called *defective* "
+                        "(e.g. a shear).")
+        else:
+            st.warning("This matrix has complex eigenvalues (rotation without real eigenvectors).")
+
+    with tab2:
+        st.markdown("""
+        ### PCA - Principal Component Analysis
+
+        PCA finds the directions of maximum variance in data.
+        These directions are exactly the **eigenvectors of the covariance matrix**,
+        and the eigenvalues tell you how much variance each direction captures.
+        """)
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            n_pca = st.slider("Number of data points", 20, 200, 80)
+            corr  = st.slider("Feature correlation", -0.95, 0.95, 0.8, step=0.05)
+            seed_pca = st.slider("Seed", 0, 10, 1, key="pca_seed")
+
+        np.random.seed(seed_pca)
+        cov_mat = np.array([[1.0, corr],[corr, 1.0]])
+        X_pca = np.random.multivariate_normal([0,0], cov_mat, n_pca)
+        cov_emp = np.cov(X_pca.T)
+        evals, evecs = np.linalg.eigh(cov_emp)
+        # sort descending
+        idx = np.argsort(evals)[::-1]
+        evals, evecs = evals[idx], evecs[:,idx]
+        var_explained = evals / evals.sum()
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=X_pca[:,0], y=X_pca[:,1], mode='markers',
+                marker=dict(color='#534AB7', size=5, opacity=0.6), name='Data'))
+            scale = 2.0
+            for i, (val, vec, col_p) in enumerate(zip(evals, evecs.T, ['#E24B4A','#1D9E75'])):
+                fig.add_shape(type='line',
+                    x0=-vec[0]*np.sqrt(val)*scale, y0=-vec[1]*np.sqrt(val)*scale,
+                    x1=vec[0]*np.sqrt(val)*scale,  y1=vec[1]*np.sqrt(val)*scale,
+                    line=dict(color=col_p, width=3))
+                fig.add_annotation(x=vec[0]*np.sqrt(val)*scale*1.1,
+                    y=vec[1]*np.sqrt(val)*scale*1.1,
+                    text=f"PC{i+1} ({var_explained[i]:.1%})",
+                    font=dict(color=col_p, size=12), showarrow=False)
+            fig.update_layout(xaxis_title="Feature 1", yaxis_title="Feature 2",
+                xaxis=dict(range=[-4,4]), yaxis=dict(range=[-4,4],scaleanchor='x',scaleratio=1),
+                height=400, plot_bgcolor='white',
+                margin=dict(l=10,r=10,t=10,b=10), showlegend=False)
+            st.plotly_chart(fig, width='stretch')
+
+        c1,c2 = st.columns(2)
+        c1.metric("PC1 explains", f"{var_explained[0]:.1%} of variance")
+        c2.metric("PC2 explains", f"{var_explained[1]:.1%} of variance")
+        st.caption("The principal components (eigenvectors) are the natural axes of the data cloud.")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PCA
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "pca":
+    st.title("🔍 PCA - Principal Component Analysis")
+    st.markdown("""
+    <div class="concept-card">
+    PCA finds the directions of <b>maximum variance</b> in high-dimensional data and projects
+    the data onto a lower-dimensional space, losing as little information as possible.
+    It is one of the most widely used dimensionality reduction techniques in ML.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["2D → 1D intuition", "Multi-dimensional PCA", "Scree plot & variance"])
+
+    with tab1:
+        st.markdown("The first principal component is the direction that captures the most variance.")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            n_pca2 = st.slider("Points", 30, 200, 80, key="pca2_n")
+            corr2  = st.slider("Feature correlation", -0.95, 0.95, 0.75, step=0.05, key="pca2_c")
+            noise2 = st.slider("Noise", 0.05, 0.8, 0.2, step=0.05, key="pca2_ns")
+            seed2  = st.slider("Seed", 0, 20, 3, key="pca2_s")
+            show_proj = st.checkbox("Show projections onto PC1", value=True)
+
+        np.random.seed(seed2)
+        cov2 = np.array([[1.0, corr2],[corr2, 1.0]])
+        X2 = np.random.multivariate_normal([0,0], cov2, n_pca2)
+        X2 += np.random.randn(*X2.shape) * noise2
+
+        # manual PCA
+        X2c = X2 - X2.mean(axis=0)
+        cov_e = np.cov(X2c.T)
+        evals2, evecs2 = np.linalg.eigh(cov_e)
+        idx2 = np.argsort(evals2)[::-1]
+        evals2, evecs2 = evals2[idx2], evecs2[:, idx2]
+        pc1 = evecs2[:, 0]
+        var_exp = evals2 / evals2.sum()
+
+        # projections onto PC1
+        projections = X2c @ pc1
+        X_proj = np.outer(projections, pc1)
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=X2[:,0], y=X2[:,1], mode='markers',
+                marker=dict(color='#534AB7', size=6, opacity=0.6), name='Data points'))
+
+            if show_proj:
+                for i in range(len(X2c)):
+                    orig = X2c[i] + X2.mean(axis=0)
+                    proj = X_proj[i] + X2.mean(axis=0)
+                    fig.add_shape(type='line', x0=orig[0], y0=orig[1],
+                        x1=proj[0], y1=proj[1],
+                        line=dict(color='rgba(239,159,39,0.3)', width=1))
+                fig.add_trace(go.Scatter(
+                    x=(X_proj + X2.mean(axis=0))[:,0],
+                    y=(X_proj + X2.mean(axis=0))[:,1],
+                    mode='markers', marker=dict(color='#EF9F27', size=5, opacity=0.8),
+                    name='Projected onto PC1'))
+
+            # draw PC arrows
+            scale = np.sqrt(evals2) * 1.5
+            for i, (ev, sc, col_p, lbl) in enumerate(zip(
+                    evecs2.T, scale, ['#E24B4A','#1D9E75'], ['PC1','PC2'])):
+                fig.add_shape(type='line',
+                    x0=X2.mean(0)[0]-ev[0]*sc, y0=X2.mean(0)[1]-ev[1]*sc,
+                    x1=X2.mean(0)[0]+ev[0]*sc, y1=X2.mean(0)[1]+ev[1]*sc,
+                    line=dict(color=col_p, width=3))
+                fig.add_annotation(
+                    x=X2.mean(0)[0]+ev[0]*sc*1.15,
+                    y=X2.mean(0)[1]+ev[1]*sc*1.15,
+                    text=f"<b>{lbl}</b> ({var_exp[i]:.1%})",
+                    font=dict(color=col_p, size=12), showarrow=False)
+
+            lim = max(abs(X2).max(), abs(X_proj + X2.mean(0)).max()) + 0.5
+            fig.update_layout(xaxis=dict(range=[-lim,lim], zeroline=True),
+                yaxis=dict(range=[-lim,lim], zeroline=True, scaleanchor='x', scaleratio=1),
+                height=430, plot_bgcolor='white',
+                legend=dict(orientation='h', y=1.1),
+                margin=dict(l=10,r=10,t=10,b=10))
+            st.plotly_chart(fig, width='stretch')
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("PC1 variance explained", f"{var_exp[0]:.1%}")
+        c2.metric("PC2 variance explained", f"{var_exp[1]:.1%}")
+        c3.metric("PC1 direction", f"[{pc1[0]:.3f}, {pc1[1]:.3f}]",
+                  help="The sign is arbitrary: [a, b] and [−a, −b] describe the same line.")
+        st.info("Orange lines show the reconstruction error - information lost by projecting onto PC1 only.")
+        if var_exp[0] < 0.55:
+            st.warning(f"PC1 explains only {var_exp[0]:.1%} - the cloud is nearly round, so no direction has much "
+                       "more variance than another. PC1's direction here is mostly determined by noise and can "
+                       "swing a lot between seeds; reducing to 1D would throw away almost half the information.")
+
+    with tab2:
+        st.markdown("PCA on a higher-dimensional dataset, projected to 2D for visualisation.")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            n_classes = st.slider("Classes", 2, 4, 3, key="pca_cls")
+            n_feats   = st.slider("Original features (dimensions)", 3, 10, 5, key="pca_f")
+            n_samp    = st.slider("Samples per class", 20, 80, 40, key="pca_s")
+            seed_hd   = st.slider("Seed", 0, 10, 1, key="pca_seed2")
+
+        np.random.seed(seed_hd)
+        centers = np.random.randn(n_classes, n_feats) * 2
+        X_hd = np.vstack([np.random.randn(n_samp, n_feats) + centers[c]
+                          for c in range(n_classes)])
+        y_hd = np.repeat(np.arange(n_classes), n_samp)
+
+        # PCA via SVD
+        X_hdc = X_hd - X_hd.mean(axis=0)
+        U, S, Vt = np.linalg.svd(X_hdc, full_matrices=False)
+        var_ratio = S**2 / (S**2).sum()
+        X_2d = X_hdc @ Vt[:2].T
+
+        with col2:
+            cls_colors = ['#534AB7','#E24B4A','#1D9E75','#EF9F27']
+            fig = go.Figure()
+            for c in range(n_classes):
+                mask = y_hd == c
+                fig.add_trace(go.Scatter(x=X_2d[mask,0], y=X_2d[mask,1],
+                    mode='markers', name=f'Class {c+1}',
+                    marker=dict(color=cls_colors[c], size=7, opacity=0.75)))
+            fig.update_layout(xaxis_title=f"PC1 ({var_ratio[0]:.1%})",
+                yaxis_title=f"PC2 ({var_ratio[1]:.1%})",
+                height=390, legend=dict(orientation='h', y=1.1))
+            st.plotly_chart(fig, width='stretch')
+
+        st.markdown(f"Original: **{n_feats}D** → PCA projection: **2D** "
+                    f"(retaining {var_ratio[0]+var_ratio[1]:.1%} of variance)")
+        st.caption("**PCA never sees the class labels** - the colours are added afterwards. It finds directions of "
+                   "maximum *variance*, which often separate the groups (as here) but aren't guaranteed to: if the "
+                   "classes differ along a low-variance direction, PCA can blur them together. For a projection "
+                   "that uses the labels to separate classes, see **LDA**.")
+        st.caption("**Standardise features first.** PCA chases variance, so a feature measured in large units "
+                   "dominates: two correlated features where one is in thousands give PC1 ≈ [1.000, 0.001] - "
+                   "essentially just the big feature. Scaling each feature to mean 0, std 1 puts them on equal "
+                   "footing. (All features here are already on the same scale.)")
+
+    with tab3:
+        st.markdown("### Scree plot - how many components to keep?")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            n_feat_s = st.slider("Number of features", 3, 15, 8, key="pca_sc_f")
+            n_samp_s = st.slider("Samples", 50, 300, 120, key="pca_sc_s")
+            seed_sc  = st.slider("Seed", 0, 10, 0, key="pca_sc_seed")
+            threshold = st.slider("Variance threshold", 0.7, 0.99, 0.90, step=0.01)
+
+        np.random.seed(seed_sc)
+        # make data with varying signal strength across dims
+        true_dims = max(2, n_feat_s // 2)
+        W = np.random.randn(n_feat_s, true_dims)
+        Z = np.random.randn(n_samp_s, true_dims)
+        X_sc = Z @ W.T + np.random.randn(n_samp_s, n_feat_s) * 0.5
+        X_sc -= X_sc.mean(0)
+        _, S_sc, _ = np.linalg.svd(X_sc, full_matrices=False)
+        var_sc = S_sc**2 / (S_sc**2).sum()
+        cumvar = np.cumsum(var_sc)
+        n_keep = int(np.searchsorted(cumvar, threshold)) + 1
+
+        with col2:
+            fig = make_subplots(rows=1, cols=2,
+                subplot_titles=["Variance per component (scree)", "Cumulative variance"])
+            fig.add_trace(go.Bar(x=list(range(1, n_feat_s+1)), y=var_sc,
+                marker_color=['#E24B4A' if i < n_keep else '#AFA9EC'
+                              for i in range(n_feat_s)], name='Individual'),
+                row=1, col=1)
+            fig.add_trace(go.Scatter(x=list(range(1, n_feat_s+1)), y=cumvar,
+                mode='lines+markers', line=dict(color='#534AB7', width=2.5),
+                name='Cumulative'), row=1, col=2)
+            fig.add_hline(y=threshold, line_dash='dash', line_color='#EF9F27',
+                annotation_text=f"{threshold:.0%}", row=1, col=2)
+            fig.add_vline(x=n_keep + 0.5, line_dash='dot', line_color='#E24B4A',
+                annotation_text=f"keep {n_keep}", row=1, col=1)
+            fig.update_xaxes(title_text="Component")
+            fig.update_yaxes(title_text="Variance explained")
+            fig.update_layout(height=350, showlegend=False)
+            st.plotly_chart(fig, width='stretch')
+
+        st.metric(f"Components needed for {threshold:.0%} variance",
+                  f"{n_keep} out of {n_feat_s}",
+                  f"{n_feat_s - n_keep} dimensions removed")
+        st.caption(f"This data was generated from **{true_dims} hidden factors** plus a little noise. Look for the "
+                   f"'elbow' in the scree plot: the first {true_dims} components carry the real signal, and from "
+                   f"component {true_dims + 1} onwards the bars drop to small, roughly equal noise-level values. "
+                   "A variance threshold and the elbow are two common ways to choose - they don't always agree.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CLUSTERING (K-MEANS & HIERARCHICAL)
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "clustering":
+    st.title("🧩 Clustering (K-Means & Hierarchical)")
+    st.markdown("""
+    <div class="concept-card">
+    Clustering finds structure in data with <b>no labels at all</b> - it groups points by
+    similarity alone. <b>K-Means</b> commits to a fixed number of groups upfront and moves
+    centroids until each point is closest to its own; <b>Hierarchical clustering</b> builds
+    a full tree of nested groupings and lets you choose how many clusters you want
+    afterward, just by deciding where to cut the tree.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Interactive K-Means", "Hierarchical Clustering & Dendrograms"])
+
+    from sklearn.cluster import KMeans
+    from sklearn.datasets import make_blobs
+    from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
+    from sklearn.metrics import silhouette_score
+
+    palette = ['#534AB7', '#E24B4A', '#1D9E75', '#EF9F27', '#888780', '#3AACC9', '#B24BE2', '#E2B24B']
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            true_k_km = st.slider("True number of groups (data)", 2, 5, 3, key="km_truek")
+            chosen_k = st.slider("k (clusters to find)", 1, 8, 3, key="km_k")
+            std_km = st.slider("Cluster spread", 0.5, 3.0, 1.2, step=0.1, key="km_std")
+            n_km = st.slider("Number of points", 50, 300, 150, key="km_n")
+
+        X_km, _ = make_blobs(n_samples=n_km, centers=true_k_km, cluster_std=std_km, random_state=7)
+        kmeans = KMeans(n_clusters=chosen_k, n_init=10, random_state=42).fit(X_km)
+        labels_km = kmeans.labels_
+        centers_km = kmeans.cluster_centers_
+
+        with col2:
+            fig = go.Figure()
+            for c in range(chosen_k):
+                m = labels_km == c
+                fig.add_trace(go.Scatter(x=X_km[m, 0], y=X_km[m, 1], mode='markers',
+                    name=f'Cluster {c}', marker=dict(color=palette[c % len(palette)], size=7)))
+            fig.add_trace(go.Scatter(x=centers_km[:, 0], y=centers_km[:, 1], mode='markers',
+                name='Centroids', marker=dict(color='black', size=14, symbol='x')))
+            fig.update_layout(height=400, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, width='stretch')
+
+        c1, c2m, c3 = st.columns(3)
+        c1.metric("Inertia (within-cluster SS)", f"{kmeans.inertia_:.1f}")
+        c2m.metric("k chosen", chosen_k)
+        c3.metric("True groups in data", true_k_km)
+
+        st.markdown("### Elbow method - choosing k")
+        ks = list(range(1, 9))
+        fits_k = {kk: KMeans(n_clusters=kk, n_init=10, random_state=42).fit(X_km) for kk in ks}
+        inertias = [fits_k[kk].inertia_ for kk in ks]
+        ks_sil = ks[1:]                                   # silhouette needs at least 2 clusters
+        sils = [silhouette_score(X_km, fits_k[kk].labels_) for kk in ks_sil]
+        best_sil_k = ks_sil[int(np.argmax(sils))]
+        fig2 = go.Figure()
+        fig2.add_trace(go.Scatter(x=ks, y=inertias, mode='lines+markers', name='Inertia (left axis)',
+            line=dict(color='#534AB7', width=2.5)))
+        fig2.add_trace(go.Scatter(x=ks_sil, y=sils, mode='lines+markers', name='Silhouette (right axis)',
+            line=dict(color='#1D9E75', width=2.5, dash='dash'), yaxis='y2'))
+        fig2.add_trace(go.Scatter(x=[best_sil_k], y=[max(sils)], mode='markers', yaxis='y2',
+            marker=dict(color='#1D9E75', size=14, symbol='star'), name=f'Best silhouette (k={best_sil_k})'))
+        fig2.add_vline(x=chosen_k, line=dict(color='#EF9F27', dash='dash'),
+            annotation_text=f"Selected k={chosen_k}")
+        fig2.update_layout(xaxis_title="k", yaxis_title="Inertia (lower = tighter)", height=300,
+            yaxis2=dict(title="Silhouette (higher = better)", overlaying='y', side='right', range=[0, 1]),
+            legend=dict(orientation='h', y=1.2))
+        st.plotly_chart(fig2, width='stretch')
+        st.caption(f"The 'elbow' - where adding another cluster stops giving a big drop in inertia - is a "
+                   f"common heuristic for picking k, but it's a judgement call. The **silhouette score** gives "
+                   f"a number to go with it: for each point it compares the distance to its own cluster with "
+                   f"the distance to the nearest other cluster (−1 to 1, higher is better). Here it peaks at "
+                   f"k = {best_sil_k}. There's no ground truth in real unsupervised problems, so neither is "
+                   "something **Cross-Validation** can settle the way it does for supervised models.")
+        st.caption("**K-Means assumptions:** it works best for roughly round clusters of similar size and "
+                   "spread, it is sensitive to feature scaling (standardise features first), and it can get "
+                   "stuck in a poor solution depending on the starting centroids - which is why it is run "
+                   "several times (`n_init=10` here) and the best result kept.")
+
+    with tab2:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            n_h = st.slider("Number of points", 10, 40, 20, key="hc_n")
+            true_k_h = st.slider("True groups (data)", 2, 5, 3, key="hc_truek")
+            std_h = st.slider("Cluster spread", 0.5, 3.0, 1.2, step=0.1, key="hc_std")
+            linkage_method = st.selectbox("Linkage method",
+                ["ward", "complete", "average", "single"], key="hc_linkage")
+            cut_frac = st.slider("Cut height (fraction of tree height)", 0.0, 1.0, 0.5,
+                step=0.05, key="hc_cut_frac")
+
+        X_h, _ = make_blobs(n_samples=n_h, centers=true_k_h, cluster_std=std_h, random_state=11)
+        Z = linkage(X_h, method=linkage_method)
+        max_h = float(Z[:, 2].max())
+        cut_height = cut_frac * max_h
+        labels_h = fcluster(Z, cut_height, criterion='distance')
+        n_found = len(set(labels_h))
+
+        # Colour each branch by the cluster it belongs to AT THE USER'S CUT, using the scatter's colours;
+        # branches that join different clusters (above the cut) are grey.
+        lab_order = sorted(set(labels_h))
+        lab_color = {lab: palette[i % len(palette)] for i, lab in enumerate(lab_order)}
+        n_leaves = len(X_h)
+        leaves_of = {i: {i} for i in range(n_leaves)}
+        for j, (a_, b_, _, _) in enumerate(Z):
+            leaves_of[n_leaves + j] = leaves_of[int(a_)] | leaves_of[int(b_)]
+        def _link_color(node_id):
+            labs = {labels_h[leaf] for leaf in leaves_of[node_id]}
+            return lab_color[labs.pop()] if len(labs) == 1 else '#BBBBBB'
+        dn = dendrogram(Z, no_plot=True, link_color_func=_link_color)
+        with col2:
+            fig_dendro = go.Figure()
+            for xs, ys, c in zip(dn['icoord'], dn['dcoord'], dn['color_list']):
+                fig_dendro.add_trace(go.Scatter(x=xs, y=ys, mode='lines',
+                    line=dict(color=c, width=1.5),
+                    showlegend=False, hoverinfo='skip'))
+            fig_dendro.add_hline(y=cut_height, line=dict(color='#EF9F27', dash='dash'),
+                annotation_text=f"Cut → {n_found} clusters (colours match the scatter below)")
+            fig_dendro.update_layout(xaxis=dict(showticklabels=False, title="Points"),
+                yaxis_title="Linkage distance", height=380)
+            st.plotly_chart(fig_dendro, width='stretch')
+
+        st.markdown("### Resulting clusters at this cut height")
+        fig_scatter = go.Figure()
+        for i, lab in enumerate(sorted(set(labels_h))):
+            m = labels_h == lab
+            fig_scatter.add_trace(go.Scatter(x=X_h[m, 0], y=X_h[m, 1], mode='markers',
+                name=f'Cluster {lab}', marker=dict(color=palette[i % len(palette)], size=9)))
+        fig_scatter.update_layout(height=340, legend=dict(orientation='h', y=1.14))
+        st.plotly_chart(fig_scatter, width='stretch')
+
+        c1, c2m = st.columns(2)
+        c1.metric("Clusters at this cut", n_found)
+        c2m.metric("Linkage method", linkage_method)
+        st.caption("**Ward** merges the pair that increases within-cluster variance the "
+                   "least (usually the most balanced-looking clusters); **single** linkage "
+                   "merges on the nearest pair of points, which can chain together "
+                   "elongated clusters; **complete** and **average** sit in between. Cut "
+                   "higher for fewer, broader clusters - unlike K-Means, you don't have to "
+                   "commit to a cluster count before seeing the whole tree.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DECISION TREE
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "decision_tree":
+    st.title("🌳 Decision Tree")
+    st.markdown("""
+    <div class="concept-card">
+    A decision tree repeatedly <b>splits the data</b> on the feature and threshold that best
+    separates the classes. Each split is chosen to give the biggest drop in <b>impurity</b>
+    (Gini, or entropy - where the drop is called <b>information gain</b>). The result is a set
+    of human-readable if/else rules.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Decision boundary", "Gini impurity & splits"])
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            max_depth = st.slider("Max tree depth", 1, 6, 3)
+            n_dt = st.slider("Samples per class", 30, 100, 50, key="dt_n")
+            sep_dt = st.slider("Class separation", 0.5, 3.0, 1.5, step=0.1, key="dt_sep")
+            seed_dt = st.slider("Seed", 0, 20, 5, key="dt_seed")
+            n_classes_dt = st.radio("Classes", [2, 3], horizontal=True)
+
+        from sklearn.tree import DecisionTreeClassifier
+        np.random.seed(seed_dt)
+        if n_classes_dt == 2:
+            X_dt = np.vstack([np.random.randn(n_dt,2)+[-sep_dt/2,0],
+                              np.random.randn(n_dt,2)+[sep_dt/2,0]])
+            y_dt = np.array([0]*n_dt+[1]*n_dt)
+        else:
+            X_dt = np.vstack([np.random.randn(n_dt,2)+[-sep_dt,0],
+                              np.random.randn(n_dt,2)+[sep_dt,0],
+                              np.random.randn(n_dt,2)+[0,sep_dt]])
+            y_dt = np.array([0]*n_dt+[1]*n_dt+[2]*n_dt)
+
+        clf_dt = DecisionTreeClassifier(max_depth=max_depth, random_state=42)
+        clf_dt.fit(X_dt, y_dt)
+        train_acc = clf_dt.score(X_dt, y_dt)
+
+        # fresh test data from the same distribution - what the tree has never seen
+        rng_te = np.random.RandomState(1000 + seed_dt)
+        n_te = 1000
+        if n_classes_dt == 2:
+            X_te = np.vstack([rng_te.randn(n_te,2)+[-sep_dt/2,0], rng_te.randn(n_te,2)+[sep_dt/2,0]])
+        else:
+            X_te = np.vstack([rng_te.randn(n_te,2)+[-sep_dt,0], rng_te.randn(n_te,2)+[sep_dt,0],
+                              rng_te.randn(n_te,2)+[0,sep_dt]])
+        y_te = np.repeat(np.arange(n_classes_dt), n_te)
+        test_acc = clf_dt.score(X_te, y_te)
+
+        depths_dt = list(range(1, 7))
+        tr_curve, te_curve = [], []
+        for d_ in depths_dt:
+            m_ = DecisionTreeClassifier(max_depth=d_, random_state=42).fit(X_dt, y_dt)
+            tr_curve.append(m_.score(X_dt, y_dt)); te_curve.append(m_.score(X_te, y_te))
+        best_depth = depths_dt[int(np.argmax(te_curve))]
+        best_test = max(te_curve)
+
+        xx_dt, yy_dt = np.meshgrid(np.linspace(-5,5,150), np.linspace(-5,5,150))
+        Z_dt = clf_dt.predict(np.c_[xx_dt.ravel(), yy_dt.ravel()]).reshape(xx_dt.shape)
+
+        dt_colors = ['#534AB7','#E24B4A','#1D9E75']
+        bg_colors  = ['rgba(83,74,183,0.12)','rgba(226,75,74,0.12)','rgba(29,158,117,0.12)']
+
+        with col2:
+            fig = go.Figure()
+            for cls in range(n_classes_dt):
+                mask_bg = Z_dt == cls
+                fig.add_trace(go.Scatter(
+                    x=xx_dt.ravel()[mask_bg.ravel()],
+                    y=yy_dt.ravel()[mask_bg.ravel()],
+                    mode='markers', marker=dict(color=dt_colors[cls], size=3, opacity=0.12),
+                    showlegend=False))
+            for cls in range(n_classes_dt):
+                mask = y_dt == cls
+                fig.add_trace(go.Scatter(x=X_dt[mask,0], y=X_dt[mask,1],
+                    mode='markers', name=f'Class {cls}',
+                    marker=dict(color=dt_colors[cls], size=7, opacity=0.85,
+                        line=dict(color='white', width=0.5))))
+            fig.update_layout(xaxis=dict(range=[-5,5]), yaxis=dict(range=[-5,5]),
+                height=420, legend=dict(orientation='h', y=1.1))
+            st.plotly_chart(fig, width='stretch')
+
+        st.caption("Trees split on one feature at a time (\"is x₁ < 0.3?\"), so every boundary is made of "
+                   "horizontal and vertical segments - that's why the regions look boxy.")
+        c1,c2,c3,c4 = st.columns(4)
+        c1.metric("Train accuracy", f"{train_acc:.1%}")
+        c2.metric("Test accuracy", f"{test_acc:.1%}", delta=f"{(test_acc-train_acc)*100:+.1f} pts vs train",
+                  help="Accuracy on 1,000 fresh points per class from the same distribution.")
+        c3.metric("Leaf nodes", clf_dt.get_n_leaves())
+        c4.metric("Best depth on test data", best_depth)
+
+        gap = train_acc - test_acc
+        if max_depth > best_depth and test_acc < best_test - 0.01:
+            st.warning(f"Overfitting: depth {max_depth} scores {train_acc:.1%} on training data but only "
+                       f"{test_acc:.1%} on new data. Depth {best_depth} does better on new data ({best_test:.1%}) - "
+                       "the extra splits are memorising training noise.")
+        elif max_depth < best_depth and test_acc < best_test - 0.01:
+            st.info(f"Underfitting: depth {best_depth} reaches {best_test:.1%} on new data versus {test_acc:.1%} "
+                    "here - this tree is too simple to capture the pattern.")
+        else:
+            st.success(f"Good fit: test accuracy ({test_acc:.1%}) is at or within 1 point of the best any depth "
+                       f"achieves on this data (train-test gap {gap*100:.1f} pts).")
+
+        fig_dc = go.Figure()
+        fig_dc.add_trace(go.Scatter(x=depths_dt, y=tr_curve, mode='lines+markers', name='Train accuracy',
+            line=dict(color='#888780', width=2, dash='dot')))
+        fig_dc.add_trace(go.Scatter(x=depths_dt, y=te_curve, mode='lines+markers', name='Test accuracy',
+            line=dict(color='#534AB7', width=2.5)))
+        fig_dc.add_vline(x=max_depth, line=dict(color='#EF9F27', dash='dash'),
+            annotation_text=f"depth {max_depth}")
+        fig_dc.update_layout(xaxis_title="Max depth", yaxis_title="Accuracy", yaxis_tickformat=".0%",
+            height=260, legend=dict(orientation='h', y=1.18))
+        st.plotly_chart(fig_dc, width='stretch')
+        st.caption("Training accuracy always rises with depth; test accuracy is what matters. "
+                   "Here the classes are separated by simple straight lines, so shallow trees are often best.")
+
+    with tab2:
+        st.markdown("### Gini impurity - the split criterion")
+        st.markdown('<div class="formula-box">Gini = 1 − Σ pᵢ²</div>', unsafe_allow_html=True)
+        st.markdown("Gini = 0 means a pure node (all one class). Its maximum is 1 − 1/k for k classes: "
+                    "0.5 for a perfectly mixed 2-class node, 0.667 for 3 classes.")
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            p_cls1 = st.slider("Fraction of class A in node", 0.0, 1.0, 0.5, step=0.01)
+            p_cls2 = 1.0 - p_cls1
+            gini = 1 - (p_cls1**2 + p_cls2**2)
+            entropy = max(0.0, -(p_cls1*np.log2(p_cls1+1e-9) + p_cls2*np.log2(p_cls2+1e-9)))   # avoid −0.0000
+            st.metric("Gini impurity", f"{gini:.4f}")
+            st.metric("Entropy", f"{entropy:.4f}")
+            if gini < 0.1:   st.success("Very pure node - good split!")
+            elif gini < 0.3: st.info("Moderately pure")
+            else:             st.warning("Impure node - tree will try to split further")
+
+        with col2:
+            p_range = np.linspace(0.001, 0.999, 300)
+            gini_curve    = 1 - (p_range**2 + (1-p_range)**2)
+            entropy_curve = -(p_range*np.log2(p_range) + (1-p_range)*np.log2(1-p_range))
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=p_range, y=gini_curve, name='Gini',
+                line=dict(color='#534AB7', width=2.5)))
+            fig.add_trace(go.Scatter(x=p_range, y=entropy_curve/2, name='Entropy/2',
+                line=dict(color='#E24B4A', width=2.5)))
+            fig.add_vline(x=p_cls1, line_dash='dash', line_color='#EF9F27',
+                annotation_text=f"p={p_cls1:.2f}")
+            fig.update_layout(xaxis_title="Fraction of class A",
+                yaxis_title="Impurity", height=320,
+                legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, width='stretch')
+
+        st.markdown("### Gini gain - how a split is chosen")
+        st.markdown("""
+        At each node the tree tries every feature and every threshold.
+        It picks the one that maximises:
+        """)
+        st.markdown('<div class="formula-box">Gini gain = Gini(parent) − [n_L/n · Gini(left) + n_R/n · Gini(right)]</div>',
+            unsafe_allow_html=True)
+        st.caption("This is the impurity decrease measured with Gini. The same formula with entropy instead of "
+                   "Gini is called **information gain** - both usually pick very similar splits.")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            n_left  = st.slider("Left child samples", 5, 50, 20)
+            p_left  = st.slider("Fraction class A - left",  0.0, 1.0, 0.9, step=0.01)
+            n_right = st.slider("Right child samples", 5, 50, 30)
+            p_right = st.slider("Fraction class A - right", 0.0, 1.0, 0.1, step=0.01)
+        n_total = n_left + n_right
+        p_parent = (n_left*p_left + n_right*p_right) / n_total
+        gini_parent = 1-(p_parent**2+(1-p_parent)**2)
+        gini_left   = 1-(p_left**2+(1-p_left)**2)
+        gini_right  = 1-(p_right**2+(1-p_right)**2)
+        ig = gini_parent - (n_left/n_total*gini_left + n_right/n_total*gini_right)
+        with col2:
+            st.code(f"""
+Parent gini  = {gini_parent:.4f}  (p_A = {p_parent:.2f})
+Left gini    = {gini_left:.4f}   (p_A = {p_left:.2f}, n={n_left})
+Right gini   = {gini_right:.4f}  (p_A = {p_right:.2f}, n={n_right})
+
+Gini gain        = {gini_parent:.4f} − ({n_left}/{n_total}·{gini_left:.4f} + {n_right}/{n_total}·{gini_right:.4f})
+                 = {ig:.4f}
+""", language="text")
+            if ig > 0.15: st.success("Excellent split - large reduction in impurity")
+            elif ig > 0.05: st.info("Decent split")
+            else: st.warning("Poor split - little gain")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ENSEMBLE TREES (BAGGING, RANDOM FOREST, BOOSTING)
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "ensemble_trees":
+    st.title("🌲 Ensemble Trees")
+    st.markdown("""
+    <div class="concept-card">
+    A single <b>Decision Tree</b> is a high-variance model - small changes in the training
+    data can produce a very different tree. Ensembles fix this by combining many trees
+    instead of trusting one: <b>Bagging</b> and <b>Random Forests</b> average many trees
+    trained on resampled data to cancel out that variance, while <b>Boosting</b> builds
+    trees one at a time, each one correcting the mistakes of the ones before it.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Single tree vs. ensembles", "Bagging → Random Forest → Boosting"])
+
+    from sklearn.datasets import make_moons
+    from sklearn.tree import DecisionTreeClassifier
+    from sklearn.ensemble import BaggingClassifier, RandomForestClassifier, GradientBoostingClassifier
+    from sklearn.model_selection import train_test_split
+
+    def _make_ensemble(method, n_estimators, max_depth, seed=42):
+        if method == "Single Tree":
+            return DecisionTreeClassifier(max_depth=max_depth, random_state=seed)
+        elif method == "Bagging":
+            return BaggingClassifier(estimator=DecisionTreeClassifier(max_depth=max_depth),
+                n_estimators=n_estimators, random_state=seed)
+        elif method == "Random Forest":
+            return RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, random_state=seed)
+        else:  # Boosting
+            return GradientBoostingClassifier(n_estimators=n_estimators,
+                max_depth=min(max_depth, 3), learning_rate=0.15, random_state=seed)
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            method_et = st.radio("Method", ["Single Tree", "Bagging", "Random Forest", "Boosting"])
+            n_est_et = st.slider("Number of trees", 5, 150, 30, key="et_n_est",
+                disabled=(method_et == "Single Tree"))
+            depth_et = st.slider("Max tree depth", 1, 8, 4, key="et_depth")
+            noise_et = st.slider("Dataset noise", 0.1, 0.5, 0.25, step=0.05, key="et_noise")
+
+        X_et, y_et = make_moons(n_samples=220, noise=noise_et, random_state=7)
+        Xtr, _, ytr, _ = train_test_split(X_et, y_et, test_size=0.3, random_state=7)
+        # Score on 2,000 fresh points from the same distribution - a 66-point test set is too noisy
+        # to compare methods (one point = 1.5% accuracy). Only a sample is drawn on the plot.
+        Xte, yte = make_moons(n_samples=2000, noise=noise_et, random_state=1234)
+
+        clf_et = _make_ensemble(method_et, n_est_et, depth_et)
+        clf_et.fit(Xtr, ytr)
+        train_acc_et = clf_et.score(Xtr, ytr)
+        test_acc_et = clf_et.score(Xte, yte)
+
+        xx, yy = np.meshgrid(np.linspace(-2, 3, 150), np.linspace(-2, 2, 150))
+        Z = clf_et.predict(np.c_[xx.ravel(), yy.ravel()]).reshape(xx.shape)
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Contour(x=np.linspace(-2, 3, 150), y=np.linspace(-2, 2, 150), z=Z,
+                showscale=False, colorscale=[[0, 'rgba(83,74,183,0.15)'], [1, 'rgba(226,75,74,0.15)']],
+                contours=dict(coloring='fill'), line=dict(width=0)))
+            fig.add_trace(go.Scatter(x=Xtr[ytr==0,0], y=Xtr[ytr==0,1], mode='markers',
+                name='Class 0 (train)', marker=dict(color='#534AB7', size=7)))
+            fig.add_trace(go.Scatter(x=Xtr[ytr==1,0], y=Xtr[ytr==1,1], mode='markers',
+                name='Class 1 (train)', marker=dict(color='#E24B4A', size=7)))
+            fig.add_trace(go.Scatter(x=Xte[:80,0], y=Xte[:80,1], mode='markers',
+                name='Test points (80 of 2,000 shown)', marker=dict(color='#1D9E75', size=8, symbol='x')))
+            fig.update_layout(height=400, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, width='stretch')
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Train accuracy", f"{train_acc_et:.1%}")
+        c2.metric("Test accuracy", f"{test_acc_et:.1%}")
+        c3.metric("Gap (overfitting signal)", f"{train_acc_et - test_acc_et:+.1%}")
+        st.caption("Trained on 154 points; test accuracy is measured on 2,000 fresh points, so differences "
+                   "of about 1-2 points between methods are real, not luck.")
+        if method_et == "Boosting" and depth_et > 3:
+            st.info(f"Boosting uses trees of depth at most 3 here, even with the slider at {depth_et}: boosting "
+                    "works by adding many *shallow* trees, and deep trees make it overfit quickly.")
+
+        st.markdown("### All four methods, same settings")
+        rows = []
+        for m in ["Single Tree", "Bagging", "Random Forest", "Boosting"]:
+            c = _make_ensemble(m, n_est_et, depth_et)
+            c.fit(Xtr, ytr)
+            rows.append((m, c.score(Xtr, ytr), c.score(Xte, yte)))
+        fig_bar = go.Figure()
+        fig_bar.add_trace(go.Bar(x=[r[0] for r in rows], y=[r[1] for r in rows],
+            name='Train accuracy', marker_color='#888780'))
+        fig_bar.add_trace(go.Bar(x=[r[0] for r in rows], y=[r[2] for r in rows],
+            name='Test accuracy', marker_color='#534AB7'))
+        fig_bar.update_layout(barmode='group', yaxis_title="Accuracy", yaxis_range=[0, 1],
+            height=320, legend=dict(orientation='h', y=1.14))
+        st.plotly_chart(fig_bar, width='stretch')
+        st.caption("The single tree usually shows the widest train/test gap - that gap is "
+                   "exactly the variance the ensembles are cancelling out. Boosting is capped at depth 3.")
+
+    with tab2:
+        st.markdown("""
+        All three methods build many trees, but they differ in **how each tree is trained**
+        and **why the ensemble is better than one tree**:
+        """)
+
+        st.markdown("""
+        **Bagging** (Bootstrap AGGregatING)
+        - Draws one bootstrap sample per tree - a random sample of the training data, the same size
+          as the training set, drawn *with replacement* (so some points repeat and others are left out)
+        - Fits one full tree per sample, then **averages** the predictions (or majority-votes)
+        - Reduces variance - but trees trained on similar data with all features available
+          tend to look alike, so the variance reduction has a ceiling
+
+        **Random Forest**
+        - Bagging, plus one more twist: each split only considers a **random subset of
+          features** (typically √p of them)
+        - This decorrelates the trees - a strong predictor can't dominate every tree - so
+          averaging cancels out more variance than plain bagging can
+
+        **Boosting**
+        - Trees are built **sequentially**, not independently
+        - **Gradient boosting** (used on this page): each new tree is fitted to the errors the current
+          ensemble still makes - the residuals for regression, or more generally the gradient of the
+          loss, which works the same way for classification. Its prediction is added in, scaled down
+          by the learning rate
+        - **AdaBoost**, the original variant, instead re-weights the training points so the next tree
+          concentrates on the examples the previous trees got wrong
+        - Uses shallow trees (depth 1-3 is typical) - each one only needs to make a small correction
+        - Reduces **bias** rather than variance - but with too many rounds or too high a
+          learning rate, it can start fitting noise
+        """)
+
+        st.markdown("### Test error vs. number of trees")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            depth_tab2 = st.slider("Max tree depth", 1, 6, 3, key="et2_depth")
+            noise_tab2 = st.slider("Dataset noise", 0.1, 0.5, 0.3, step=0.05, key="et2_noise")
+
+        est_range = [1, 3, 5, 10, 20, 40, 70, 100, 150]
+
+        @st.cache_data(show_spinner="Training ~1,200 trees…")
+        def _et_curves(depth, noise):
+            X2, y2 = make_moons(n_samples=220, noise=noise, random_state=7)
+            Xtr2, _, ytr2, _ = train_test_split(X2, y2, test_size=0.3, random_state=7)
+            Xte2, yte2 = make_moons(n_samples=2000, noise=noise, random_state=1234)   # large fresh test set
+            bag, rf, boost = [], [], []
+            for ne in est_range:
+                b = BaggingClassifier(estimator=DecisionTreeClassifier(max_depth=depth),
+                    n_estimators=ne, random_state=42).fit(Xtr2, ytr2)
+                r = RandomForestClassifier(n_estimators=ne, max_depth=depth,
+                    random_state=42).fit(Xtr2, ytr2)
+                g = GradientBoostingClassifier(n_estimators=ne, max_depth=min(depth, 3),
+                    learning_rate=0.15, random_state=42).fit(Xtr2, ytr2)
+                bag.append(1 - b.score(Xte2, yte2))
+                rf.append(1 - r.score(Xte2, yte2))
+                boost.append(1 - g.score(Xte2, yte2))
+            single = 1 - DecisionTreeClassifier(max_depth=depth, random_state=42).fit(Xtr2, ytr2).score(Xte2, yte2)
+            return bag, rf, boost, single
+
+        bag_err, rf_err, boost_err, single_err = _et_curves(depth_tab2, noise_tab2)
+
+        fig2 = go.Figure()
+        fig2.add_hline(y=single_err, line=dict(color='#888780', dash='dot'),
+            annotation_text="Single tree (doesn't change with 'n trees')")
+        fig2.add_trace(go.Scatter(x=est_range, y=bag_err, name='Bagging',
+            mode='lines+markers', line=dict(color='#EF9F27', width=2.5)))
+        fig2.add_trace(go.Scatter(x=est_range, y=rf_err, name='Random Forest',
+            mode='lines+markers', line=dict(color='#534AB7', width=2.5)))
+        fig2.add_trace(go.Scatter(x=est_range, y=boost_err, name='Boosting',
+            mode='lines+markers', line=dict(color='#E24B4A', width=2.5)))
+        fig2.update_layout(xaxis_title="Number of trees", yaxis_title="Test error rate",
+            height=340, legend=dict(orientation='h', y=1.14))
+        st.plotly_chart(fig2, width='stretch')
+        st.caption("Bagging and Random Forest error drops fast then flattens - adding more "
+                   "trees can't hurt, it just stops helping. Boosting keeps improving for "
+                   "longer since each round targets the remaining errors directly, which is "
+                   "also why it needs its **learning rate** and tree count tuned together to "
+                   "avoid eventually overfitting - see **Regularization** and "
+                   "**Cross-Validation** for how that tuning is usually done. Error is measured on "
+                   "2,000 fresh test points; boosting trees are capped at depth 3.")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# NAIVE BAYES
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "naive_bayes":
+    st.title("📊 Naive Bayes")
+    st.markdown("""
+    <div class="concept-card">
+    Naive Bayes applies <b>Bayes' theorem</b> with the "naive" assumption that features are
+    independent given the class. Despite its simplicity it works surprisingly well for
+    text classification, spam filtering and medical diagnosis.
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('<div class="formula-box">P(class | features) ∝ P(class) · Π P(featureᵢ | class)</div>',
+        unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Bayes theorem live", "Gaussian Naive Bayes classifier"])
+
+    with tab1:
+        st.markdown("### Update your belief with evidence")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            prior = st.slider("Prior P(disease)", 0.001, 0.5, 0.01, step=0.001,
+                format="%.3f", help="How common is the disease in the population?")
+            sensitivity = st.slider("Sensitivity P(+|disease)", 0.5, 1.0, 0.95, step=0.01,
+                help="True positive rate of the test")
+            specificity = st.slider("Specificity P(−|healthy)", 0.5, 1.0, 0.90, step=0.01,
+                help="True negative rate of the test")
+            test_result = st.radio("Test result", ["Positive ✅", "Negative ❌"])
+
+        fp_rate = 1 - specificity
+        p_pos   = prior*sensitivity + (1-prior)*fp_rate
+        p_neg   = prior*(1-sensitivity) + (1-prior)*specificity
+
+        if test_result == "Positive ✅":
+            posterior = prior * sensitivity / (p_pos + 1e-12)
+            evidence_str = "positive"
+        else:
+            posterior = prior * (1-sensitivity) / (p_neg + 1e-12)
+            evidence_str = "negative"
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Bar(x=['Prior P(disease)', f'Posterior P(disease|test {evidence_str})'],
+                y=[prior, posterior],
+                marker_color=['#AFA9EC','#534AB7' if posterior > prior else '#E24B4A'],
+                text=[f"{prior:.4f}", f"{posterior:.4f}"],
+                textposition='outside'))
+            fig.update_layout(yaxis=dict(range=[0, min(1, max(posterior, prior)*1.5)]),
+                height=320, showlegend=False, yaxis_title="Probability")
+            st.plotly_chart(fig, width='stretch')
+
+        c1,c2,c3 = st.columns(3)
+        c1.metric("Prior", f"{prior:.4f}")
+        c2.metric("Posterior", f"{posterior:.4f}")
+        c3.metric("Belief change", f"{posterior / prior:.2f}× the prior",
+                  help="Posterior ÷ prior: how many times more (or less) likely the disease is after the test.")
+        if test_result == "Positive ✅":
+            st.markdown(f"""
+            **Bayes formula applied:**
+            - P(disease | positive) = P(+|disease)·P(disease) / P(+) = {sensitivity:.2f}·{prior:.3f} / {p_pos:.4f} = **{posterior:.4f}**
+            """)
+        else:
+            st.markdown(f"""
+            **Bayes formula applied:**
+            - P(disease | negative) = P(−|disease)·P(disease) / P(−) = {1-sensitivity:.2f}·{prior:.3f} / {p_neg:.4f} = **{posterior:.4f}**
+            """)
+        if test_result == "Positive ✅" and prior <= 0.01 and posterior < 0.5:
+            st.info(f"Even after a positive test from a {sensitivity:.0%}-sensitive test, the chance of disease is only "
+                    f"{posterior:.1%} - because the disease is rare, most positives are false alarms. "
+                    f"The **base rate fallacy** is the mistake of ignoring this and assuming the answer is close to "
+                    f"{sensitivity:.0%}.")
+
+    with tab2:
+        st.markdown("### Gaussian Naive Bayes - 2D feature classifier")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            n_nb = st.slider("Samples per class", 20, 80, 40, key="nb_n")
+            sep_nb = st.slider("Class separation", 0.5, 3.0, 1.5, step=0.1, key="nb_sep")
+            seed_nb = st.slider("Seed", 0, 10, 1, key="nb_seed")
+            rho_nb = st.slider("Feature correlation within each class", 0.0, 0.95, 0.0, step=0.05, key="nb_rho",
+                help="0 = features independent, exactly what Naive Bayes assumes. "
+                     "Raise it to break the 'naive' assumption and watch what goes wrong.")
+            test_x1 = st.slider("Test point - feature 1", -4.0, 4.0, 0.5, step=0.1)
+            test_x2 = st.slider("Test point - feature 2", -4.0, 4.0, 0.5, step=0.1)
+
+        np.random.seed(seed_nb)
+        cov_nb = np.array([[1.0, rho_nb], [rho_nb, 1.0]])      # same covariance in both classes
+        L_nb = np.linalg.cholesky(cov_nb)
+        mu0_true, mu1_true = np.array([-sep_nb/2, 0.0]), np.array([sep_nb/2, 0.0])
+        X_nb0 = np.random.randn(n_nb, 2) @ L_nb.T + mu0_true
+        X_nb1 = np.random.randn(n_nb, 2) @ L_nb.T + mu1_true
+        X_nb  = np.vstack([X_nb0, X_nb1])
+        y_nb  = np.array([0]*n_nb + [1]*n_nb)
+
+        # fit Gaussian NB manually
+        means = np.array([X_nb[y_nb==c].mean(0) for c in [0,1]])
+        stds  = np.array([X_nb[y_nb==c].std(0)  for c in [0,1]])
+        priors_nb = np.array([0.5, 0.5])
+
+        def gauss_pdf(x, mu, sigma):
+            return np.exp(-0.5*((x-mu)/sigma)**2) / (sigma*np.sqrt(2*np.pi) + 1e-9)
+
+        def nb_predict_proba(X):
+            """Naive Bayes P(class | x) for an (m, 2) array of points - features treated as independent."""
+            X = np.atleast_2d(X)
+            lp = np.stack([np.log(priors_nb[c]) +
+                           np.sum(np.log(gauss_pdf(X, means[c], stds[c]) + 1e-12), axis=1) for c in [0, 1]], axis=1)
+            lp -= lp.max(axis=1, keepdims=True)
+            pr = np.exp(lp)
+            return pr / pr.sum(axis=1, keepdims=True)
+
+        # True Bayes-optimal rule (known means & full covariance, equal priors): linear in x
+        w_true = np.linalg.solve(cov_nb, mu1_true - mu0_true)
+        b_true = -0.5 * (mu1_true + mu0_true) @ w_true
+        def true_proba1(X):
+            return 1 / (1 + np.exp(-(np.atleast_2d(X) @ w_true + b_true)))
+
+        # decision boundary grid
+        xx_nb, yy_nb = np.meshgrid(np.linspace(-5,5,120), np.linspace(-5,5,120))
+        grid_nb = np.c_[xx_nb.ravel(), yy_nb.ravel()]
+        Z_nb = nb_predict_proba(grid_nb)[:, 1].reshape(xx_nb.shape)
+
+        test_proba = nb_predict_proba(np.array([test_x1, test_x2]))[0]
+        test_true1 = float(true_proba1(np.array([test_x1, test_x2]))[0])
+
+        # accuracy on fresh data: Naive Bayes vs the best possible rule
+        rng_eval = np.random.default_rng(123)
+        Xe = np.vstack([rng_eval.standard_normal((2000, 2)) @ L_nb.T + mu0_true,
+                        rng_eval.standard_normal((2000, 2)) @ L_nb.T + mu1_true])
+        ye = np.r_[np.zeros(2000), np.ones(2000)]
+        acc_nb   = np.mean((nb_predict_proba(Xe)[:, 1] >= 0.5) == ye)
+        acc_true = np.mean((true_proba1(Xe) >= 0.5) == ye)
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Contour(x=np.linspace(-5,5,120), y=np.linspace(-5,5,120),
+                z=Z_nb, colorscale=[[0,'rgba(83,74,183,0.2)'],[0.5,'white'],[1,'rgba(226,75,74,0.2)']],
+                showscale=False, contours=dict(showlabels=False)))
+            fig.add_trace(go.Scatter(x=X_nb0[:,0], y=X_nb0[:,1], mode='markers',
+                name='Class 0', marker=dict(color='#534AB7', size=7, opacity=0.75)))
+            fig.add_trace(go.Scatter(x=X_nb1[:,0], y=X_nb1[:,1], mode='markers',
+                name='Class 1', marker=dict(color='#E24B4A', size=7, opacity=0.75)))
+            pred_cls = int(test_proba[1] >= 0.5)
+            fig.add_trace(go.Scatter(x=[test_x1], y=[test_x2], mode='markers',
+                name=f'Test → Class {pred_cls}',
+                marker=dict(color=['#534AB7','#E24B4A'][pred_cls], size=14,
+                    symbol='star', line=dict(color='black',width=1.5))))
+            # true optimal boundary: w·x + b = 0
+            if abs(w_true[1]) > 1e-9:
+                xb = np.linspace(-5, 5, 50)
+                yb = -(w_true[0] * xb + b_true) / w_true[1]
+            else:
+                xb = np.full(50, -b_true / w_true[0]); yb = np.linspace(-5, 5, 50)
+            fig.add_trace(go.Scatter(x=xb, y=yb, mode='lines', name='Best possible boundary',
+                line=dict(color='#1D9E75', width=2.5, dash='dash')))
+            fig.add_trace(go.Contour(x=np.linspace(-5,5,120), y=np.linspace(-5,5,120), z=Z_nb,
+                contours=dict(start=0.5, end=0.5, size=1, coloring='lines'),
+                line=dict(color='#333', width=2), showscale=False, name='Naive Bayes boundary',
+                showlegend=True, hoverinfo='skip'))
+            fig.update_layout(xaxis=dict(range=[-5,5]), yaxis=dict(range=[-5,5], scaleanchor='x'),
+                height=420, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, width='stretch')
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Naive Bayes P(Class 1 | x)", f"{test_proba[1]:.4f}")
+        c2.metric("True P(Class 1 | x)", f"{test_true1:.4f}",
+                  help="Using the real means and the full covariance (including the correlation).")
+        c3.metric("Accuracy on new data", f"NB {acc_nb:.1%}",
+                  delta=f"{(acc_nb - acc_true)*100:+.1f} pts vs best possible {acc_true:.1%}",
+                  delta_color="normal")
+        if rho_nb == 0:
+            st.caption("Correlation 0: the features really are independent within each class, so the 'naive' "
+                       "assumption holds - the Naive Bayes boundary (solid) lines up with the best possible one (dashed).")
+        else:
+            st.warning(f"Correlation {rho_nb:.2f}: the features move together within each class, but Naive Bayes "
+                       "multiplies their probabilities as if they were independent. Its boundary (solid) stays "
+                       "upright while the best boundary (dashed) tilts, and its probabilities become miscalibrated - "
+                       "compare the two P(Class 1 | x) values for the test point.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CNN - CONVOLUTIONAL LAYER
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "cnn":
+    st.title("🖼️ Convolutional Layer (CNN)")
+    st.markdown("""
+    <div class="concept-card">
+    A convolutional layer slides a small <b>kernel</b> (filter) across an input,
+    computing a dot product at every position. This detects local patterns -
+    edges, textures, shapes - regardless of where they appear in the image.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Kernel convolution visualised", "Common kernels & effects"])
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            grid_size = st.slider("Input size (N×N)", 6, 12, 8)
+            input_type = st.selectbox("Input pattern",
+                ["Random", "Vertical edge", "Horizontal edge", "Diagonal", "Checkerboard"])
+            kernel_preset = st.selectbox("Kernel (3×3)",
+                ["Edge detect (vertical)", "Edge detect (horizontal)",
+                 "Sharpen", "Blur (average)", "Prewitt (vertical)", "Custom"])
+            if kernel_preset == "Custom":
+                st.markdown("**Your kernel** (edit the 9 weights):")
+                default_ck = [[1.0, 0.0, -1.0], [1.0, 0.0, -1.0], [1.0, 0.0, -1.0]]
+                K_custom = np.zeros((3, 3))
+                for ki in range(3):
+                    kc = st.columns(3)
+                    for kj in range(3):
+                        K_custom[ki, kj] = kc[kj].number_input(f"k[{ki},{kj}]", value=default_ck[ki][kj],
+                            step=0.5, key=f"cnn_k{ki}{kj}", label_visibility="collapsed")
+            stride = st.radio("Stride", [1, 2], horizontal=True)
+            padding = st.checkbox("Zero padding (same size output)", value=False)
+
+        np.random.seed(42)
+        G = grid_size
+        if input_type == "Random":
+            inp = np.random.rand(G, G)
+        elif input_type == "Vertical edge":
+            inp = np.zeros((G,G)); inp[:, G//2:] = 1.0
+        elif input_type == "Horizontal edge":
+            inp = np.zeros((G,G)); inp[G//2:, :] = 1.0
+        elif input_type == "Diagonal":
+            inp = np.array([[1.0 if abs(i-j)<2 else 0.0 for j in range(G)] for i in range(G)])
+        else:
+            inp = np.array([[(i+j)%2*1.0 for j in range(G)] for i in range(G)])
+
+        kernels = {
+            "Edge detect (vertical)":   np.array([[-1,0,1],[-2,0,2],[-1,0,1]]),
+            "Edge detect (horizontal)": np.array([[-1,-2,-1],[0,0,0],[1,2,1]]),
+            "Sharpen":                  np.array([[0,-1,0],[-1,5,-1],[0,-1,0]]),
+            "Blur (average)":           np.ones((3,3))/9,
+            "Prewitt (vertical)":       np.array([[1,0,-1],[1,0,-1],[1,0,-1]]),
+        }
+        K = K_custom if kernel_preset == "Custom" else kernels[kernel_preset]
+
+        # convolution
+        pad = 1 if padding else 0
+        inp_padded = np.pad(inp, pad) if padding else inp
+        out_size = (inp_padded.shape[0]-3)//stride+1
+        feature_map = np.zeros((out_size, out_size))
+        for i in range(out_size):
+            for j in range(out_size):
+                patch = inp_padded[i*stride:i*stride+3, j*stride:j*stride+3]
+                feature_map[i,j] = np.sum(patch * K)
+
+        with col2:
+            fig = make_subplots(rows=1, cols=3,
+                subplot_titles=["Input", "Kernel (3×3)", "Feature map (output)"],
+                column_widths=[0.45, 0.15, 0.4])
+            fig.add_trace(go.Heatmap(z=inp, colorscale='Greys', showscale=False,
+                xgap=1, ygap=1), row=1, col=1)
+            fig.add_trace(go.Heatmap(z=K, colorscale='RdBu', zmid=0, showscale=False,
+                xgap=2, ygap=2,
+                text=[[f"{K[i,j]:.1f}" for j in range(3)] for i in range(3)],
+                texttemplate="%{text}", textfont=dict(size=11)), row=1, col=2)
+            fig.add_trace(go.Heatmap(z=feature_map, colorscale='RdBu', zmid=0,
+                showscale=False, xgap=1, ygap=1), row=1, col=3)
+            fig.update_yaxes(autorange='reversed')
+            fig.update_layout(height=380)
+            st.plotly_chart(fig, width='stretch')
+
+        c1,c2,c3 = st.columns(3)
+        c1.metric("Input size", f"{G}×{G}")
+        c2.metric("Output size", f"{out_size}×{out_size}")
+        c3.metric("Parameters in kernel", "9 weights + 1 bias")
+        st.caption("Colours: **white = 0**, red = negative, blue = positive response. An edge detector stays white "
+                   "on flat regions and lights up only where the brightness changes.")
+        st.markdown(f"**Key insight:** the same 9 weights are reused at every position - this *weight sharing* "
+                    f"makes the layer **translation-equivariant** (shift the input, and the feature map shifts the "
+                    f"same way) and vastly more efficient than a fully-connected layer "
+                    f"({G*G*out_size*out_size:,} weights vs 9). Full translation *invariance* - the output not "
+                    f"changing at all - only comes later, from pooling layers.")
+        st.caption("Technically this is **cross-correlation**: the kernel is slid over the input as-is. The "
+                   "mathematical convolution flips the kernel first. Deep-learning libraries (PyTorch, TensorFlow) "
+                   "compute cross-correlation and still call it convolution - which is why a kernel can look 'the "
+                   "wrong way round' compared with a maths textbook. Since the weights are learned, it makes no "
+                   "practical difference.")
+
+    with tab2:
+        st.markdown("### How different kernels highlight different features")
+        np.random.seed(7)
+        # make a structured test image
+        test_img = np.zeros((16,16))
+        test_img[3:13, 3:13] = 0.5
+        test_img[5:11, 5:11] = 1.0
+        test_img[2, :] = 0.8; test_img[:, 2] = 0.8
+
+        kernel_gallery = {
+            "Original":               np.array([[0,0,0],[0,1,0],[0,0,0]]),
+            "Vertical edges":         np.array([[-1,0,1],[-2,0,2],[-1,0,1]]),
+            "Horizontal edges":       np.array([[-1,-2,-1],[0,0,0],[1,2,1]]),
+            "Blur":                   np.ones((3,3))/9,
+            "Sharpen":                np.array([[0,-1,0],[-1,5,-1],[0,-1,0]]),
+        }
+
+        results = {}
+        for name, k in kernel_gallery.items():
+            fm = np.zeros((14,14))
+            for i in range(14):
+                for j in range(14):
+                    fm[i,j] = np.sum(test_img[i:i+3,j:j+3]*k)
+            results[name] = fm
+
+        fig = make_subplots(rows=1, cols=5,
+            subplot_titles=list(kernel_gallery.keys()))
+        for idx, (name, fm) in enumerate(results.items()):
+            fig.add_trace(go.Heatmap(z=fm, colorscale='RdBu' if idx>0 else 'Greys',
+                zmid=0 if idx > 0 else None, showscale=False, xgap=1, ygap=1), row=1, col=idx+1)
+        fig.update_yaxes(autorange='reversed')
+        fig.update_layout(height=200)
+        st.plotly_chart(fig, width='stretch')
+        st.caption("Same input image, 5 different 3×3 kernels. CNNs learn these kernels automatically from data.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ATTENTION MECHANISM
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "attention":
+    st.title("👁️ Attention Mechanism")
+    st.markdown("""
+    <div class="concept-card">
+    Attention allows a model to <b>selectively focus</b> on different parts of the input
+    when producing each output. In transformers, every token computes a <b>Query</b>,
+    receives <b>Keys</b> from all tokens, and uses the dot product similarity to decide
+    how much to <b>attend</b> to each position.
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('<div class="formula-box">Attention(Q,K,V) = softmax(Q·Kᵀ / √dₖ) · V</div>',
+        unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Attention weights visualised", "Softmax & temperature"])
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            sentence = st.text_input("Input sentence (space-separated tokens)",
+                "the cat sat on the mat")
+            tokens = sentence.strip().split()
+            if len(tokens) < 2:
+                st.warning("Please enter at least 2 words - attention compares tokens with each other. "
+                           "Showing the default sentence.")
+                tokens = "the cat sat on the mat".split()
+            n_tok = len(tokens)
+            # unique labels: plotly merges identical category names, so repeated words get their position
+            tok_labels = [tok if tokens.count(tok) == 1 else f"{tok} ({i+1})" for i, tok in enumerate(tokens)]
+            query_idx = st.slider("Query token (which word is 'looking')",
+                0, max(n_tok-1, 0), min(2, n_tok-1))
+            d_k = st.select_slider("Key dimension dₖ", [4, 8, 16, 32], value=8)
+            seed_att = st.slider("Seed (random QK weights)", 0, 20, 5, key="att_seed")
+            temperature = st.slider("Extra temperature τ (scores ÷ √dₖ·τ)", 0.1, 2.0, 1.0, step=0.1,
+                help="1 = the standard transformer scaling. Below 1 sharpens the attention, above 1 flattens it.")
+
+        np.random.seed(seed_att)
+        # random embeddings for demo
+        embeddings = np.random.randn(n_tok, d_k)
+        W_Q = np.random.randn(d_k, d_k) * 0.5
+        W_K = np.random.randn(d_k, d_k) * 0.5
+        W_V = np.random.randn(d_k, d_k) * 0.5
+
+        Q = embeddings @ W_Q
+        K = embeddings @ W_K
+        V = embeddings @ W_V
+
+        # raw scores for the query token
+        scores = Q[query_idx] @ K.T / (np.sqrt(d_k) * temperature)
+        attn_weights = np.exp(scores - scores.max())
+        attn_weights /= attn_weights.sum()
+
+        # full attention matrix
+        all_scores = Q @ K.T / (np.sqrt(d_k) * temperature)
+        all_weights = np.exp(all_scores - all_scores.max(axis=1, keepdims=True))
+        all_weights /= all_weights.sum(axis=1, keepdims=True)
+
+        with col2:
+            fig = make_subplots(rows=1, cols=2,
+                subplot_titles=[f'Attention from "{tok_labels[query_idx]}"',
+                                "Full attention matrix"])
+            fig.add_trace(go.Bar(x=tok_labels, y=attn_weights,
+                marker_color=['#E24B4A' if i==query_idx else '#534AB7' for i in range(n_tok)],
+                text=[f"{w:.3f}" for w in attn_weights], textposition='outside',
+                showlegend=False), row=1, col=1)
+            fig.add_trace(go.Heatmap(z=all_weights, x=tok_labels, y=tok_labels,
+                colorscale='Blues', showscale=False,
+                text=[[f"{all_weights[i,j]:.2f}" for j in range(n_tok)] for i in range(n_tok)],
+                texttemplate="%{text}", textfont=dict(size=10)), row=1, col=2)
+            fig.update_yaxes(autorange='reversed', row=1, col=2)
+            fig.update_xaxes(title_text="Key token", row=1, col=1)
+            fig.update_yaxes(title_text="Attention weight", row=1, col=1)
+            fig.update_layout(height=380)
+            st.plotly_chart(fig, width='stretch')
+
+        top_token = tok_labels[int(np.argmax(attn_weights))]
+        st.markdown(f'**"{tok_labels[query_idx]}"** attends most strongly to **"{top_token}"** '
+                    f'(weight = {attn_weights.max():.3f})')
+        st.caption("⚠️ The Q, K and V weights here are **random and untrained**, so this particular pattern means "
+                   "nothing about the sentence - change the seed and it changes completely. In a trained transformer, "
+                   "the same mechanism learns patterns such as a pronoun attending to the noun it refers to.")
+        st.caption("**Why divide by √dₖ?** A dot product of two random dₖ-dimensional vectors grows with dₖ - its "
+                   "typical size is about √dₖ. Without scaling, large dₖ gives huge scores, softmax turns almost "
+                   "one-hot, and gradients become tiny. Dividing by √dₖ keeps the scores at a stable scale whatever "
+                   "dₖ is. Try dₖ = 32 with τ = 0.1 to see the near one-hot effect.")
+
+    with tab2:
+        st.markdown("### Softmax converts raw scores into attention weights")
+        st.markdown('<div class="formula-box">softmax(zᵢ) = exp(zᵢ) / Σ exp(zⱼ)</div>',
+            unsafe_allow_html=True)
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            n_scores = st.slider("Number of keys", 3, 8, 5)
+            raw_scores = [st.slider(f"Score z{i+1}", -3.0, 3.0,
+                [1.5, -0.5, 2.0, 0.3, -1.0, 0.8, -0.2, 1.1][i], step=0.1, key=f"sm_{i}")
+                for i in range(n_scores)]
+            temp_sm = st.slider("Temperature τ", 0.1, 3.0, 1.0, step=0.1,
+                help="Low T → sharp (winner-take-all). High T → uniform.")
+
+        scores_arr = np.array(raw_scores) / temp_sm
+        sm = np.exp(scores_arr - scores_arr.max())
+        sm /= sm.sum()
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Bar(x=[f"k{i+1}" for i in range(n_scores)],
+                y=raw_scores, name='Raw scores', marker_color='#AFA9EC', opacity=0.7))
+            fig.add_trace(go.Bar(x=[f"k{i+1}" for i in range(n_scores)],
+                y=sm, name='After softmax', marker_color='#534AB7'))
+            fig.update_layout(barmode='group', height=320,
+                legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, width='stretch')
+        st.markdown(f"**Temperature τ={temp_sm}:** {'sharp focus on top key' if temp_sm < 0.5 else 'uniform attention across all keys' if temp_sm > 2 else 'balanced attention'}")
+        st.caption("Scores are divided by τ before the softmax. Transformers divide by √dₖ, so in this language the "
+                   "built-in temperature is **τ = √dₖ** (e.g. τ = 8 for dₖ = 64). Low temperature → the model is more "
+                   "decisive; high → more spread out.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PROBABILITY DISTRIBUTIONS
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "probability":
+    st.title("🎲 Probability Distributions")
+    st.markdown("""
+    <div class="concept-card">
+    A probability distribution describes how likely each value of a random variable is.
+    Distributions are everywhere in ML: loss functions assume distributions over errors,
+    variational autoencoders sample from Gaussians, and Bayesian methods put distributions
+    over parameters.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["Normal (Gaussian)", "Binomial & Poisson", "Comparing distributions"])
+
+    with tab1:
+        st.markdown('<div class="formula-box">f(x) = (1/σ√2π) · exp(−(x−μ)²/2σ²)</div>',
+            unsafe_allow_html=True)
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            mu    = st.slider("Mean μ", -4.0, 4.0, 0.0, step=0.1, key="nd_mu")
+            sigma = st.slider("Std dev σ", 0.1, 3.0, 1.0, step=0.1, key="nd_sigma")
+            show_68 = st.checkbox("Show 68–95–99.7 rule", value=True)
+            x_query = st.slider("Query point x", -6.0, 6.0, 1.0, step=0.1)
+
+        from scipy import stats as scipy_stats
+        # plot μ ± 5σ, widened if needed so the query point is always visible
+        x_lo, x_hi = min(mu - 5*sigma, x_query - 0.5), max(mu + 5*sigma, x_query + 0.5)
+        x_nd = np.linspace(x_lo, x_hi, 600)
+        y_nd = np.exp(-0.5*((x_nd-mu)/sigma)**2) / (sigma*np.sqrt(2*np.pi))
+        pdf_at_x = np.exp(-0.5*((x_query-mu)/sigma)**2) / (sigma*np.sqrt(2*np.pi))
+        cdf_at_x = float(scipy_stats.norm.cdf(x_query, loc=mu, scale=sigma))   # exact P(X ≤ x)
+
+        with col2:
+            fig = go.Figure()
+            if show_68:
+                for k, alpha, label in [(1,0.20,'68%'),(2,0.12,'95%'),(3,0.07,'99.7%')]:
+                    fig.add_trace(go.Scatter(
+                        x=np.concatenate([x_nd[(x_nd>=mu-k*sigma)&(x_nd<=mu+k*sigma)],
+                                          x_nd[(x_nd>=mu-k*sigma)&(x_nd<=mu+k*sigma)][::-1]]),
+                        y=np.concatenate([y_nd[(x_nd>=mu-k*sigma)&(x_nd<=mu+k*sigma)],
+                                          np.zeros(((x_nd>=mu-k*sigma)&(x_nd<=mu+k*sigma)).sum())]),
+                        fill='toself', fillcolor=f'rgba(83,74,183,{alpha})',
+                        line=dict(color='rgba(0,0,0,0)'), name=f'±{k}σ ({label})'))
+            fig.add_trace(go.Scatter(x=x_nd, y=y_nd, name='PDF',
+                line=dict(color='#534AB7', width=2.5)))
+            fig.add_vline(x=mu, line_dash='dot', line_color='#EF9F27',
+                annotation_text=f"μ={mu}")
+            fig.add_vline(x=x_query, line_dash='dash', line_color='#E24B4A',
+                annotation_text=f"x={x_query:.1f}")
+            fig.update_layout(xaxis_title="x", yaxis_title="Probability density",
+                height=380, legend=dict(orientation='h', y=1.12))
+            st.plotly_chart(fig, width='stretch')
+
+        c1,c2,c3,c4 = st.columns(4)
+        c1.metric("PDF f(x)", f"{pdf_at_x:.4f}",
+                  help="A density, not a probability - it can be larger than 1 when σ is small.")
+        c2.metric("P(X ≤ x)", f"{cdf_at_x:.4f}",
+                  help="The CDF: area under the curve to the left of the query point.")
+        c3.metric("Mean μ", f"{mu:g}")
+        c4.metric("Variance σ²", f"{sigma**2:.2f}")
+
+    with tab2:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            dist_type = st.radio("Distribution", ["Binomial", "Poisson"])
+            if dist_type == "Binomial":
+                n_bin = st.slider("n (trials)", 1, 50, 20)
+                p_bin = st.slider("p (success prob)", 0.01, 0.99, 0.3, step=0.01)
+                k_vals = np.arange(0, n_bin+1)
+                from math import comb
+                pmf = np.array([comb(n_bin,k)*(p_bin**k)*((1-p_bin)**(n_bin-k)) for k in k_vals])
+                mean_d, var_d = n_bin*p_bin, n_bin*p_bin*(1-p_bin)
+                title = f"Binomial(n={n_bin}, p={p_bin})"
+            else:
+                lam = st.slider("λ (rate)", 0.5, 15.0, 4.0, step=0.5)
+                from scipy import stats as scipy_stats
+                k_max = max(10, int(scipy_stats.poisson.ppf(0.999, lam)))   # show ≥ 99.9% of the probability
+                k_vals = np.arange(0, k_max + 1)
+                pmf = scipy_stats.poisson.pmf(k_vals, lam)
+                mean_d, var_d = lam, lam
+                title = f"Poisson(λ={lam})"
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Bar(x=k_vals, y=pmf, name='PMF',
+                marker_color='#534AB7', opacity=0.8))
+            fig.add_vline(x=mean_d, line_dash='dash', line_color='#E24B4A',
+                annotation_text=f"mean={mean_d:.2f}")
+            fig.update_layout(xaxis_title="k", yaxis_title="P(X=k)",
+                title=title, height=350, showlegend=False)
+            st.plotly_chart(fig, width='stretch')
+        c1,c2 = st.columns(2)
+        c1.metric("Mean", f"{mean_d:.3f}")
+        c2.metric("Variance", f"{var_d:.3f}")
+
+    with tab3:
+        st.markdown("### Entropy & uncertainty - what the shape of a distribution tells you")
+        st.markdown("""
+        Two distributions with the same mean can look completely different in spread.
+        **Entropy** quantifies this uncertainty - a wide, flat distribution has high entropy
+        (many outcomes are nearly equally likely); a sharp, narrow one has low entropy.
+        """)
+        st.markdown('<div class="formula-box">'
+            'H(X) = −Σ p(x) · log p(x)    (discrete)<br>'
+            'H(X) = −∫ p(x) · log p(x) dx  (continuous)<br><br>'
+            'For N(μ, σ²):  H = ½ ln(2πeσ²)'
+            '</div>', unsafe_allow_html=True)
+
+        mean_cmp = st.slider("Shared mean μ", -2.0, 2.0, 0.0, step=0.2, key="prob_mu_cmp")
+        x_cmp = np.linspace(-8, 8, 600)
+        fig = go.Figure()
+        for sigma_cmp, col_c, lbl in [
+            (0.5,'#E24B4A','σ=0.5  (low entropy, high certainty)'),
+            (1.0,'#534AB7','σ=1.0'),
+            (2.5,'#1D9E75','σ=2.5  (high entropy, high uncertainty)')
+        ]:
+            y_cmp = np.exp(-0.5*((x_cmp-mean_cmp)/sigma_cmp)**2)/(sigma_cmp*np.sqrt(2*np.pi))
+            entropy = 0.5*np.log(2*np.pi*np.e*sigma_cmp**2)
+            fig.add_trace(go.Scatter(x=x_cmp, y=y_cmp, name=f"{lbl}  H={entropy:.2f}",
+                line=dict(color=col_c, width=2.5)))
+        fig.update_layout(xaxis_title="x", yaxis_title="PDF", height=320,
+            legend=dict(orientation='h', y=1.15))
+        st.plotly_chart(fig, width='stretch')
+        st.caption("Unlike the discrete entropy, the continuous (differential) entropy can be negative: "
+                   "½ ln(2πeσ²) < 0 whenever σ < 0.24. Only differences in entropy are meaningful here.")
+
+        st.markdown("""
+        **In ML:**
+        - **VAEs** learn both μ and σ for each latent dimension - a narrow σ means the encoder
+          is confident about where a point belongs; wide σ means uncertainty
+        - **KL divergence** measures how far one distribution is from another - used as the
+          regularisation term in VAE training: KL(q ∥ p)
+        - **Softmax output** forms a categorical distribution - high-entropy outputs signal
+          the model is uncertain between classes
+        - **Cross-entropy loss** = negative log-likelihood of the true labels under the model's
+          predicted distribution
+
+        > 📊 For the connection between σ, variance, and spread in data,
+        > see **Dispersion** in Statistics & Data Science.
+        """)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SVD - MATRIX DECOMPOSITION
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "svd":
+    st.title("✂️ SVD - Singular Value Decomposition")
+    st.markdown("""
+    <div class="concept-card">
+    SVD decomposes any matrix into three simpler matrices: <b>A = U Σ Vᵀ</b>.
+    It reveals the intrinsic structure of data. Key applications: PCA, image compression,
+    recommendation systems, and understanding what a neural network layer has learned.
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('<div class="formula-box">A = U · Σ · Vᵀ &nbsp;&nbsp;&nbsp; (m×n) = (m×m)(m×n)(n×n)</div>',
+        unsafe_allow_html=True)
+    st.caption("These are the sizes of the *full* SVD. In practice the *reduced* SVD is used: with r = min(m, n), "
+               "U is m×r, Σ is r×r and Vᵀ is r×n - the extra columns of the full U or V only multiply zeros in Σ.")
+
+    tab1, tab2 = st.tabs(["Image compression", "U, Σ, Vᵀ explorer"])
+
+    with tab1:
+        st.markdown("### SVD as lossy compression - keep only the top k singular values")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            img_type = st.selectbox("Test image", ["Shapes", "Gradient", "Stripes", "Checkerboard", "Random noise", "Smooth blob"],
+                help="Gradient and Smooth blob are rank 1, Stripes and Checkerboard rank 2 - perfect at tiny k. "
+                     "Shapes has many singular values and sharpens gradually; noise barely compresses at all.")
+            k_svd = st.slider("Rank k (singular values kept)", 1, 30, 5)
+            img_size = 40
+
+        np.random.seed(0)
+        if img_type == "Shapes":   # circle + tilted square: many singular values, decaying gradually
+            yy, xx = np.mgrid[0:img_size, 0:img_size]
+            circle = (xx-13)**2 + (yy-14)**2 <= 8**2
+            u_r = (xx-27)*np.cos(np.pi/6) + (yy-26)*np.sin(np.pi/6)
+            v_r = -(xx-27)*np.sin(np.pi/6) + (yy-26)*np.cos(np.pi/6)
+            square = (np.abs(u_r) <= 7) & (np.abs(v_r) <= 7)
+            img = np.clip(circle*1.0 + square*0.6, 0, 1)
+        elif img_type == "Gradient":
+            img = np.outer(np.linspace(0,1,img_size), np.linspace(0,1,img_size))
+        elif img_type == "Stripes":
+            img = np.tile(np.linspace(0,1,img_size), (img_size,1))
+            img[::2] = 1 - img[::2]
+        elif img_type == "Checkerboard":
+            img = np.array([[(i+j)%2 for j in range(img_size)] for i in range(img_size)], dtype=float)
+        elif img_type == "Random noise":
+            img = np.random.rand(img_size, img_size)
+        else:
+            cx, cy = img_size//2, img_size//2
+            img = np.array([[np.exp(-((i-cx)**2+(j-cy)**2)/80) for j in range(img_size)] for i in range(img_size)])
+
+        U, S, Vt = np.linalg.svd(img)
+        k_capped = min(k_svd, len(S))
+        img_approx = (U[:, :k_capped] * S[:k_capped]) @ Vt[:k_capped, :]
+        error = np.mean((img - img_approx)**2)
+        var_captured = (S[:k_capped]**2).sum() / (S**2).sum()
+        compression = k_capped*(img_size+img_size+1) / (img_size*img_size)
+
+        with col2:
+            fig = make_subplots(rows=1, cols=3,
+                subplot_titles=["Original", f"Rank-{k_capped} approx", "Singular values"])
+            fig.add_trace(go.Heatmap(z=img, colorscale='Greys', showscale=False), row=1, col=1)
+            fig.add_trace(go.Heatmap(z=img_approx, colorscale='Greys', showscale=False), row=1, col=2)
+            fig.add_trace(go.Bar(x=list(range(1,len(S)+1)), y=S,
+                marker_color=['#534AB7' if i<k_capped else '#AFA9EC' for i in range(len(S))],
+                showlegend=False), row=1, col=3)
+            fig.add_vline(x=k_capped+0.5, line_dash='dash', line_color='#E24B4A', row=1, col=3)
+            fig.update_yaxes(autorange='reversed', row=1, col=1)   # row 0 at the top, like an image
+            fig.update_yaxes(autorange='reversed', row=1, col=2)
+            fig.update_layout(height=350)
+            st.plotly_chart(fig, width='stretch')
+
+        c1,c2,c3,c4 = st.columns(4)
+        c1.metric("Rank k", k_capped)
+        c2.metric("Energy captured (σ² share)", f"{var_captured:.1%}",
+                  help="Σσᵢ² over kept values ÷ Σσᵢ² over all = share of the squared Frobenius norm. "
+                       "It equals 'variance explained' only when the data is mean-centred first, as in PCA.")
+        c3.metric("Reconstruction MSE", f"{error:.4f}")
+        c4.metric("Storage ratio", f"{compression:.2f}×", help="<1 means compressed")
+        st.caption(f"Blue bars = kept singular values. Grey = discarded. "
+                   f"Original needs {img_size}² = {img_size**2} values; "
+                   f"rank-{k_capped} needs {k_capped*(2*img_size+1)} values.")
+
+    with tab2:
+        st.markdown("### The three matrices U, Σ, Vᵀ explained")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            m_svd = st.slider("Rows m", 3, 8, 4, key="svd_m")
+            n_svd = st.slider("Cols n", 3, 8, 5, key="svd_n")
+            rank_svd = st.slider("True rank of matrix", 1, min(m_svd,n_svd), 2)
+            seed_svd = st.slider("Seed", 0, 10, 0, key="svd_seed")
+
+        np.random.seed(seed_svd)
+        # build a low-rank matrix
+        A_true = np.random.randn(m_svd, rank_svd) @ np.random.randn(rank_svd, n_svd)
+        A_noisy = A_true + np.random.randn(m_svd, n_svd) * 0.5
+        U_s, S_s, Vt_s = np.linalg.svd(A_noisy, full_matrices=False)
+
+        with col2:
+            fig = make_subplots(rows=1, cols=4,
+                subplot_titles=["A (noisy)", "U (left singular)", "Σ (diagonal)", "Vᵀ (right singular)"],
+                column_widths=[0.3, 0.25, 0.15, 0.3])
+            fig.add_trace(go.Heatmap(z=A_noisy, colorscale='RdBu', showscale=False,
+                zmid=0), row=1, col=1)
+            fig.add_trace(go.Heatmap(z=U_s, colorscale='RdBu', showscale=False,
+                zmid=0), row=1, col=2)
+            fig.add_trace(go.Heatmap(z=np.diag(S_s), colorscale='Blues',
+                showscale=False), row=1, col=3)
+            fig.add_trace(go.Heatmap(z=Vt_s, colorscale='RdBu', showscale=False,
+                zmid=0), row=1, col=4)
+            fig.update_layout(height=320)
+            st.plotly_chart(fig, width='stretch')
+
+        st.markdown("**U** - how original rows relate to latent dimensions  \n"
+                    "**Σ** - importance of each latent dimension (singular values)  \n"
+                    "**Vᵀ** - how original columns relate to latent dimensions")
+        import pandas as pd
+        st.dataframe(pd.DataFrame({
+            "Singular value": [f"σ{i+1} = {S_s[i]:.3f}" for i in range(len(S_s))],
+            "Energy share (σ²)": [f"{S_s[i]**2/(S_s**2).sum():.1%}" for i in range(len(S_s))],
+            "Cumulative": [f"{(S_s[:i+1]**2).sum()/(S_s**2).sum():.1%}" for i in range(len(S_s))],
+        }), width='stretch', hide_index=True)
+        st.caption(f"The matrix was built with true rank {rank_svd}, then noise was added. Look for "
+                   f"{rank_svd} large singular value{'s' if rank_svd > 1 else ''} followed by small, noise-level ones - "
+                   "that gap is how SVD reveals the hidden low-rank structure.")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# REACT LOOP
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "react_loop":
+    st.title("🔄 ReAct Loop")
+    st.markdown("""
+    <div class="concept-card">
+    <b>ReAct</b> (Reason + Act) is the core loop of a tool-using agent.
+    At each step the model: <b>Reasons</b> about what to do next,
+    <b>Acts</b> by calling a tool, then <b>Observes</b> the result -
+    repeating until the task is complete.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Step-by-step simulation", "Loop anatomy"])
+
+    with tab1:
+        st.markdown("### Simulate an agent solving a task")
+
+        SCENARIOS = {
+            "Find the weather and plan an outfit": [
+                ("Thought", "I need to check the current weather to recommend an outfit.",
+                 "🧠", "#534AB7"),
+                ("Action",  'get_weather(location="Sofia, Bulgaria")',
+                 "🔧", "#EF9F27"),
+                ("Observation", '{"temp": 12, "condition": "rainy", "wind_mph": 15}',
+                 "👁️", "#1D9E75"),
+                ("Thought", "It is cold and rainy. I should recommend a waterproof jacket and layers.",
+                 "🧠", "#534AB7"),
+                ("Action",  'search_web(query="best rainy day outfits 12 degrees")',
+                 "🔧", "#EF9F27"),
+                ("Observation", "Results: waterproof jacket, warm underlayer, waterproof shoes recommended.",
+                 "👁️", "#1D9E75"),
+                ("Thought", "I have enough information to give a complete recommendation.",
+                 "🧠", "#534AB7"),
+                ("Final Answer", "Wear a waterproof jacket over a warm underlayer, waterproof shoes. Bring an umbrella.",
+                 "✅", "#E24B4A"),
+            ],
+            "Calculate compound interest and summarise": [
+                ("Thought", "I need to calculate compound interest. I should use the calculator tool.",
+                 "🧠", "#534AB7"),
+                ("Action",  'calculator(expression="1000 * (1 + 0.05/12) ** (12*3)")',
+                 "🔧", "#EF9F27"),
+                ("Observation", '{"result": 1161.62}',
+                 "👁️", "#1D9E75"),
+                ("Thought", "The result is $1161.62. Now I should look up the current savings rate to compare.",
+                 "🧠", "#534AB7"),
+                ("Action",  'search_web(query="average savings account interest rate 2025")',
+                 "🔧", "#EF9F27"),
+                ("Observation", "Average savings rate is around 4.5% APY as of 2025.",
+                 "👁️", "#1D9E75"),
+                ("Thought", "I can now provide a complete answer comparing both options.",
+                 "🧠", "#534AB7"),
+                ("Final Answer", "$1000 grows to $1161.62 at 5% over 3 years. This beats the average 4.5% APY savings rate.",
+                 "✅", "#E24B4A"),
+            ],
+            "Research and write a short report": [
+                ("Thought", "I need to gather information before writing. Let me search for recent data.",
+                 "🧠", "#534AB7"),
+                ("Action",  'search_web(query="transformer architecture key innovations 2024")',
+                 "🔧", "#EF9F27"),
+                ("Observation", "Results: mixture-of-experts, flash attention, grouped query attention, long context.",
+                 "👁️", "#1D9E75"),
+                ("Thought", "Good, I have key points. Let me also check the latest model benchmarks.",
+                 "🧠", "#534AB7"),
+                ("Action",  'search_web(query="LLM benchmark results 2024 MMLU HumanEval")',
+                 "🔧", "#EF9F27"),
+                ("Observation", "GPT-4o: MMLU 88.7%, Claude 3.5: MMLU 88.3%, Gemini Ultra: 90.0%",
+                 "👁️", "#1D9E75"),
+                ("Thought", "I now have enough to write a concise, factual summary report.",
+                 "🧠", "#534AB7"),
+                ("Final Answer", "Report written: 2024 saw MoE scaling, long-context models, and top MMLU scores reaching 90%.",
+                 "✅", "#E24B4A"),
+            ],
+        }
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            scenario = st.selectbox("Task scenario", list(SCENARIOS.keys()))
+            steps = SCENARIOS[scenario]
+            n_steps = len(steps)
+            step_idx = st.slider("Show up to step", 1, n_steps, 1,
+                help="Drag to reveal each step of the agent loop")
+            st.markdown("---")
+            st.markdown("**Step types:**")
+            for label, col_s in [("🧠 Thought","#534AB7"),("🔧 Action","#EF9F27"),
+                                   ("👁️ Observation","#1D9E75"),("✅ Final Answer","#E24B4A")]:
+                st.markdown(f'<span style="color:{col_s}">●</span> {label}', unsafe_allow_html=True)
+
+        with col2:
+            for i, (stype, content_s, icon, color) in enumerate(steps[:step_idx]):
+                border = "3px solid" if stype == "Final Answer" else "2px solid"
+                bg = "#fef9e7" if stype == "Thought" else \
+                     "#fff8f0" if stype == "Action" else \
+                     "#f0faf5" if stype == "Observation" else "#fdecea"
+                st.markdown(f"""
+                <div style="border-left:{border} {color};background:{bg};
+                            padding:0.7rem 1rem;border-radius:0 8px 8px 0;
+                            margin-bottom:8px">
+                    <div style="font-size:0.75rem;font-weight:600;color:{color};
+                                text-transform:uppercase;letter-spacing:0.05em">
+                        {icon} {stype} - step {i+1}</div>
+                    <div style="font-family:monospace;font-size:0.9rem;margin-top:4px">
+                        {content_s}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            if step_idx < n_steps:
+                remaining = n_steps - step_idx
+                st.caption(f"▶ {remaining} more step{'s' if remaining>1 else ''} to go - drag the slider")
+            else:
+                st.success("✅ Agent completed the task!")
+
+        # metrics
+        steps_shown = steps[:step_idx]
+        thoughts = sum(1 for s in steps_shown if s[0]=="Thought")
+        actions  = sum(1 for s in steps_shown if s[0]=="Action")
+        obs      = sum(1 for s in steps_shown if s[0]=="Observation")
+        c1,c2,c3 = st.columns(3)
+        c1.metric("🧠 Thoughts", thoughts)
+        c2.metric("🔧 Tool calls", actions)
+        c3.metric("👁️ Observations", obs)
+
+    with tab2:
+        st.markdown("### The ReAct loop - anatomy")
+        # draw the loop as a flow diagram using plotly
+        fig = go.Figure()
+        fig.update_layout(xaxis=dict(visible=False, range=[0,10]),
+            yaxis=dict(visible=False, range=[0,10]),
+            height=420, plot_bgcolor="white",
+            margin=dict(l=20,r=20,t=20,b=20))
+
+        nodes = [
+            (5, 8.5, "TASK / GOAL", "#E8E6FF", "#534AB7", 14),
+            (2, 6,   "🧠 REASON\n(Thought)", "#FFF8E1", "#B8860B", 12),
+            (8, 6,   "🔧 ACT\n(Tool call)", "#FFF3E0", "#E65100", 12),
+            (5, 3.5, "👁️ OBSERVE\n(Result)", "#E8F5E9", "#1B5E20", 12),
+            (5, 1,   "✅ FINAL\nANSWER", "#FFEBEE", "#B71C1C", 12),
+        ]
+        for x, y, label, fill, border, fsize in nodes:
+            w, h = 1.5, 0.8
+            fig.add_shape(type="rect", x0=x-w, y0=y-h, x1=x+w, y1=y+h,
+                fillcolor=fill, line=dict(color=border, width=2.5), layer="below")
+            for di, line in enumerate(label.split("\n")):
+                fig.add_annotation(x=x, y=y + 0.2 - di*0.45, text=line,
+                    showarrow=False, font=dict(size=fsize, color=border))
+
+        arrows = [
+            (5, 7.7, 5, 6.8, "Start"),
+            (3.5, 6, 6.5, 6, "decide action"),
+            (8, 5.2, 6.5, 4.3, "tool result"),
+            (3.5, 4.3, 2, 5.2, "re-reason"),
+            (5, 2.7, 5, 1.8, "done?"),
+            (3.4, 3.5, 1.5, 3.5, ""),
+            (1.5, 3.5, 1.5, 6, ""),
+            (1.5, 6, 0.5, 6, "loop back"),
+        ]
+        for x0,y0,x1,y1,lbl in arrows:
+            fig.add_shape(type="line", x0=x0,y0=y0,x1=x1,y1=y1,
+                line=dict(color="#888", width=1.5))
+            if lbl:
+                mx,my = (x0+x1)/2,(y0+y1)/2
+                fig.add_annotation(x=mx,y=my,text=lbl,showarrow=False,
+                    font=dict(size=9,color="#555"),
+                    bgcolor="rgba(255,255,255,0.7)",borderpad=1)
+
+        st.plotly_chart(fig, width='stretch')
+        st.markdown("""
+        The agent loops through **Reason → Act → Observe** until it decides it has enough
+        information to produce a final answer. Each iteration gives it new grounding from
+        the real world via tools.
+        """)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TOOL USE
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "tool_use":
+    st.title("🔧 Tool Use")
+    st.markdown("""
+    <div class="concept-card">
+    Tool use lets an LLM extend beyond its training data by calling <b>external functions</b> -
+    web search, calculators, databases, APIs, code interpreters. The model outputs a structured
+    <b>tool call</b>, the result is injected back as an observation, and the model continues.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Tool call anatomy", "Tool selection & routing"])
+
+    with tab1:
+        st.markdown("### How a tool call works end to end")
+
+        TOOLS_DEMO = {
+            "get_weather": {
+                "description": "Get current weather for a location",
+                "parameters": {"location": "string - city name or coordinates",
+                               "units": "string - 'celsius' or 'fahrenheit'"},
+                "example_call": '{"location": "Sofia, Bulgaria", "units": "celsius"}',
+                "example_result": '{"temp": 12, "condition": "partly cloudy", "humidity": 65, "wind_kph": 20}',
+            },
+            "web_search": {
+                "description": "Search the web and return top results",
+                "parameters": {"query": "string - search query",
+                               "max_results": "integer - number of results (1-10)"},
+                "example_call": '{"query": "latest transformer architecture research", "max_results": 3}',
+                "example_result": '["FlashAttention-3 reduces memory...", "Mamba SSMs challenge...", "Mixture-of-experts scaling..."]',
+            },
+            "code_interpreter": {
+                "description": "Execute Python code and return output",
+                "parameters": {"code": "string - valid Python code to execute"},
+                "example_call": '{"code": "import numpy as np\\nprint(np.linalg.norm([3, 4]))"}',
+                "example_result": '{"stdout": "5.0\\n", "stderr": "", "exit_code": 0}',
+            },
+            "database_query": {
+                "description": "Run a SQL query on the company database",
+                "parameters": {"sql": "string - SQL SELECT statement",
+                               "database": "string - database name"},
+                "example_call": '{"sql": "SELECT AVG(score) FROM users WHERE active=1", "database": "prod"}',
+                "example_result": '{"rows": [{"AVG(score)": 87.3}], "row_count": 1, "elapsed_ms": 42}',
+            },
+        }
+
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            chosen_tool = st.selectbox("Select a tool", list(TOOLS_DEMO.keys()))
+            tool_info = TOOLS_DEMO[chosen_tool]
+            st.markdown(f"**Description:** {tool_info['description']}")
+            st.markdown("**Parameters:**")
+            for pname, pdesc in tool_info['parameters'].items():
+                st.markdown(f"- `{pname}`: {pdesc}")
+
+        with col2:
+            st.markdown("**Example tool call (JSON):**")
+            st.code(tool_info['example_call'], language="json")
+            st.markdown("**Tool result returned to agent:**")
+            st.code(tool_info['example_result'], language="json")
+
+        st.markdown("### Full message flow")
+        flow_steps = [
+            ("User message", "What's the weather in Sofia today?", "#f0f0f0", "#333"),
+            ("LLM generates tool call", f'<tool_call>\n{{"name": "{chosen_tool}",\n "args": {tool_info["example_call"]}}}\n</tool_call>', "#fff8e1", "#b8860b"),
+            ("Tool executes & returns", tool_info["example_result"], "#e8f5e9", "#1b5e20"),
+            ("LLM generates final response", "Based on the tool result, the agent now composes a natural language answer to the user.", "#f3f0ff", "#534AB7"),
+        ]
+        for label, content_f, bg, col_f in flow_steps:
+            st.markdown(f"""
+            <div style="background:{bg};border-radius:8px;padding:0.7rem 1rem;
+                        margin-bottom:8px;border-left:3px solid {col_f}">
+                <div style="font-size:0.75rem;font-weight:600;color:{col_f};
+                            text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">
+                    {label}</div>
+                <code style="font-size:0.85rem;color:{col_f}">{content_f}</code>
+            </div>
+            """, unsafe_allow_html=True)
+
+    with tab2:
+        st.markdown("### How the agent decides which tool to call")
+        st.markdown("""
+        Given a user message, the agent scores each available tool and picks the best fit.
+        In practice this is done by the LLM reasoning about the tool descriptions.
+        """)
+
+        user_query = st.text_input("User query", "What is the square root of 1764?")
+
+        # simple keyword scoring for demo
+        tool_scores = {}
+        q_lower = user_query.lower()
+        tool_scores["get_weather"]      = sum(w in q_lower for w in ["weather","temperature","rain","sunny","forecast","climate","cold","hot"])
+        tool_scores["web_search"]       = sum(w in q_lower for w in ["search","find","latest","news","who","what","when","where","research","recent"])
+        tool_scores["code_interpreter"] = sum(w in q_lower for w in ["calculate","compute","code","run","python","math","sqrt","sum","plot","sort","algorithm"])
+        tool_scores["database_query"]   = sum(w in q_lower for w in ["database","query","sql","table","rows","records","average","count","users","data"])
+
+        total = sum(tool_scores.values()) or 1
+        tool_probs = {k: v/total for k,v in tool_scores.items()}
+        best_tool = max(tool_scores, key=tool_scores.get)
+
+        fig = go.Figure(go.Bar(
+            x=list(tool_scores.keys()),
+            y=[tool_probs[k] for k in tool_scores],
+            marker_color=['#534AB7' if k==best_tool else '#AFA9EC' for k in tool_scores],
+            text=[f"{tool_probs[k]:.0%}" for k in tool_scores],
+            textposition='outside'))
+        fig.update_layout(yaxis_title="Relevance score", height=300, showlegend=False,
+            yaxis_range=[0, 1.2])
+        st.plotly_chart(fig, width='stretch')
+
+        st.markdown(f"**Best tool for this query:** `{best_tool}`")
+        st.caption("Real agents use the LLM itself to select tools based on natural language descriptions - "
+                   "not keyword matching. This demo uses simple keyword heuristics for illustration.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PLANNING & TASK DECOMPOSITION
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "planning":
+    st.title("🗺️ Planning & Task Decomposition")
+    st.markdown("""
+    <div class="concept-card">
+    Complex tasks must be broken into <b>subtasks</b> before an agent can act.
+    Good planning identifies <b>dependencies</b> between steps (what must happen before what),
+    enables <b>parallelism</b> where possible, and handles failures gracefully.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Task dependency graph", "Planning strategies"])
+
+    with tab1:
+        TASK_PLANS = {
+            "Write a research report": {
+                "tasks": [
+                    ("T1", "Define research question", []),
+                    ("T2", "Search for sources",       ["T1"]),
+                    ("T3", "Read & summarise source A",["T2"]),
+                    ("T4", "Read & summarise source B",["T2"]),
+                    ("T5", "Read & summarise source C",["T2"]),
+                    ("T6", "Synthesise findings",      ["T3","T4","T5"]),
+                    ("T7", "Write draft",              ["T6"]),
+                    ("T8", "Review & edit",            ["T7"]),
+                    ("T9", "Final report",             ["T8"]),
+                ],
+                "parallel": ["T3","T4","T5"],
+            },
+            "Build and deploy a feature": {
+                "tasks": [
+                    ("T1", "Write requirements", []),
+                    ("T2", "Design schema",      ["T1"]),
+                    ("T3", "Write backend code", ["T2"]),
+                    ("T4", "Write frontend code",["T2"]),
+                    ("T5", "Write tests",        ["T3","T4"]),
+                    ("T6", "Code review",        ["T5"]),
+                    ("T7", "Deploy to staging",  ["T6"]),
+                    ("T8", "QA testing",         ["T7"]),
+                    ("T9", "Deploy to prod",     ["T8"]),
+                ],
+                "parallel": ["T3","T4"],
+            },
+            "Plan a trip": {
+                "tasks": [
+                    ("T1", "Choose destination", []),
+                    ("T2", "Check visa requirements",["T1"]),
+                    ("T3", "Search flights",     ["T1"]),
+                    ("T4", "Search hotels",      ["T1"]),
+                    ("T5", "Book flights",       ["T3"]),
+                    ("T6", "Book hotel",         ["T4"]),
+                    ("T7", "Plan itinerary",     ["T5","T6"]),
+                    ("T8", "Pack & prepare",     ["T2","T7"]),
+                ],
+                "parallel": ["T2","T3","T4"],
+            },
+        }
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            plan_choice = st.selectbox("Task scenario", list(TASK_PLANS.keys()))
+            plan = TASK_PLANS[plan_choice]
+            tasks = plan["tasks"]
+            parallel = plan["parallel"]
+
+            st.markdown("**Task list:**")
+            for tid, tname, deps in tasks:
+                dep_str = f" (after {', '.join(deps)})" if deps else " (start)"
+                is_par  = "⚡ parallel" if tid in parallel else ""
+                st.markdown(f"**{tid}** {tname}{dep_str} {is_par}")
+
+        with col2:
+            # layout tasks in levels (topological sort approximation)
+            def compute_levels(tasks):
+                levels = {}
+                task_dict = {t[0]: t[2] for t in tasks}
+                def level(tid):
+                    if tid not in levels:
+                        deps = task_dict[tid]
+                        levels[tid] = (max(level(d) for d in deps) + 1) if deps else 0
+                    return levels[tid]
+                for t in tasks: level(t[0])
+                return levels
+
+            lvls = compute_levels(tasks)
+            max_lvl = max(lvls.values())
+
+            # group by level
+            from collections import defaultdict
+            by_level = defaultdict(list)
+            for tid, tname, _ in tasks:
+                by_level[lvls[tid]].append((tid, tname))
+
+            fig = go.Figure()
+            fig.update_layout(xaxis=dict(visible=False, range=[-0.5, max_lvl+0.5]),
+                yaxis=dict(visible=False),
+                height=420, plot_bgcolor="white",
+                margin=dict(l=10,r=10,t=10,b=10))
+
+            pos = {}
+            for lvl in range(max_lvl+1):
+                nodes_at = by_level[lvl]
+                n = len(nodes_at)
+                for i, (tid, tname) in enumerate(nodes_at):
+                    y = (i - (n-1)/2) * 1.5
+                    pos[tid] = (lvl, y)
+                    is_par = tid in parallel
+                    fill = "#fff3cd" if is_par else "#eeedfe"
+                    border = "#EF9F27" if is_par else "#534AB7"
+                    fig.add_shape(type="rect",
+                        x0=lvl-0.38, y0=y-0.45, x1=lvl+0.38, y1=y+0.45,
+                        fillcolor=fill, line=dict(color=border, width=2))
+                    label = tname if len(tname)<=18 else tname[:16]+"…"
+                    fig.add_annotation(x=lvl, y=y+0.12, text=f"<b>{tid}</b>",
+                        showarrow=False, font=dict(size=10, color=border))
+                    fig.add_annotation(x=lvl, y=y-0.18, text=label,
+                        showarrow=False, font=dict(size=8, color="#444"))
+
+            # draw dependency arrows
+            for tid, tname, deps in tasks:
+                x1, y1 = pos[tid]
+                for dep in deps:
+                    x0, y0 = pos[dep]
+                    fig.add_shape(type="line", x0=x0+0.38, y0=y0, x1=x1-0.38, y1=y1,
+                        line=dict(color="#aaa", width=1.2))
+
+            st.plotly_chart(fig, width='stretch')
+            st.caption("🟡 Yellow = can run in parallel. Purple = sequential dependency.")
+
+        # stats
+        n_parallel = len(parallel)
+        n_seq = len(tasks) - n_parallel
+        critical = max_lvl + 1
+        c1,c2,c3 = st.columns(3)
+        c1.metric("Total subtasks", len(tasks))
+        c2.metric("Parallelisable", n_parallel)
+        c3.metric("Critical path length", critical)
+
+    with tab2:
+        st.markdown("### Planning strategies compared")
+        import pandas as pd
+        strategies = [
+            ("Sequential",       "Execute subtasks one by one in order",
+             "Simple, predictable", "Slow - no parallelism", "Simple linear tasks"),
+            ("Hierarchical",     "Break goal → sub-goals → actions recursively",
+             "Handles complexity", "Risk of over-planning", "Multi-step research, coding"),
+            ("ReAct (reactive)", "Plan one step at a time based on observations",
+             "Adapts to surprises", "May take more steps", "Web browsing, tool use"),
+            ("Tree of Thought",  "Explore multiple reasoning branches, prune bad ones",
+             "Better on hard problems", "High token cost", "Maths, strategy, puzzles"),
+            ("Multi-agent",      "Assign subtasks to specialised sub-agents in parallel",
+             "Fast, parallel", "Complex coordination", "Large pipelines, code generation"),
+        ]
+        st.dataframe(pd.DataFrame(strategies,
+            columns=["Strategy","How it works","Advantage","Disadvantage","Best for"]),
+            width='stretch', hide_index=True)
+
+        st.markdown("### When does planning fail?")
+        failure_modes = {
+            "Incorrect decomposition": 0.30,
+            "Missing dependencies": 0.20,
+            "Tool call errors": 0.25,
+            "Context window overflow": 0.15,
+            "Infinite loops": 0.10,
+        }
+        fig2 = go.Figure(go.Bar(
+            x=list(failure_modes.values()), y=list(failure_modes.keys()),
+            orientation='h',
+            marker_color=['#E24B4A','#EF9F27','#534AB7','#1D9E75','#D4537E'],
+            text=[f"{v:.0%}" for v in failure_modes.values()],
+            textposition='outside'))
+        fig2.update_layout(xaxis_title="Relative frequency", height=280,
+            xaxis_range=[0, 0.45], showlegend=False)
+        st.plotly_chart(fig2, width='stretch')
+        st.caption("Illustrative distribution - real failure rates depend heavily on model capability and task complexity.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# AGENT MEMORY TYPES
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "agent_memory":
+    st.title("🧠 Agent Memory Types")
+    st.markdown("""
+    <div class="concept-card">
+    Agents need different kinds of memory to operate effectively.
+    No single memory type covers all needs - real systems combine several.
+    The right mix depends on the task horizon, latency requirements and cost.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Memory taxonomy", "RAG retrieval visualised"])
+
+    with tab1:
+        import pandas as pd
+        memory_types = [
+            ("In-context (working)", "Text in the current prompt window",
+             "Instant, no setup", "Limited by context length, lost after session",
+             "Current conversation, recent tool results", "🟢 Fast"),
+            ("External / Vector store", "Embeddings in a vector DB (RAG)",
+             "Scales to millions of docs, persistent",
+             "Retrieval latency, embedding cost, may miss context",
+             "Company knowledge bases, long-term user history", "🟡 Medium"),
+            ("Parametric (weights)", "Knowledge baked into model weights during training",
+             "Zero latency, always available",
+             "Cannot be updated without retraining, may hallucinate",
+             "World knowledge, language, reasoning", "🟢 Fast"),
+            ("Episodic / Log store", "Structured record of past agent runs",
+             "Full history, inspectable",
+             "Grows indefinitely, needs summarisation",
+             "Multi-session continuity, debugging", "🟡 Medium"),
+            ("Cache (KV cache)", "Saved key-value pairs from previous forward passes",
+             "Reduces repeated computation cost",
+             "Memory-intensive, invalidated on change",
+             "Long stable system prompts, repeated prefixes", "🟢 Fast"),
+        ]
+        st.dataframe(pd.DataFrame(memory_types,
+            columns=["Type","What it is","Advantage","Limitation","Used for","Speed"]),
+            width='stretch', hide_index=True)
+
+        st.markdown("### Memory access pattern during a single agent turn")
+        fig = go.Figure()
+        fig.update_layout(xaxis=dict(visible=False, range=[0,10]),
+            yaxis=dict(visible=False, range=[0,10]),
+            height=320, plot_bgcolor="white",
+            margin=dict(l=10,r=10,t=10,b=10))
+
+        items = [
+            (5, 9, "User Query", "#f3f0ff", "#534AB7"),
+            (5, 7.2, "In-context window\n(system prompt + history)", "#e8f4ff", "#1565C0"),
+            (2, 5, "Vector DB\n(RAG retrieval)", "#fff8e1", "#B8860B"),
+            (8, 5, "Parametric\n(model weights)", "#e8f5e9", "#1B5E20"),
+            (5, 3, "Agent reasoning\n& response", "#fdecea", "#B71C1C"),
+        ]
+        for x,y,label,fill,border in items:
+            fig.add_shape(type="rect", x0=x-1.5, y0=y-0.7, x1=x+1.5, y1=y+0.7,
+                fillcolor=fill, line=dict(color=border, width=2))
+            for di,line in enumerate(label.split("\n")):
+                fig.add_annotation(x=x, y=y+0.15-di*0.38, text=line,
+                    showarrow=False, font=dict(size=10, color=border))
+
+        for x0,y0,x1,y1 in [(5,8.3,5,7.9),(3.5,7.2,2,5.7),(6.5,7.2,8,5.7),
+                              (2,4.3,4,3.7),(8,4.3,6,3.7),(5,2.3,5,1.5)]:
+            fig.add_shape(type="line",x0=x0,y0=y0,x1=x1,y1=y1,
+                line=dict(color="#aaa",width=1.5))
+        st.plotly_chart(fig, width='stretch')
+
+    with tab2:
+        st.markdown("### RAG - Retrieval Augmented Generation")
+        st.markdown("""
+        RAG retrieves relevant documents from an external store at query time,
+        injects them into the context, and lets the LLM answer with up-to-date grounded information.
+        """)
+
+        DOCS = [
+            "Transformers use self-attention to model relationships between all tokens simultaneously.",
+            "Gradient descent minimises the loss by moving parameters in the direction of steepest descent.",
+            "Convolutional neural networks use sliding kernels to detect local patterns in images.",
+            "RLHF aligns language models with human preferences using reward models and PPO.",
+            "Vector databases store embeddings and support fast approximate nearest-neighbour search.",
+            "LoRA fine-tunes large models efficiently by adding low-rank adapter matrices.",
+            "The attention mechanism computes query-key dot products scaled by sqrt(d_k).",
+            "Dropout randomly zeros activations during training to reduce overfitting.",
+            "PCA projects data onto the directions of maximum variance using eigenvectors.",
+            "The chain rule allows backpropagation to compute gradients through many layers.",
+        ]
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            query_rag = st.text_input("Query", "How does attention work?")
+            top_k = st.slider("Retrieve top-k docs", 1, 5, 3)
+            st.markdown("**Document store (10 docs):**")
+            for i, doc in enumerate(DOCS):
+                st.markdown(f"<small>Doc {i+1}: {doc[:55]}…</small>", unsafe_allow_html=True)
+
+        # simple TF-IDF-like scoring
+        query_words = set(query_rag.lower().split())
+        scores = []
+        for doc in DOCS:
+            doc_words = set(doc.lower().split())
+            overlap = len(query_words & doc_words)
+            # bonus for key phrase matches
+            bonus = sum(2 for w in query_words if any(w in dw for dw in doc_words))
+            scores.append(overlap + bonus * 0.3)
+
+        scores_arr = np.array(scores, dtype=float)
+        scores_norm = scores_arr / (scores_arr.max() + 1e-9)
+        top_idx = np.argsort(scores_arr)[::-1]
+
+        with col2:
+            fig = go.Figure(go.Bar(
+                x=[f"Doc {i+1}" for i in range(len(DOCS))],
+                y=scores_norm,
+                marker_color=['#534AB7' if i in top_idx[:top_k] else '#AFA9EC'
+                              for i in range(len(DOCS))],
+                text=[f"{s:.2f}" for s in scores_norm],
+                textposition='outside'))
+            fig.update_layout(yaxis_title="Similarity score", height=300,
+                yaxis_range=[0,1.3], showlegend=False)
+            st.plotly_chart(fig, width='stretch')
+
+            st.markdown(f"**Top {top_k} retrieved documents:**")
+            for rank, idx in enumerate(top_idx[:top_k]):
+                st.markdown(f"""
+                <div style="background:#eeedfe;border-left:3px solid #534AB7;
+                            padding:0.5rem 0.8rem;border-radius:0 6px 6px 0;margin-bottom:6px">
+                    <b>#{rank+1} Doc {idx+1}</b> (score={scores_norm[idx]:.2f})<br>
+                    <small>{DOCS[idx]}</small>
+                </div>
+                """, unsafe_allow_html=True)
+        st.caption("Real RAG uses dense vector embeddings (cosine similarity). "
+                   "This demo uses simple keyword overlap for illustration.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MULTI-AGENT SYSTEMS
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "multi_agent":
+    st.title("🤝 Multi-Agent Systems")
+    st.markdown("""
+    <div class="concept-card">
+    A <b>multi-agent system</b> uses several specialised AI agents working together.
+    An <b>orchestrator</b> agent breaks down the task and routes subtasks to
+    <b>worker agents</b>, each optimised for a specific capability.
+    Results are aggregated and returned to the user.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Orchestrator pattern", "Agent communication"])
+
+    with tab1:
+        PIPELINES = {
+            "Content creation pipeline": {
+                "orchestrator": "Content Orchestrator",
+                "workers": [
+                    ("Research Agent",  "🔍", "Searches web, gathers facts and sources",           "#534AB7"),
+                    ("Writer Agent",    "✍️", "Drafts content from research findings",             "#1D9E75"),
+                    ("Editor Agent",    "📝", "Reviews, corrects grammar and improves clarity",    "#EF9F27"),
+                    ("SEO Agent",       "📈", "Optimises keywords, meta tags, structure",          "#E24B4A"),
+                    ("Publisher Agent", "🚀", "Formats and publishes to CMS",                     "#D4537E"),
+                ],
+                "flow": ["Research Agent","Writer Agent","Editor Agent","SEO Agent","Publisher Agent"],
+                "parallel": ["Research Agent"],
+            },
+            "Software engineering pipeline": {
+                "orchestrator": "Engineering Orchestrator",
+                "workers": [
+                    ("Planner Agent",   "🗺️", "Breaks feature into tasks and acceptance criteria", "#534AB7"),
+                    ("Coder Agent",     "💻", "Writes implementation code",                       "#1D9E75"),
+                    ("Test Agent",      "🧪", "Writes and runs unit/integration tests",            "#EF9F27"),
+                    ("Review Agent",    "🔍", "Performs code review and security checks",         "#E24B4A"),
+                    ("Deploy Agent",    "🚀", "Runs CI/CD pipeline and deploys to staging",       "#D4537E"),
+                ],
+                "flow": ["Planner Agent","Coder Agent","Test Agent","Review Agent","Deploy Agent"],
+                "parallel": ["Coder Agent","Test Agent"],
+            },
+            "Data analysis pipeline": {
+                "orchestrator": "Analysis Orchestrator",
+                "workers": [
+                    ("Ingestion Agent", "📥", "Fetches data from APIs and databases",             "#534AB7"),
+                    ("Cleaning Agent",  "🧹", "Handles missing values, outliers, formatting",    "#1D9E75"),
+                    ("Stats Agent",     "📊", "Computes descriptive statistics and correlations", "#EF9F27"),
+                    ("ML Agent",        "🤖", "Trains and evaluates predictive models",           "#E24B4A"),
+                    ("Report Agent",    "📄", "Generates charts, tables and narrative report",   "#D4537E"),
+                ],
+                "flow": ["Ingestion Agent","Cleaning Agent","Stats Agent","ML Agent","Report Agent"],
+                "parallel": ["Stats Agent","ML Agent"],
+            },
+        }
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            pipeline_choice = st.selectbox("Pipeline", list(PIPELINES.keys()))
+            pipeline = PIPELINES[pipeline_choice]
+            active_step = st.slider("Simulate execution step",
+                0, len(pipeline["workers"]), 2)
+            st.markdown(f"**Orchestrator:** {pipeline['orchestrator']}")
+            st.markdown("**Worker agents:**")
+            for i, (name, icon, desc, col_w) in enumerate(pipeline["workers"]):
+                status = "✅ done" if i < active_step else "⏳ waiting" if i == active_step else "⬜ queued"
+                par = " ⚡parallel" if name in pipeline["parallel"] else ""
+                st.markdown(f'<span style="color:{col_w}">●</span> **{icon} {name}** {status}{par}<br>'
+                            f'<small style="color:#666">{desc}</small>', unsafe_allow_html=True)
+
+        with col2:
+            fig = go.Figure()
+            fig.update_layout(xaxis=dict(visible=False, range=[-0.5, len(pipeline["workers"])+0.5]),
+                yaxis=dict(visible=False, range=[-1, 4]),
+                height=400, plot_bgcolor="white",
+                margin=dict(l=10,r=10,t=10,b=10))
+
+            # orchestrator at top
+            fig.add_shape(type="rect", x0=len(pipeline["workers"])/2-1.2, y0=3.0,
+                x1=len(pipeline["workers"])/2+1.2, y1=3.8,
+                fillcolor="#f3f0ff", line=dict(color="#534AB7", width=2.5))
+            fig.add_annotation(x=len(pipeline["workers"])/2, y=3.4,
+                text=f"<b>🎯 {pipeline['orchestrator']}</b>",
+                showarrow=False, font=dict(size=11, color="#534AB7"))
+
+            workers = pipeline["workers"]
+            xs = np.linspace(0.5, len(workers)-0.5, len(workers))
+            for i, (name, icon, desc, col_w) in enumerate(workers):
+                x = xs[i]
+                is_done = i < active_step
+                is_active = i == active_step
+                fill = "#d4edda" if is_done else "#fff3cd" if is_active else "#f8f9fa"
+                border = col_w
+                lw = 3 if is_active else 2
+                fig.add_shape(type="rect", x0=x-0.45, y0=0.8, x1=x+0.45, y1=2.2,
+                    fillcolor=fill, line=dict(color=border, width=lw))
+                fig.add_annotation(x=x, y=1.7, text=f"{icon}",
+                    showarrow=False, font=dict(size=16))
+                short_name = name.replace(" Agent","")
+                fig.add_annotation(x=x, y=1.2, text=f"<b>{short_name}</b>",
+                    showarrow=False, font=dict(size=9, color=col_w))
+                status_icon = "✅" if is_done else "⚡" if is_active else "⬜"
+                fig.add_annotation(x=x, y=0.95, text=status_icon,
+                    showarrow=False, font=dict(size=10))
+
+                # line from orchestrator to worker
+                fig.add_shape(type="line", x0=len(workers)/2, y0=3.0,
+                    x1=x, y1=2.2, line=dict(color="#aaa", width=1, dash="dot"))
+
+                # arrows between sequential workers
+                if i < len(workers)-1 and workers[i][0] not in pipeline["parallel"]:
+                    fig.add_shape(type="line", x0=x+0.45, y0=1.5,
+                        x1=xs[i+1]-0.45, y1=1.5,
+                        line=dict(color=col_w, width=1.5))
+
+            # result arrow back up
+            fig.add_shape(type="line",
+                x0=xs[-1], y0=2.2, x1=len(workers)/2, y1=3.0,
+                line=dict(color="#1D9E75", width=2, dash="dash"))
+            fig.add_annotation(x=len(workers)/2+0.8, y=2.6, text="result",
+                showarrow=False, font=dict(size=9, color="#1D9E75"))
+
+            st.plotly_chart(fig, width='stretch')
+            st.caption("⚡ = parallel workers. Drag the slider to watch the pipeline execute.")
+
+    with tab2:
+        st.markdown("### How agents communicate")
+        import pandas as pd
+        comm_patterns = [
+            ("Message passing", "Agents send structured messages (JSON/text) via a shared bus or queue",
+             "Decoupled, async-friendly", "Needs schema design"),
+            ("Shared memory / blackboard", "All agents read/write to a common state store",
+             "Simple, visible to all", "Concurrency conflicts"),
+            ("Function calls", "Orchestrator calls sub-agents as if they were tools",
+             "Clean, hierarchical", "Sequential by default"),
+            ("Streaming", "Agents pipe output tokens directly to the next agent",
+             "Low latency", "Complex error handling"),
+        ]
+        st.dataframe(pd.DataFrame(comm_patterns,
+            columns=["Pattern","Description","Pro","Con"]),
+            width='stretch', hide_index=True)
+
+        st.markdown("### Key design decisions")
+        decisions = {
+            "How many agents?": "Start with one. Add agents only when a clear specialisation boundary exists.",
+            "Synchronous or async?": "Sync is simpler to debug. Async is needed for parallelism and long-running tasks.",
+            "How to handle failure?": "Each agent should return success/error. Orchestrator retries or falls back.",
+            "How to share context?": "Pass minimal context in each message. Use IDs to reference large objects in shared stores.",
+            "How to avoid loops?": "Set a max iteration count. Track visited states. Use a supervisor agent.",
+        }
+        for q, a in decisions.items():
+            with st.expander(q):
+                st.markdown(a)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# REFLECTION & SELF-CRITIQUE
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "reflection":
+    st.title("🪞 Reflection & Self-Critique")
+    st.markdown("""
+    <div class="concept-card">
+    <b>Reflection</b> is an agentic pattern where the model doesn't just produce an answer -
+    it <b>critiques its own output</b> against the goal, then <b>revises</b>. Instead of a single
+    forward pass, the agent loops through <b>Generate → Critique → Revise</b> until the result is
+    good enough or a step budget runs out. This is the core idea behind methods like
+    <b>Self-Refine</b> and <b>Reflexion</b>, and it's one of the most reliable ways to improve
+    agent output quality without any extra training.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Reflection loop simulation", "Why it works"])
+
+    with tab1:
+        st.markdown("### Watch a draft improve across reflection rounds")
+
+        TASKS = {
+            "Write a cold outreach email": [
+                ("Draft", "Hi, I saw your company and think we should talk. Let me know if interested.",
+                 "✍️", "#534AB7", 35),
+                ("Critique", "Too generic - no specific value proposition, no clear ask, could be sent to anyone.",
+                 "🔍", "#E24B4A", None),
+                ("Revise", "Hi Maria, I noticed your team shipped the new billing API - nice work. We built a tool "
+                 "that cuts integration time in half; open to a 15-min call this week?",
+                 "✏️", "#1D9E75", 78),
+                ("Critique", "Better and specific, but the opening compliment feels slightly generic. Tighten the CTA.",
+                 "🔍", "#E24B4A", None),
+                ("Revise", "Hi Maria, saw the new billing API your team shipped last week - the webhook retry logic "
+                 "was clever. We built a tool that cuts integration time like that in half. Worth a 15-min call Thursday?",
+                 "✏️", "#1D9E75", 93),
+            ],
+            "Summarise a technical incident report": [
+                ("Draft", "The system had an error and it was fixed after some investigation.",
+                 "✍️", "#534AB7", 25),
+                ("Critique", "Missing root cause, impact, and timeline - reads as filler, not a summary.",
+                 "🔍", "#E24B4A", None),
+                ("Revise", "A misconfigured cache TTL caused a 12-minute outage affecting 8% of API requests; "
+                 "fixed by rolling back the config and adding a canary check.",
+                 "✏️", "#1D9E75", 82),
+                ("Critique", "Good detail. Could still clarify who was affected and add a one-line prevention step.",
+                 "🔍", "#E24B4A", None),
+                ("Revise", "A misconfigured cache TTL caused a 12-minute outage for EU-region API requests (8% of "
+                 "traffic); rolled back and added a canary check. Prevention: TTL changes now require staged rollout.",
+                 "✏️", "#1D9E75", 96),
+            ],
+            "Solve a word problem": [
+                ("Draft", "A train travels 60 miles in 1.5 hours, so its speed is 60/1.5... about 45 mph.",
+                 "✍️", "#534AB7", 20),
+                ("Critique", "Arithmetic error: 60 ÷ 1.5 = 40, not 45. Recompute before finalising.",
+                 "🔍", "#E24B4A", None),
+                ("Revise", "60 miles ÷ 1.5 hours = 40 mph.",
+                 "✏️", "#1D9E75", 90),
+                ("Critique", "Correct now, but doesn't show the check step - verify by multiplying back.",
+                 "🔍", "#E24B4A", None),
+                ("Revise", "60 ÷ 1.5 = 40 mph. Check: 40 mph × 1.5 h = 60 miles ✓. Answer: 40 mph.",
+                 "✏️", "#1D9E75", 99),
+            ],
+        }
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            task = st.selectbox("Task", list(TASKS.keys()))
+            steps = TASKS[task]
+            n_steps = len(steps)
+            step_idx = st.slider("Show up to step", 1, n_steps, 1,
+                help="Drag to reveal each generate/critique/revise round")
+            st.markdown("---")
+            st.markdown("**Step types:**")
+            for label, col_s in [("✍️ Draft/Generate","#534AB7"),("🔍 Critique","#E24B4A"),
+                                   ("✏️ Revise","#1D9E75")]:
+                st.markdown(f'<span style="color:{col_s}">●</span> {label}', unsafe_allow_html=True)
+
+        with col2:
+            for i, (stype, content_s, icon, color, score) in enumerate(steps[:step_idx]):
+                bg = "#f0eefc" if stype == "Draft" else \
+                     "#fdecea" if stype == "Critique" else "#f0faf5"
+                score_html = f'<span style="float:right;font-weight:700">{score}/100</span>' if score is not None else ""
+                st.markdown(f"""
+                <div style="border-left:2px solid {color};background:{bg};
+                            padding:0.7rem 1rem;border-radius:0 8px 8px 0;
+                            margin-bottom:8px">
+                    <div style="font-size:0.75rem;font-weight:600;color:{color};
+                                text-transform:uppercase;letter-spacing:0.05em">
+                        {icon} {stype} - step {i+1}{score_html}</div>
+                    <div style="font-size:0.9rem;margin-top:4px">{content_s}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            if step_idx < n_steps:
+                st.caption(f"▶ {n_steps - step_idx} more step{'s' if n_steps-step_idx>1 else ''} to go")
+            else:
+                st.success("✅ Converged to a high-quality final answer")
+
+        # quality trajectory chart
+        scores_shown = [(i+1, s[4]) for i, s in enumerate(steps[:step_idx]) if s[4] is not None]
+        if scores_shown:
+            xs, ys = zip(*scores_shown)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=list(xs), y=list(ys), mode="lines+markers",
+                line=dict(color="#1D9E75", width=3), marker=dict(size=10, color="#1D9E75"),
+                name="Quality score"))
+            fig.update_layout(title="Output quality across reflection rounds",
+                xaxis=dict(title="Step", tickmode="array", tickvals=list(xs)),
+                yaxis=dict(title="Quality score", range=[0, 100]),
+                height=280, margin=dict(l=40, r=20, t=40, b=40))
+            st.plotly_chart(fig, width='stretch')
+
+    with tab2:
+        st.markdown("### The generate → critique → revise cycle")
+        fig = go.Figure()
+        fig.update_layout(xaxis=dict(visible=False, range=[0, 10]),
+            yaxis=dict(visible=False, range=[0, 10]),
+            height=380, plot_bgcolor="white",
+            margin=dict(l=20, r=20, t=20, b=20))
+
+        nodes = [
+            (2, 7, "✍️ GENERATE\n(Draft answer)", "#EDE9FE", "#534AB7", 12),
+            (8, 7, "🔍 CRITIQUE\n(Self-evaluate)", "#FDECEA", "#B71C1C", 12),
+            (5, 3, "✏️ REVISE\n(Improve draft)", "#E8F5E9", "#1B5E20", 12),
+            (5, 0.7, "✅ Good enough?\nStop.", "#FFF8E1", "#8A6D00", 11),
+        ]
+        for x, y, label, fill, border, fsize in nodes:
+            w, h = 1.6, 0.8
+            fig.add_shape(type="rect", x0=x-w, y0=y-h, x1=x+w, y1=y+h,
+                fillcolor=fill, line=dict(color=border, width=2.5), layer="below")
+            for di, line in enumerate(label.split("\n")):
+                fig.add_annotation(x=x, y=y + 0.2 - di*0.45, text=line,
+                    showarrow=False, font=dict(size=fsize, color=border))
+
+        arrows = [
+            (3.6, 7, 6.4, 7, "draft"),
+            (8, 6.2, 6, 3.8, "critique"),
+            (4, 3.8, 2, 6.2, "loop back if not done"),
+            (5, 2.2, 5, 1.5, "check"),
+        ]
+        for x0, y0, x1, y1, lbl in arrows:
+            fig.add_shape(type="line", x0=x0, y0=y0, x1=x1, y1=y1,
+                line=dict(color="#888", width=1.5))
+            if lbl:
+                mx, my = (x0+x1)/2, (y0+y1)/2
+                fig.add_annotation(x=mx, y=my, text=lbl, showarrow=False,
+                    font=dict(size=9, color="#555"),
+                    bgcolor="rgba(255,255,255,0.7)", borderpad=1)
+
+        st.plotly_chart(fig, width='stretch')
+
+        st.markdown("### Why reflection improves output")
+        cols = st.columns(3)
+        with cols[0]:
+            st.markdown("**🎯 Separates generation from evaluation**")
+            st.caption("Critiquing is often an easier task than producing the right answer the "
+                       "first time - the model just has to spot what's wrong.")
+        with cols[1]:
+            st.markdown("**🔁 More inference-time compute**")
+            st.caption("Extra reasoning steps at inference time trade latency/cost for quality, "
+                       "similar to how deeper search improves game-playing agents.")
+        with cols[2]:
+            st.markdown("**🧯 Catches errors before the user sees them**")
+            st.caption("Factual slips, weak arguments, or arithmetic mistakes get caught and "
+                       "fixed internally instead of shipping in the final answer.")
+
+        st.markdown("### Common variants")
+        variants = [
+            ("Self-Refine", "Same model plays generator and critic, iterating on its own output with no external feedback."),
+            ("Reflexion", "Adds persistent memory of past mistakes across attempts, so the agent avoids repeating them."),
+            ("Actor–Critic agents", "A separate critic model or rubric scores the actor's output, decoupling the two roles."),
+            ("RAG-grounded critique", "Critique step checks the draft against retrieved sources to catch factual errors."),
+        ]
+        st.dataframe(pd.DataFrame(variants, columns=["Variant", "Description"]),
+            width='stretch', hide_index=True)
+
+        st.markdown("""
+        <div class="concept-card">
+        <b>Trade-off:</b> reflection costs extra tokens and latency for every round - it's most
+        valuable for tasks where correctness matters more than speed (code, math, high-stakes
+        writing), and least valuable for simple, low-risk generations. It also composes with the
+        <b>ReAct Loop</b> (reflection can trigger a new tool call) and <b>Multi-Agent Systems</b>
+        (the critic can be a separate agent rather than the same model wearing two hats).
+        </div>
+        """, unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# VECTOR NORMS
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "vector_norms":
+    st.title("‖·‖ Vector Norms")
+    st.markdown("""
+    <div class="concept-card">
+    A <b>norm</b> is a function that assigns a non-negative <em>length</em> or <em>size</em> to a vector.
+    Different norms measure size differently - and choosing the right one shapes how ML models learn,
+    regularize, and measure distance.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["Unit balls - geometry of norms", "Live norm calculator", "Connection to regularization"])
+
+    # ── TAB 1: Unit balls ─────────────────────────────────────────────────
+    with tab1:
+        st.markdown("### What does 'all vectors of norm = 1' look like?")
+        st.markdown(
+            "The **unit ball** is the set of all vectors **v** with ‖v‖ = 1. "
+            "Its shape reveals the norm's geometry."
+        )
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            p_val = st.slider("p  (Lp norm)", min_value=0.5, max_value=8.0, value=2.0, step=0.1)
+            show_l1 = st.checkbox("Overlay L1  (p=1)", value=True)
+            show_l2 = st.checkbox("Overlay L2  (p=2)", value=True)
+            st.markdown('<div class="formula-box">‖v‖ₚ = (|v₁|ᵖ + |v₂|ᵖ)^(1/p)</div>', unsafe_allow_html=True)
+            if p_val < 1.0:
+                st.warning("p < 1 is not a true norm (triangle inequality fails) but is used in sparse optimization.")
+            elif p_val == 1.0:
+                st.info("p = 1 → L1 norm. Diamond shape; promotes sparsity.")
+            elif p_val == 2.0:
+                st.success("p = 2 → L2 norm (Euclidean). Perfect circle.")
+            elif p_val >= 6.0:
+                st.info(f"p = {p_val:.1f} is large → approaching the L∞ norm, whose unit ball is a square: max(|v₁|, |v₂|).")
+            elif p_val < 2.0:
+                st.info(f"p = {p_val:.1f} - intermediate shape between diamond (p=1) and circle (p=2).")
+            else:
+                st.info(f"p = {p_val:.1f} - intermediate shape between circle (p=2) and square (p→∞).")
+
+        with col2:
+            # Generate unit-ball contour for current p
+            theta = np.linspace(0, 2 * np.pi, 800)
+            # Parametric: sign(cos)*|cos|^(2/p), sign(sin)*|sin|^(2/p)
+            def lp_unit_ball(p):
+                t = np.linspace(0, 2 * np.pi, 800)
+                x = np.sign(np.cos(t)) * np.abs(np.cos(t)) ** (2 / p)
+                y = np.sign(np.sin(t)) * np.abs(np.sin(t)) ** (2 / p)
+                return x, y
+
+            fig = go.Figure()
+
+            if show_l1:
+                x1, y1 = lp_unit_ball(1.0)
+                fig.add_trace(go.Scatter(x=x1, y=y1, mode="lines",
+                    line=dict(color="#E24B4A", width=1.5, dash="dash"),
+                    name="L1 (p=1)"))
+            if show_l2:
+                x2, y2 = lp_unit_ball(2.0)
+                fig.add_trace(go.Scatter(x=x2, y=y2, mode="lines",
+                    line=dict(color="#1D9E75", width=1.5, dash="dot"),
+                    name="L2 (p=2)"))
+
+            xp, yp = lp_unit_ball(p_val)
+            fig.add_trace(go.Scatter(x=xp, y=yp, mode="lines",
+                line=dict(color="#534AB7", width=3),
+                fill="toself", fillcolor="rgba(83,74,183,0.08)",
+                name=f"Lp (p={p_val:.1f})"))
+
+            fig.update_layout(
+                height=400,
+                xaxis=dict(range=[-1.5, 1.5], zeroline=True, zerolinecolor="#ccc",
+                           scaleanchor="y", title="v₁"),
+                yaxis=dict(range=[-1.5, 1.5], zeroline=True, zerolinecolor="#ccc",
+                           title="v₂"),
+                plot_bgcolor="white",
+                legend=dict(x=0.01, y=0.99),
+                margin=dict(l=40, r=20, t=20, b=40),
+            )
+            st.plotly_chart(fig, width='stretch')
+
+        st.markdown("""
+        **Key geometric intuitions:**
+        - **L1 (diamond)** - corners touch the axes; this means a solution *on* the L1 unit ball is likely to sit at a corner, which has zero in all but one coordinate → **sparsity**.
+        - **L2 (circle)** - perfectly symmetric; no preferred direction, so solutions shrink smoothly towards zero without going exactly to zero.
+        - **L∞ (square)** - measures the *largest* single coordinate: ‖v‖∞ = max(|v₁|, |v₂|).
+        - **p < 1** - the shape caves inward (non-convex); even sparser solutions but harder to optimise.
+        """)
+
+    # ── TAB 2: Live norm calculator ───────────────────────────────────────
+    with tab2:
+        st.markdown("### Move the vector - watch the norms update")
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            vx = st.slider("v₁", -5.0, 5.0, 3.0, step=0.1)
+            vy = st.slider("v₂", -5.0, 5.0, 4.0, step=0.1)
+
+            v = np.array([vx, vy])
+            l0 = int(np.sum(v != 0))          # pseudo L0 (count of non-zeros)
+            l1 = np.sum(np.abs(v))
+            l2 = np.linalg.norm(v)
+            linf = np.max(np.abs(v))
+
+            st.markdown('<div class="formula-box">‖v‖₀  =  ' + str(l0) + '  (non-zero entries)</div>', unsafe_allow_html=True)
+            st.caption("‖v‖₀ is not a true norm: scaling the vector doesn't change it (‖2v‖₀ = ‖v‖₀). "
+                       "It is still called the 'L0 norm' because it counts how sparse a vector is.")
+            st.markdown(f'<div class="formula-box">‖v‖₁  =  |{_vin(vx)}| + |{_vin(vy)}|  =  {_vout(l1)}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="formula-box">‖v‖₂  =  √({_vin(vx)}² + {_vin(vy)}²)  =  {_vout(l2)}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="formula-box">‖v‖∞  =  max(|{_vin(vx)}|, |{_vin(vy)}|)  =  {_vout(linf)}</div>', unsafe_allow_html=True)
+
+            st.markdown("---")
+            st.markdown("**Relationship (always true):**")
+            st.markdown(f"‖v‖∞ ≤ ‖v‖₂ ≤ ‖v‖₁  →  {_vout(linf)} ≤ {_vout(l2)} ≤ {_vout(l1)}")
+
+        with col2:
+            fig = go.Figure()
+
+            # Draw the norm "radius" circles / diamonds at the computed values
+            def lp_ball_scaled(p, r):
+                t = np.linspace(0, 2 * np.pi, 800)
+                x = r * np.sign(np.cos(t)) * np.abs(np.cos(t)) ** (2 / p)
+                y = r * np.sign(np.sin(t)) * np.abs(np.sin(t)) ** (2 / p)
+                return x, y
+
+            # L1 ball at radius l1
+            x1b, y1b = lp_ball_scaled(1.0, l1)
+            fig.add_trace(go.Scatter(x=x1b, y=y1b, mode="lines",
+                line=dict(color="#E24B4A", width=1.5, dash="dash"),
+                name=f"L1 ball r={l1:.2f}"))
+
+            # L2 ball at radius l2
+            x2b, y2b = lp_ball_scaled(2.0, l2)
+            fig.add_trace(go.Scatter(x=x2b, y=y2b, mode="lines",
+                line=dict(color="#1D9E75", width=1.5, dash="dot"),
+                name=f"L2 ball r={l2:.2f}"))
+
+            # The vector
+            fig.add_trace(go.Scatter(x=[0, vx], y=[0, vy], mode="lines+markers",
+                line=dict(color="#534AB7", width=3),
+                marker=dict(size=[0, 10], color="#534AB7"),
+                name=f"v = [{_vin(vx)}, {_vin(vy)}]"))
+
+            # Projections to axes (L1 path)
+            fig.add_trace(go.Scatter(
+                x=[vx, vx, 0], y=[0, vy, vy],
+                mode="lines", line=dict(color="#E24B4A", width=1.5, dash="dot"),
+                showlegend=False))
+
+            ax_range = max(abs(vx), abs(vy), l1) * 1.3 + 1
+            fig.update_layout(
+                height=420,
+                xaxis=dict(range=[-ax_range, ax_range], zeroline=True,
+                           zerolinecolor="#ccc", scaleanchor="y", title="v₁"),
+                yaxis=dict(range=[-ax_range, ax_range], zeroline=True,
+                           zerolinecolor="#ccc", title="v₂"),
+                plot_bgcolor="white",
+                legend=dict(x=0.01, y=0.99),
+                margin=dict(l=40, r=20, t=20, b=40),
+            )
+            st.plotly_chart(fig, width='stretch')
+            st.caption("The L1 ball (dashed red diamond) just touches the vector tip. "
+                       "The L2 ball (dotted green circle) also passes through the tip. "
+                       "Dotted red lines show the Manhattan path (|v₁| + |v₂|).")
+
+    # ── TAB 3: Connection to regularization ──────────────────────────────
+    with tab3:
+        st.markdown("### Why the shape of the norm determines sparsity")
+        st.markdown("""
+        In regularized training, we minimize:
+        """)
+        st.markdown('<div class="formula-box">L1 (Lasso): Loss(w) + λ·‖w‖₁ &nbsp;&nbsp;|&nbsp;&nbsp; L2 (Ridge): Loss(w) + λ·‖w‖₂²</div>', unsafe_allow_html=True)
+        st.markdown("""
+        The optimal solution is where the **loss contours** first touch the **norm ball**.
+        The geometry of the ball determines whether that touching point has zeros.
+        """)
+        st.caption("Simplification: the demo draws the ball with radius 1/λ. The real rule is only that a larger λ "
+                   "means a smaller ball - the exact radius for a given λ depends on the loss.")
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            lambda_reg = st.slider("Regularization strength λ", 0.01, 2.0, 0.5, step=0.05)
+            norm_type  = st.radio("Norm", ["L1", "L2"], horizontal=True)
+            loss_center_x = st.slider("Loss minimum  w₁*", -3.0, 3.0, 2.5, step=0.1)
+            loss_center_y = st.slider("Loss minimum  w₂*", -3.0, 3.0, 2.0, step=0.1)
+            p_reg = 1.0 if norm_type == "L1" else 2.0
+
+        with col2:
+            w1_grid = np.linspace(-3.5, 3.5, 300)
+            w2_grid = np.linspace(-3.5, 3.5, 300)
+            W1, W2  = np.meshgrid(w1_grid, w2_grid)
+
+            # Quadratic loss centred at (loss_center_x, loss_center_y)
+            Loss = (W1 - loss_center_x)**2 + 1.2*(W2 - loss_center_y)**2
+
+            # Norm ball radius = 1/lambda (larger lambda → smaller allowed region)
+            ball_r = 1.0 / lambda_reg
+
+            fig = go.Figure()
+
+            # Loss contours
+            fig.add_trace(go.Contour(
+                z=Loss, x=w1_grid, y=w2_grid,
+                contours=dict(start=0.2, end=10, size=0.6, coloring="lines"),
+                colorscale=[[0,"#c8e6c9"],[1,"#1D9E75"]],
+                line=dict(width=1), showscale=False, name="Loss contours",
+            ))
+
+            # Norm ball boundary
+            t = np.linspace(0, 2*np.pi, 800)
+            bx = ball_r * np.sign(np.cos(t)) * np.abs(np.cos(t))**(2/p_reg)
+            by = ball_r * np.sign(np.sin(t)) * np.abs(np.sin(t))**(2/p_reg)
+            fig.add_trace(go.Scatter(x=bx, y=by, mode="lines",
+                line=dict(color="#E24B4A" if norm_type=="L1" else "#534AB7", width=2.5),
+                name=f"{norm_type} ball  r={ball_r:.2f}"))
+
+            # Find approximate touching point (constrained optimum)
+            # Grid search inside ball
+            mask = (np.abs(W1)**p_reg + np.abs(W2)**p_reg) <= ball_r**p_reg
+            Loss_masked = np.where(mask, Loss, np.inf)
+            idx = np.unravel_index(np.argmin(Loss_masked), Loss_masked.shape)
+            opt_w1 = w1_grid[idx[1]]
+            opt_w2 = w2_grid[idx[0]]
+
+            fig.add_trace(go.Scatter(
+                x=[opt_w1], y=[opt_w2], mode="markers",
+                marker=dict(size=14, color="#EF9F27", symbol="star",
+                            line=dict(color="#333", width=1.5)),
+                name=f"Solution  ({opt_w1:.2f}, {opt_w2:.2f})"))
+
+            # Loss minimum (unconstrained)
+            fig.add_trace(go.Scatter(
+                x=[loss_center_x], y=[loss_center_y], mode="markers",
+                marker=dict(size=10, color="#888", symbol="x", line=dict(color="#555", width=2)),
+                name="Unconstrained min"))
+
+            fig.update_layout(
+                height=420,
+                xaxis=dict(range=[-3.5, 3.5], zeroline=True, zerolinecolor="#ccc",
+                           scaleanchor="y", title="w₁"),
+                yaxis=dict(range=[-3.5, 3.5], zeroline=True, zerolinecolor="#ccc", title="w₂"),
+                plot_bgcolor="white",
+                legend=dict(x=0.01, y=0.99, font=dict(size=11)),
+                margin=dict(l=40, r=20, t=20, b=40),
+            )
+            st.plotly_chart(fig, width='stretch')
+
+            min_inside = (abs(loss_center_x)**p_reg + abs(loss_center_y)**p_reg) <= ball_r**p_reg
+            if min_inside:
+                st.warning(f"Constraint not active: the unconstrained minimum ({loss_center_x:.1f}, {loss_center_y:.1f}) "
+                           f"is already inside the {norm_type} ball (r = {ball_r:.2f}), so the solution is the minimum "
+                           "itself and regularization changes nothing. Increase λ to shrink the ball.")
+            elif norm_type == "L1":
+                if abs(opt_w1) < 0.05 or abs(opt_w2) < 0.05:
+                    st.success(f"★ L1 solution sits at a **corner** of the diamond → one weight is ~0 (sparse!)  "
+                               f"w = ({opt_w1:.2f}, {opt_w2:.2f})")
+                else:
+                    st.info(f"Solution: w = ({opt_w1:.2f}, {opt_w2:.2f}) - on an edge of the diamond, so both weights are non-zero. "
+                            "Move the loss minimum closer to one axis (e.g. w₁* = 3, w₂* = 0.5) to see a corner solution.")
+            else:
+                st.info(f"★ L2 solution is on the **smooth circle** → both weights shrink towards 0, but typically "
+                        f"neither reaches exactly 0 (only if it was already 0 at the unconstrained minimum).  "
+                        f"w = ({opt_w1:.2f}, {opt_w2:.2f})")
+
+        st.markdown("""
+        **Take-aways:**
+        | | L1 norm | L2 norm |
+        |---|---|---|
+        | Penalty term | λ(\\|w₁\\| + \\|w₂\\|) | λ(w₁² + w₂²) |
+        | Ball shape | Diamond (corners on axes) | Circle (smooth) |
+        | Optimal solution | Likely at a corner → **sparse weights** | On the curve → **small but non-zero weights** |
+        | Use when | You want feature selection | You want all features to contribute a little |
+        | Also called | Lasso regularization | Ridge regularization |
+        """)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# EMBEDDINGS
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "embeddings":
+    st.title("🗺️ Embeddings")
+    st.markdown("""
+    <div class="concept-card">
+    An <b>embedding</b> maps a discrete object - a word, sentence, image, user - into a
+    dense vector of real numbers so that <em>similar things end up close together</em> in
+    that space. The geometry of the space encodes meaning: direction, distance and angle
+    all carry information the model can learn from.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["Word2Vec vs GloVe", "Cosine similarity explorer", "Static vs contextual"])
+
+    # ── TAB 1: Word2Vec vs GloVe ─────────────────────────────────────────
+    with tab1:
+        st.markdown("### How are embeddings trained?")
+
+        col_a, col_b = st.columns(2)
+
+        with col_a:
+            st.markdown("#### Word2Vec  *(Google, 2013)*")
+            st.markdown("""
+            **Core idea:** train a shallow neural network to *predict* words from their neighbours.
+            The hidden-layer weights become the embedding vectors.
+
+            Two flavours:
+            - **Skip-gram** - given centre word, predict surrounding context words
+            - **CBOW** - given context words, predict the centre word
+
+            **Learning signal:** local context windows (e.g. ±2 words).
+            The model never sees global corpus statistics - only one window at a time.
+            """)
+            st.markdown('<div class="formula-box">P(context | word) ≈ softmax(E_word · E_context^T)</div>', unsafe_allow_html=True)
+
+            # Illustrate Skip-gram window
+            sentence = ["the", "cat", "sat", "on", "the", "mat"]
+            centre_idx = st.slider("Centre word (Skip-gram)", 1, 4, 2, key="w2v_centre")
+            window = 2
+
+            fig_sg = go.Figure()
+            for i, word in enumerate(sentence):
+                dist = abs(i - centre_idx)
+                if i == centre_idx:
+                    color, size, label = "#534AB7", 20, f"<b>{word}</b><br>(target)"
+                elif dist <= window:
+                    color, size, label = "#1D9E75", 14, f"{word}<br>(context)"
+                else:
+                    color, size, label = "#ccc", 10, word
+
+                fig_sg.add_trace(go.Scatter(
+                    x=[i], y=[0], mode="markers+text",
+                    marker=dict(size=size, color=color),
+                    text=[word], textposition="top center",
+                    textfont=dict(color=color, size=12),
+                    showlegend=False
+                ))
+                # window bracket lines
+                if dist == window and dist > 0:
+                    fig_sg.add_shape(type="line", x0=centre_idx, y0=-0.3, x1=i, y1=-0.3,
+                        line=dict(color="#1D9E75", width=1.5, dash="dot"))
+
+            fig_sg.update_layout(
+                height=160, plot_bgcolor="white",
+                xaxis=dict(visible=False, range=[-0.5, 5.5]),
+                yaxis=dict(visible=False, range=[-0.6, 0.6]),
+                margin=dict(l=10, r=10, t=10, b=10)
+            )
+            st.plotly_chart(fig_sg, width='stretch')
+            st.caption(f"Window = ±{window}. Purple = target word; green = context words used for training.")
+
+        with col_b:
+            st.markdown("#### GloVe  *(Stanford, 2014)*")
+            st.markdown("""
+            **Core idea:** factorize the *global* word co-occurrence matrix.
+            Build a table of how often every word pair (i, j) appears within a window
+            across the *entire* corpus, then find vectors whose dot product matches
+            the log of that count.
+
+            **Learning signal:** corpus-wide statistics - every sentence contributes
+            to the same table before any vectors are learned.
+            """)
+            st.markdown('<div class="formula-box">w_i · w_j + b_i + b_j ≈ log X_ij</div>', unsafe_allow_html=True)
+            st.markdown("*X_ij = co-occurrence count of words i and j*")
+
+            # Co-occurrence matrix mini-demo
+            words_demo = ["king", "queen", "man", "woman", "crown"]
+            # Plausible toy co-occurrence counts
+            co_matrix = np.array([
+                [0,  15, 20,  8, 30],
+                [15,  0,  8, 22, 28],
+                [20,  8,  0, 35,  5],
+                [ 8, 22, 35,  0,  4],
+                [30, 28,  5,  4,  0],
+            ], dtype=float)
+
+            fig_co = go.Figure(data=go.Heatmap(
+                z=co_matrix,
+                x=words_demo, y=words_demo,
+                colorscale="Blues",
+                text=co_matrix.astype(int),
+                texttemplate="%{text}",
+                showscale=False,
+            ))
+            fig_co.update_layout(
+                height=260, margin=dict(l=10, r=10, t=30, b=10),
+                title=dict(text="Toy co-occurrence matrix X_ij", font=dict(size=12)),
+            )
+            st.plotly_chart(fig_co, width='stretch')
+            st.caption("GloVe optimises vectors so w_i · w_j ≈ log(X_ij). High counts → large dot product (words that appear together, e.g. king-crown - not necessarily synonyms).")
+
+        st.markdown("---")
+        st.markdown("### Side-by-side comparison")
+        import pandas as pd
+        comparison = [
+            ("Learning signal",    "Local context windows",                   "Global co-occurrence matrix"),
+            ("Training objective", "Predict neighbour words (classification)", "Fit log co-occurrence counts (regression)"),
+            ("Model type",         "Shallow neural network",                  "Weighted least-squares factorization"),
+            ("Memory during train","Low - streams one window at a time",       "High - builds a large (sparse) N×N co-occurrence table first"),
+            ("Strengths",          "Syntactic patterns; fast to train",        "Semantic analogies; leverages full corpus"),
+            ("Weaknesses",         "Misses long-range corpus statistics",      "Memory-intensive for large vocabularies"),
+            ("Both share",         "Dense fixed-size vectors per word",        "Dense fixed-size vectors per word"),
+            ("Both share",         "Semantic arithmetic (king−man+woman≈queen)", "Semantic arithmetic (king−man+woman≈queen)"),
+            ("Both share",         "Static - one vector per word regardless of context", "Static - one vector per word regardless of context"),
+        ]
+        df_cmp = pd.DataFrame(comparison, columns=["Aspect", "Word2Vec", "GloVe"])
+        st.dataframe(df_cmp, width='stretch', hide_index=True)
+
+    # ── TAB 2: Cosine similarity explorer ────────────────────────────────
+    with tab2:
+        st.markdown("### Cosine similarity - meaning as angle")
+        st.markdown("""
+        The standard way to compare two embeddings is **cosine similarity** - the cosine
+        of the angle between them. It ignores magnitude (a long and a short vector pointing
+        the same way are equally similar).
+        """)
+        st.markdown('<div class="formula-box">cos(θ) = (a · b) / (‖a‖ · ‖b‖)  ∈  [−1, 1]</div>', unsafe_allow_html=True)
+
+        # Toy 2-D word embeddings (hand-crafted to illustrate clusters)
+        toy_words = {
+            "king":   np.array([ 2.1,  1.8]),
+            "queen":  np.array([ 1.9,  2.2]),
+            "man":    np.array([ 1.8, -0.3]),
+            "woman":  np.array([ 1.6,  0.2]),
+            "prince": np.array([ 2.3,  1.2]),
+            "dog":    np.array([-1.5, -1.8]),
+            "cat":    np.array([-1.8, -1.4]),
+            "puppy":  np.array([-1.3, -2.1]),
+            "run":    np.array([-0.5,  2.2]),
+            "walk":   np.array([-0.3,  1.9]),
+            "sprint": np.array([-0.7,  2.5]),
+        }
+
+        word_list = list(toy_words.keys())
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            word_a = st.selectbox("Word A", word_list, index=0)
+            word_b = st.selectbox("Word B", word_list, index=1)
+
+            va = toy_words[word_a]
+            vb = toy_words[word_b]
+            cos_sim = np.dot(va, vb) / (np.linalg.norm(va) * np.linalg.norm(vb))
+            angle   = np.degrees(np.arccos(np.clip(cos_sim, -1, 1)))
+
+            st.metric("Cosine similarity", f"{cos_sim:.3f}")
+            st.metric("Angle between vectors", f"{angle:.1f}°")
+
+            if cos_sim > 0.95:
+                st.success("Nearly identical direction - very similar meaning.")
+            elif cos_sim > 0.7:
+                st.success("High similarity - related concepts.")
+            elif cos_sim > 0.3:
+                st.info("Moderate similarity - loosely related.")
+            elif cos_sim > 0:
+                st.warning("Weak similarity - different topics.")
+            else:
+                st.error("Negative similarity - opposite directions.")
+
+            st.markdown("---")
+            st.markdown("**All similarities to Word A:**")
+            sims = {w: np.dot(va, toy_words[w]) / (np.linalg.norm(va) * np.linalg.norm(toy_words[w]))
+                    for w in word_list if w != word_a}
+            for w, s in sorted(sims.items(), key=lambda x: -x[1]):
+                bar = "█" * int((s + 1) * 10)
+                st.markdown(f"`{w:<8}` {s:+.2f}  {bar}")
+
+        with col2:
+            fig = go.Figure()
+
+            # Plot all word vectors as points
+            clusters = {
+                "royalty": ["king","queen","prince"],
+                "gender":  ["man","woman"],
+                "animals": ["dog","cat","puppy"],
+                "motion":  ["run","walk","sprint"],
+            }
+            cluster_colors = {"royalty":"#534AB7","gender":"#D4537E","animals":"#1D9E75","motion":"#EF9F27"}
+
+            for cluster, members in clusters.items():
+                xs = [toy_words[w][0] for w in members]
+                ys = [toy_words[w][1] for w in members]
+                fig.add_trace(go.Scatter(
+                    x=xs, y=ys, mode="markers+text",
+                    text=members, textposition="top center",
+                    marker=dict(size=12, color=cluster_colors[cluster]),
+                    name=cluster, textfont=dict(size=11)
+                ))
+
+            # Highlight selected pair with arrows from origin
+            for word, color, label in [(word_a, "#222", "A"), (word_b, "#E24B4A", "B")]:
+                v = toy_words[word]
+                fig.add_annotation(
+                    x=v[0], y=v[1], ax=0, ay=0,
+                    xref="x", yref="y", axref="x", ayref="y",
+                    showarrow=True,
+                    arrowhead=3, arrowwidth=2.5, arrowcolor=color,
+                    text=f"<b>{label}</b>", font=dict(color=color, size=13),
+                )
+
+            # Arc for angle
+            theta_a = np.arctan2(va[1], va[0])
+            theta_b = np.arctan2(vb[1], vb[0])
+            arc_r   = 0.5
+            d_theta = (theta_b - theta_a + np.pi) % (2*np.pi) - np.pi   # signed shortest turn from A to B
+            arc_t   = theta_a + np.linspace(0, d_theta, 50)
+            fig.add_trace(go.Scatter(
+                x=arc_r * np.cos(arc_t),
+                y=arc_r * np.sin(arc_t),
+                mode="lines", line=dict(color="#999", width=1.5, dash="dot"),
+                showlegend=False
+            ))
+
+            fig.update_layout(
+                height=420,
+                xaxis=dict(range=[-2.8, 3.2], zeroline=True, zerolinecolor="#ddd", title="dim 1"),
+                yaxis=dict(range=[-2.8, 3.2], zeroline=True, zerolinecolor="#ddd",
+                           title="dim 2", scaleanchor="x"),
+                plot_bgcolor="white",
+                legend=dict(x=0.01, y=0.01),
+                margin=dict(l=40, r=20, t=20, b=40),
+            )
+            st.plotly_chart(fig, width='stretch')
+            st.caption("Toy 2-D embeddings - clusters show semantic grouping. "
+                       "Arrows show the two selected words; the dotted arc is the angle between them.")
+
+        st.markdown("### The famous analogy: king − man + woman ≈ queen")
+        v_analogy = toy_words["king"] - toy_words["man"] + toy_words["woman"]
+        sims_analogy = {w: np.dot(v_analogy, toy_words[w]) / (np.linalg.norm(v_analogy) * np.linalg.norm(toy_words[w]))
+                        for w in word_list if w not in ("king", "man", "woman")}   # input words excluded, as in Word2Vec
+        top3 = sorted(sims_analogy.items(), key=lambda x: -x[1])[:3]
+        st.markdown(f"In this toy space: **king − man + woman** is closest to → "
+                    f"**{top3[0][0]}** (sim={top3[0][1]:.2f}), "
+                    f"{top3[1][0]} ({top3[1][1]:.2f}), "
+                    f"{top3[2][0]} ({top3[2][1]:.2f})")
+        st.caption("The three input words are left out of the ranking - standard practice in Word2Vec tools, "
+                   "otherwise the answer is often just one of the inputs.")
+
+    # ── TAB 3: Static vs Contextual ──────────────────────────────────────
+    with tab3:
+        st.markdown("### The fundamental limitation of Word2Vec and GloVe")
+        st.markdown("""
+        Both Word2Vec and GloVe produce **one fixed vector per word** - regardless of context.
+        The word *"bank"* gets the same vector whether you mean a river bank or a financial bank.
+        """)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("#### Static embeddings (Word2Vec / GloVe)")
+            st.markdown("""
+            - One vector per word, learned once, frozen
+            - Fast and memory-efficient at inference
+            - Cannot distinguish word sense from context
+            - Good for: bag-of-words models, similarity search, recommendation
+            """)
+            st.markdown('<div class="formula-box">embed("bank") → [0.3, −0.7, 1.2, ...]<br><small>same vector in every sentence</small></div>', unsafe_allow_html=True)
+
+        with col2:
+            st.markdown("#### Contextual embeddings (BERT, GPT, etc.)")
+            st.markdown("""
+            - A different vector per token *per context*
+            - Computed by a full transformer forward pass
+            - Captures polysemy, syntax, long-range dependencies
+            - Good for: NLU, QA, classification, generation
+            """)
+            st.markdown('<div class="formula-box">embed("bank", "river bank") → [0.1, 0.9, −0.2, ...]<br>embed("bank", "savings bank") → [0.8, −0.1, 0.5, ...]</div>', unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.markdown("### Evolution of embeddings")
+
+        timeline = [
+            ("2003", "Neural LM\n(Bengio et al.)", "First dense word vectors as by-product of language modelling", "#ccc"),
+            ("2013", "Word2Vec\n(Mikolov, Google)", "Efficient skip-gram & CBOW; popularised word embeddings", "#534AB7"),
+            ("2014", "GloVe\n(Pennington, Stanford)", "Global co-occurrence matrix factorization", "#534AB7"),
+            ("2018", "ELMo\n(Peters et al.)", "First contextual embeddings from bi-directional LSTMs", "#1D9E75"),
+            ("2018", "BERT\n(Devlin, Google)", "Transformer encoder; masked language modelling; fine-tunable", "#1D9E75"),
+            ("2019+", "Sentence-BERT,\nOpenAI Ada, etc.", "Optimised for sentence-level similarity and retrieval", "#EF9F27"),
+        ]
+
+        fig_tl = go.Figure()
+        fig_tl.update_layout(
+            height=280,
+            xaxis=dict(visible=False, range=[-0.5, len(timeline) - 0.5]),
+            yaxis=dict(visible=False, range=[-1, 3]),
+            plot_bgcolor="white",
+            margin=dict(l=10, r=10, t=20, b=10),
+        )
+
+        for i, (year, name, desc, color) in enumerate(timeline):
+            fig_tl.add_shape(type="circle",
+                x0=i-0.35, y0=0.6, x1=i+0.35, y1=1.4,
+                fillcolor=color, line=dict(color=color))
+            fig_tl.add_annotation(x=i, y=1.0, text=f"<b>{year}</b>",
+                showarrow=False, font=dict(size=10, color="white"))
+            fig_tl.add_annotation(x=i, y=0.2, text=name.replace("\n","<br>"),
+                showarrow=False, font=dict(size=9, color="#333"), align="center")
+            fig_tl.add_annotation(x=i, y=2.2, text=desc,
+                showarrow=False, font=dict(size=8, color="#555"), align="center",
+                width=130)
+            if i < len(timeline) - 1:
+                fig_tl.add_shape(type="line", x0=i+0.35, y0=1.0,
+                    x1=i+0.65, y1=1.0, line=dict(color="#aaa", width=2))
+
+        st.plotly_chart(fig_tl, width='stretch')
+
+        st.markdown("""
+        **When to use which:**
+        | Use case | Best choice |
+        |---|---|
+        | Large-scale similarity search / ANN index | Static (Word2Vec, GloVe) for words; sentence embeddings (Sentence-BERT, Ada) for text |
+        | Text classification with limited compute | Static + simple classifier |
+        | Named entity recognition, QA, NLU | Contextual (BERT family) |
+        | Sentence / document retrieval (RAG) | Sentence-BERT, Ada-002, or similar |
+        | Generation tasks | GPT-style contextual (decoder) |
+        """)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# VECTOR SPACES
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "vector_spaces":
+    st.title("🧭 Vector Spaces")
+    st.markdown("""
+    <div class="concept-card">
+    A <b>vector space</b> is the mathematical stage on which ML happens.
+    Understanding <em>basis</em>, <em>span</em>, <em>projection</em> and <em>orthogonality</em>
+    gives you the intuition behind PCA, attention heads, embeddings and least-squares - 
+    all of which are fundamentally about finding the right directions in a space.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "Unit vectors & normalisation",
+        "Basis & span",
+        "Projection",
+        "Orthogonality & orthonormality",
+    ])
+
+    # ── TAB 1: Unit vectors ───────────────────────────────────────────────
+    with tab1:
+        st.markdown("### Unit vectors - stripping away magnitude, keeping direction")
+        st.markdown("""
+        A **unit vector** has magnitude exactly 1. It encodes pure direction.
+        Normalising a vector means dividing it by its own magnitude to produce its unit vector.
+        """)
+        st.markdown('<div class="formula-box">v̂ = v / ‖v‖₂     so that  ‖v̂‖₂ = 1</div>', unsafe_allow_html=True)
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            vx = st.slider("v₁", -4.0, 4.0, 3.0, step=0.1, key="uv_x")
+            vy = st.slider("v₂", -4.0, 4.0, 2.0, step=0.1, key="uv_y")
+            mag = np.sqrt(vx**2 + vy**2)
+            ux, uy = (vx / mag, vy / mag) if mag > 1e-9 else (0.0, 0.0)
+
+            st.markdown("**Original vector v:**")
+            st.markdown(f'<div class="formula-box">[{vx:.2f}, {vy:.2f}]<br>‖v‖ = {mag:.3f}</div>', unsafe_allow_html=True)
+            st.markdown("**Unit vector v̂:**")
+            if mag > 1e-9:
+                st.markdown(f'<div class="formula-box">[{ux:.3f}, {uy:.3f}]<br>‖v̂‖ = {np.sqrt(ux**2+uy**2):.3f}</div>', unsafe_allow_html=True)
+            else:
+                st.warning("v is the zero vector - it has no direction, so its unit vector v̂ is undefined.")
+
+            st.markdown("---")
+            st.markdown("**Standard basis unit vectors:**")
+            st.markdown('<div class="formula-box">ê₁ = [1, 0]&nbsp;&nbsp;&nbsp;ê₂ = [0, 1]</div>', unsafe_allow_html=True)
+            st.caption("Every vector is a linear combination of the standard basis: v = v₁ê₁ + v₂ê₂")
+
+        with col2:
+            fig = go.Figure()
+            lim = max(abs(vx), abs(vy), 1.5) + 0.8
+
+            # Unit circle
+            theta_c = np.linspace(0, 2*np.pi, 200)
+            fig.add_trace(go.Scatter(
+                x=np.cos(theta_c), y=np.sin(theta_c),
+                mode="lines", line=dict(color="#ddd", width=1.5, dash="dot"),
+                name="Unit circle  ‖v‖=1", showlegend=True
+            ))
+
+            # Original vector
+            fig.add_annotation(x=vx, y=vy, ax=0, ay=0,
+                xref="x", yref="y", axref="x", ayref="y",
+                showarrow=True, arrowhead=3, arrowwidth=3, arrowcolor="#534AB7",
+                text=f"<b>v</b> ‖v‖={mag:.2f}", font=dict(color="#534AB7", size=12),
+                bgcolor="rgba(255,255,255,0.7)"
+            )
+
+            # Unit vector
+            fig.add_annotation(x=ux, y=uy, ax=0, ay=0,
+                xref="x", yref="y", axref="x", ayref="y",
+                showarrow=True, arrowhead=3, arrowwidth=2.5, arrowcolor="#1D9E75",
+                text=f"<b>v̂</b> ‖v̂‖=1", font=dict(color="#1D9E75", size=12),
+                bgcolor="rgba(255,255,255,0.7)"
+            )
+
+            # Standard basis
+            for ex, ey, label in [(1,0,"ê₁"),(0,1,"ê₂")]:
+                fig.add_annotation(x=ex, y=ey, ax=0, ay=0,
+                    xref="x", yref="y", axref="x", ayref="y",
+                    showarrow=True, arrowhead=2, arrowwidth=1.5, arrowcolor="#EF9F27",
+                    text=label, font=dict(color="#EF9F27", size=12),
+                )
+
+            fig.update_layout(
+                height=420,
+                xaxis=dict(range=[-lim,lim], zeroline=True, zerolinecolor="#ccc",
+                           scaleanchor="y", title="v₁"),
+                yaxis=dict(range=[-lim,lim], zeroline=True, zerolinecolor="#ccc", title="v₂"),
+                plot_bgcolor="white", legend=dict(x=0.01, y=0.99),
+                margin=dict(l=40,r=20,t=20,b=40),
+            )
+            st.plotly_chart(fig, width='stretch')
+            st.caption("Purple = original vector v. Green = unit vector v̂ (always touches unit circle). Orange = standard basis vectors.")
+
+        st.markdown("""
+        **Why unit vectors matter in ML:**
+        - **Cosine similarity** compares embeddings as unit vectors - magnitude is normalised away so only direction counts
+        - **Attention** in transformers projects queries and keys, then computes dot products - the scale-dot-product
+          uses √d to keep unit-scale variance
+        - **Weight initialisation** schemes (Xavier, He) scale the random weights so the *variance of the signal*
+          stays roughly constant from layer to layer - neither blowing up nor shrinking to zero
+        """)
+
+    # ── TAB 2: Basis & span ───────────────────────────────────────────────
+    with tab2:
+        st.markdown("### Basis vectors and the span they define")
+        st.markdown("""
+        A **basis** is a minimal set of vectors that can reach every point in the space
+        through linear combinations. The **span** of a set of vectors is all the points
+        you can reach by scaling and adding them.
+        """)
+        st.markdown('<div class="formula-box">span{b₁, b₂} = { α·b₁ + β·b₂  |  α, β ∈ ℝ }</div>', unsafe_allow_html=True)
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.markdown("**Basis vector b₁:**")
+            b1x = st.slider("b₁ₓ", -3.0, 3.0, 1.0, step=0.1, key="bs_b1x")
+            b1y = st.slider("b₁ᵧ", -3.0, 3.0, 0.0, step=0.1, key="bs_b1y")
+            st.markdown("**Basis vector b₂:**")
+            b2x = st.slider("b₂ₓ", -3.0, 3.0, 0.0, step=0.1, key="bs_b2x")
+            b2y = st.slider("b₂ᵧ", -3.0, 3.0, 1.0, step=0.1, key="bs_b2y")
+            st.markdown("**Target vector v = α·b₁ + β·b₂:**")
+            alpha = st.slider("α (weight on b₁)", -3.0, 3.0, 1.5, step=0.1, key="bs_alpha")
+            beta  = st.slider("β (weight on b₂)", -3.0, 3.0, 1.0, step=0.1, key="bs_beta")
+
+            # Check linear independence
+            det = b1x*b2y - b1y*b2x
+            vx_t = alpha*b1x + beta*b2x
+            vy_t = alpha*b1y + beta*b2y
+
+            st.markdown(f'<div class="formula-box">v = {_vin(alpha)}·b₁ + {_vin(beta)}·b₂<br>= [{_vout(vx_t)}, {_vout(vy_t)}]</div>', unsafe_allow_html=True)
+
+            if abs(det) < 0.05:
+                st.error("⚠️ det ≈ 0 - these vectors are linearly dependent! They only span a line "
+                         "(or just the origin, if both are zero), not the full 2D plane.")
+            else:
+                st.success(f"✓ Linearly independent (det = {det:.2f}) - they span all of ℝ².")
+
+        with col2:
+            fig = go.Figure()
+            lim = max(4.5, abs(vx_t) + 1, abs(vy_t) + 1, abs(b1x) + 1, abs(b1y) + 1, abs(b2x) + 1, abs(b2y) + 1)
+
+            # Shade the span region (parallelogram grid)
+            grid_a = np.arange(-3, 4)   # whole steps, so grid crossings are integer α, β
+            grid_b = np.arange(-3, 4)
+            for a in grid_a:
+                xs = [a*b1x + g*b2x for g in [-3,3]]
+                ys = [a*b1y + g*b2y for g in [-3,3]]
+                fig.add_trace(go.Scatter(x=xs, y=ys, mode="lines",
+                    line=dict(color="rgba(83,74,183,0.12)", width=1), showlegend=False))
+            for b in grid_b:
+                xs = [g*b1x + b*b2x for g in [-3,3]]
+                ys = [g*b1y + b*b2y for g in [-3,3]]
+                fig.add_trace(go.Scatter(x=xs, y=ys, mode="lines",
+                    line=dict(color="rgba(83,74,183,0.12)", width=1), showlegend=False))
+
+            # Basis vectors
+            for (bvx, bvy, label, color) in [(b1x,b1y,"b₁","#534AB7"),(b2x,b2y,"b₂","#E24B4A")]:
+                fig.add_annotation(x=bvx, y=bvy, ax=0, ay=0,
+                    xref="x", yref="y", axref="x", ayref="y",
+                    showarrow=True, arrowhead=3, arrowwidth=3, arrowcolor=color,
+                    text=f"<b>{label}</b>", font=dict(color=color, size=13))
+
+            # Parallelogram components
+            fig.add_trace(go.Scatter(
+                x=[0, alpha*b1x, vx_t],
+                y=[0, alpha*b1y, vy_t],
+                mode="lines", line=dict(color="#534AB7", width=1.5, dash="dot"), showlegend=False))
+            fig.add_trace(go.Scatter(
+                x=[0, beta*b2x, vx_t],
+                y=[0, beta*b2y, vy_t],
+                mode="lines", line=dict(color="#E24B4A", width=1.5, dash="dot"), showlegend=False))
+
+            # Result vector
+            fig.add_annotation(x=vx_t, y=vy_t, ax=0, ay=0,
+                xref="x", yref="y", axref="x", ayref="y",
+                showarrow=True, arrowhead=3, arrowwidth=2.5, arrowcolor="#1D9E75",
+                text=f"<b>v</b> [{vx_t:.1f},{vy_t:.1f}]", font=dict(color="#1D9E75", size=12))
+
+            fig.update_layout(
+                height=430,
+                xaxis=dict(range=[-lim,lim], zeroline=True, zerolinecolor="#ccc", scaleanchor="y", title="x"),
+                yaxis=dict(range=[-lim,lim], zeroline=True, zerolinecolor="#ccc", title="y"),
+                plot_bgcolor="white", showlegend=False,
+                margin=dict(l=40,r=20,t=20,b=40),
+            )
+            st.plotly_chart(fig, width='stretch')
+            st.caption("Grid lines show the coordinate system defined by b₁ and b₂. "
+                       "The green vector v is reached by stepping α times along b₁ and β times along b₂.")
+
+        st.markdown("""
+        **In ML:**
+        - **PCA** finds a new basis aligned with the directions of maximum variance
+        - **Embeddings** live in a high-dimensional vector space - the basis is learned, not hand-crafted
+        - **Linear dependence** means redundant features - a sign of multicollinearity in regression
+        """)
+
+    # ── TAB 3: Projection ─────────────────────────────────────────────────
+    with tab3:
+        st.markdown("### Projecting one vector onto another")
+        st.markdown("""
+        The **projection** of **a** onto **b** is the shadow **a** casts along the direction of **b**.
+        It tells you: *how much of **a** lies in the direction of **b**?*
+        """)
+        st.markdown('<div class="formula-box">proj_b(a) = (a·b / ‖b‖²) · b = (a·b̂) · b̂</div>', unsafe_allow_html=True)
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            ax_p = st.slider("a₁", -4.0, 4.0,  3.0, step=0.1, key="pr_ax")
+            ay_p = st.slider("a₂", -4.0, 4.0,  2.5, step=0.1, key="pr_ay")
+            bx_p = st.slider("b₁", -4.0, 4.0,  4.0, step=0.1, key="pr_bx")
+            by_p = st.slider("b₂", -4.0, 4.0,  1.0, step=0.1, key="pr_by")
+
+            a = np.array([ax_p, ay_p])
+            b = np.array([bx_p, by_p])
+            b_norm2 = np.dot(b, b)
+
+            if b_norm2 < 1e-9:
+                st.warning("b is the zero vector - projection undefined.")
+                scalar_proj = 0.0
+                proj_vec = np.array([0.0, 0.0])
+                perp_vec = a.copy()
+            else:
+                scalar_proj = np.dot(a, b) / np.sqrt(b_norm2)
+                proj_vec = (np.dot(a, b) / b_norm2) * b
+                perp_vec = a - proj_vec
+
+            st.markdown("**Scalar projection** (signed length along b̂):")
+            st.markdown(f'<div class="formula-box">a·b̂ = {_vout(scalar_proj)}</div>', unsafe_allow_html=True)
+            st.markdown("**Vector projection** (the actual shadow vector):")
+            st.markdown(f'<div class="formula-box">proj_b(a) = [{_vout(proj_vec[0])}, {_vout(proj_vec[1])}]</div>', unsafe_allow_html=True)
+            st.markdown("**Perpendicular component** a⊥:")
+            st.markdown(f'<div class="formula-box">a⊥ = [{_vout(perp_vec[0])}, {_vout(perp_vec[1])}]</div>', unsafe_allow_html=True)
+            st.caption("a = proj_b(a) + a⊥   (decomposition is always exact)")
+
+        with col2:
+            fig = go.Figure()
+            lim = max(abs(ax_p), abs(ay_p), abs(bx_p), abs(by_p)) + 1.2
+
+            # b vector (extended as reference line)
+            b_hat = b / (np.sqrt(b_norm2) + 1e-9)
+            fig.add_trace(go.Scatter(
+                x=[-lim*b_hat[0]*0.9, lim*b_hat[0]*0.9],
+                y=[-lim*b_hat[1]*0.9, lim*b_hat[1]*0.9],
+                mode="lines", line=dict(color="#E24B4A", width=1, dash="dot"),
+                showlegend=False
+            ))
+
+            # a vector
+            fig.add_annotation(x=ax_p, y=ay_p, ax=0, ay=0,
+                xref="x", yref="y", axref="x", ayref="y",
+                showarrow=True, arrowhead=3, arrowwidth=3, arrowcolor="#534AB7",
+                text="<b>a</b>", font=dict(color="#534AB7", size=14))
+
+            # b vector
+            fig.add_annotation(x=bx_p, y=by_p, ax=0, ay=0,
+                xref="x", yref="y", axref="x", ayref="y",
+                showarrow=True, arrowhead=3, arrowwidth=3, arrowcolor="#E24B4A",
+                text="<b>b</b>", font=dict(color="#E24B4A", size=14))
+
+            # projection vector
+            fig.add_annotation(x=proj_vec[0], y=proj_vec[1], ax=0, ay=0,
+                xref="x", yref="y", axref="x", ayref="y",
+                showarrow=True, arrowhead=3, arrowwidth=2.5, arrowcolor="#1D9E75",
+                text="<b>proj</b>", font=dict(color="#1D9E75", size=12))
+
+            # perpendicular drop line (from a to proj)
+            fig.add_trace(go.Scatter(
+                x=[proj_vec[0], ax_p],
+                y=[proj_vec[1], ay_p],
+                mode="lines", line=dict(color="#EF9F27", width=2, dash="dash"),
+                name="a⊥ (perpendicular)"
+            ))
+
+            # right-angle marker at proj_vec
+            if b_norm2 > 1e-9 and np.linalg.norm(perp_vec) > 1e-6:
+                perp_dir = np.array([-b_hat[1], b_hat[0]]) * 0.25
+                if np.dot(perp_dir, perp_vec) < 0:   # put the marker on the same side as a
+                    perp_dir = -perp_dir
+                corner = proj_vec + perp_dir
+                fig.add_trace(go.Scatter(
+                    x=[proj_vec[0], corner[0], corner[0]+b_hat[0]*0.25],
+                    y=[proj_vec[1], corner[1], corner[1]+b_hat[1]*0.25],
+                    mode="lines", line=dict(color="#aaa", width=1.5),
+                    showlegend=False
+                ))
+
+            fig.update_layout(
+                height=430,
+                xaxis=dict(range=[-lim,lim], zeroline=True, zerolinecolor="#ccc",
+                           scaleanchor="y", title="x"),
+                yaxis=dict(range=[-lim,lim], zeroline=True, zerolinecolor="#ccc", title="y"),
+                plot_bgcolor="white",
+                legend=dict(x=0.01, y=0.99),
+                margin=dict(l=40,r=20,t=20,b=40),
+            )
+            st.plotly_chart(fig, width='stretch')
+            st.caption("Green = projection of a onto b (the shadow). "
+                       "Orange dashed = perpendicular component a⊥. Right-angle marker confirms they are perpendicular.")
+
+        st.markdown("""
+        **Why projection is everywhere in ML:**
+        | Concept | What's being projected |
+        |---|---|
+        | **PCA** | Data points projected onto principal components (eigenvectors) |
+        | **Least-squares regression** | Target y projected onto the column space of X |
+        | **Attention** | Queries projected onto key directions to get attention scores |
+        | **Cosine similarity** | Measures how much one embedding projects onto another |
+        | **Gram-Schmidt** | Builds orthogonal basis by repeatedly subtracting projections |
+        """)
+
+    # ── TAB 4: Orthogonality & orthonormality ─────────────────────────────
+    with tab4:
+        st.markdown("### Orthogonality - vectors at right angles")
+        st.markdown("""
+        Two vectors are **orthogonal** if their dot product is zero - they share no component
+        in common. A set of vectors is **orthonormal** if they are *all orthogonal to each other*
+        and *each has magnitude 1*.
+        """)
+
+        col1, col2 = st.columns([1,1])
+        with col1:
+            st.markdown('<div class="formula-box">a ⊥ b  ⟺  a · b = 0</div>', unsafe_allow_html=True)
+            st.markdown('<div class="formula-box">Orthonormal:  bᵢ · bⱼ = δᵢⱼ<br><small>(1 if i=j, 0 if i≠j)</small></div>', unsafe_allow_html=True)
+        with col2:
+            st.markdown("""
+            **Orthogonal** → dot product = 0, magnitudes can be anything
+
+            **Orthonormal** → dot product = 0 AND each vector is a unit vector
+
+            The standard basis {ê₁=[1,0], ê₂=[0,1]} is orthonormal.
+            """)
+
+        st.markdown("---")
+        st.markdown("### Interactive: build an orthogonal pair")
+        col1, col2 = st.columns([1,2])
+        with col1:
+            ox = st.slider("v₁", -3.0, 3.0, 2.0, step=0.1, key="orth_x")
+            oy = st.slider("v₂", -3.0, 3.0, 1.0, step=0.1, key="orth_y")
+
+            v1 = np.array([ox, oy])
+            # Perpendicular vector is always [-oy, ox]
+            v2 = np.array([-oy, ox])
+            v1_unit = v1 / (np.linalg.norm(v1) + 1e-9)
+            v2_unit = v2 / (np.linalg.norm(v2) + 1e-9)
+            dot_check = np.dot(v1, v2)
+
+            st.markdown("**v** (your vector):")
+            st.markdown(f'<div class="formula-box">[{ox:.2f}, {oy:.2f}]  ‖v‖={np.linalg.norm(v1):.3f}</div>', unsafe_allow_html=True)
+            st.markdown("**v⊥** (auto-computed orthogonal):")
+            st.markdown(f'<div class="formula-box">[{v2[0]:.2f}, {v2[1]:.2f}]  ‖v⊥‖={np.linalg.norm(v2):.3f}</div>', unsafe_allow_html=True)
+            st.markdown("**Dot product check:**")
+            st.markdown(f'<div class="formula-box">v · v⊥ = {dot_check:.6f} ≈ 0 ✓</div>', unsafe_allow_html=True)
+            st.markdown("**Unit vectors (orthonormal pair):**")
+            if np.linalg.norm(v1) > 1e-9:
+                st.markdown(f'<div class="formula-box">û = [{v1_unit[0]:.3f}, {v1_unit[1]:.3f}]<br>û⊥ = [{v2_unit[0]:.3f}, {v2_unit[1]:.3f}]</div>', unsafe_allow_html=True)
+            else:
+                st.warning("v is the zero vector - it has no direction, so there is no orthonormal pair to build. "
+                           "(The dot product is 0, but zero vectors aren't unit vectors.)")
+
+        with col2:
+            fig = go.Figure()
+            lim = max(abs(ox), abs(oy), 1.5) + 1.0
+
+            # Unit circle
+            theta_c = np.linspace(0, 2*np.pi, 200)
+            fig.add_trace(go.Scatter(x=np.cos(theta_c), y=np.sin(theta_c),
+                mode="lines", line=dict(color="#ccc", width=1.5, dash="dot"), showlegend=False))
+
+            # v and v⊥ (original)
+            for vec, label, color in [(v1,"v","#534AB7"),(v2,"v⊥","#E24B4A")]:
+                fig.add_annotation(x=vec[0], y=vec[1], ax=0, ay=0,
+                    xref="x", yref="y", axref="x", ayref="y",
+                    showarrow=True, arrowhead=3, arrowwidth=3, arrowcolor=color,
+                    text=f"<b>{label}</b>", font=dict(color=color, size=14))
+
+            # Unit versions
+            for vec, label, color in [(v1_unit,"û","#534AB7"),(v2_unit,"û⊥","#E24B4A")]:
+                fig.add_annotation(x=vec[0], y=vec[1], ax=0, ay=0,
+                    xref="x", yref="y", axref="x", ayref="y",
+                    showarrow=True, arrowhead=2, arrowwidth=1.5,
+                    arrowcolor=color,
+                    text=f"<b>{label}</b>", font=dict(color=color, size=11))
+
+            # right-angle marker at origin
+            scale = 0.25
+            corner = v1_unit * scale + v2_unit * scale
+            fig.add_trace(go.Scatter(
+                x=[v1_unit[0]*scale, corner[0], v2_unit[0]*scale],
+                y=[v1_unit[1]*scale, corner[1], v2_unit[1]*scale],
+                mode="lines", line=dict(color="#aaa", width=1.5), showlegend=False
+            ))
+
+            fig.update_layout(
+                height=430,
+                xaxis=dict(range=[-lim,lim], zeroline=True, zerolinecolor="#ccc",
+                           scaleanchor="y", title="x"),
+                yaxis=dict(range=[-lim,lim], zeroline=True, zerolinecolor="#ccc", title="y"),
+                plot_bgcolor="white", showlegend=False,
+                margin=dict(l=40,r=20,t=20,b=40),
+            )
+            st.plotly_chart(fig, width='stretch')
+            st.caption("Thick arrows = original vectors. Thin arrows = unit versions (ending on the dotted unit circle). "
+                       "Right-angle marker at origin confirms orthogonality.")
+
+        st.markdown("---")
+        st.markdown("### Why orthogonality is the backbone of ML")
+
+        cols = st.columns(3)
+        with cols[0]:
+            st.markdown("#### PCA")
+            st.markdown("""
+            Principal components are **orthogonal** by construction - each new axis is perpendicular
+            to all previous ones, so there is zero redundancy between components.
+            """)
+        with cols[1]:
+            st.markdown("#### Attention heads")
+            st.markdown("""
+            Multiple attention heads learn **different** subspaces. Near-orthogonal heads
+            can capture different aspects of the input - for example one head may track
+            syntax while another tracks meaning.
+            """)
+        with cols[2]:
+            st.markdown("#### Weight matrices (QR)")
+            st.markdown("""
+            Orthogonal weight initialisation preserves vector norms through each linear layer,
+            which helps gradients avoid vanishing or exploding in deep networks.
+            """)
+
+        st.markdown("""
+        **Gram-Schmidt process** - how to turn any set of linearly independent vectors into an orthonormal basis:
+        """)
+        st.markdown('<div class="formula-box">u₁ = v₁ / ‖v₁‖<br>u₂ = (v₂ − (v₂·u₁)u₁) / ‖…‖<br>u₃ = (v₃ − (v₃·u₁)u₁ − (v₃·u₂)u₂) / ‖…‖  …</div>', unsafe_allow_html=True)
+        st.caption("At each step: subtract the projections onto all previous basis vectors, then normalise. "
+                   "QR decomposition produces the same orthonormal basis - though libraries like NumPy compute it "
+                   "with more numerically stable methods (Householder reflections) rather than plain Gram-Schmidt.")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# RECURRENT NETWORKS
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "rnn":
+    st.title("🔁 Recurrent Networks")
+    st.markdown("""
+    <div class="concept-card">
+    A <b>recurrent network</b> processes sequences by maintaining a <em>hidden state</em>
+    - a memory that carries information forward through time. Unlike feedforward networks
+    which treat each input independently, RNNs share the same weights at every timestep,
+    allowing them to model patterns across variable-length sequences.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["RNN - recurrence through time", "LSTM & GRU - gated memory", "RNN vs Transformer"])
+
+    # ── TAB 1: RNN basics ─────────────────────────────────────────────────
+    with tab1:
+        st.markdown("### The recurrence equation")
+        st.markdown("""
+        At each timestep **t**, the RNN takes the current input **xₜ** and the previous
+        hidden state **hₜ₋₁**, combines them linearly, and squashes the result through
+        an activation function (usually tanh) to produce the new hidden state **hₜ**.
+        """)
+        col_eq1, col_eq2 = st.columns(2)
+        with col_eq1:
+            st.markdown('<div class="formula-box">hₜ = tanh(Wₕ · hₜ₋₁ + Wₓ · xₜ + b)</div>', unsafe_allow_html=True)
+        with col_eq2:
+            st.markdown('<div class="formula-box">yₜ = Wᵧ · hₜ + bᵧ<br><small>(optional output at each step)</small></div>', unsafe_allow_html=True)
+
+        st.markdown("### Unrolled RNN - shared weights at every step")
+
+        n_steps = st.slider("Sequence length (timesteps)", 3, 7, 5, key="rnn_steps")
+        highlight = st.slider("Highlight timestep", 1, n_steps, 3, key="rnn_hl")
+
+        # Draw unrolled diagram as SVG-style figure with plotly
+        fig = go.Figure()
+        box_w, box_h = 0.8, 0.5
+        y_h, y_x, y_y = 1.5, 0.0, 3.0
+
+        for t in range(n_steps):
+            x = t * 2.0
+            col_h = "#534AB7" if t+1 == highlight else "#c5c1f0"
+            col_x = "#1D9E75" if t+1 == highlight else "#a8dbc9"
+            col_y = "#EF9F27" if t+1 == highlight else "#fde3a5"
+
+            # h box
+            fig.add_shape(type="rect", x0=x-box_w/2, y0=y_h-box_h/2,
+                x1=x+box_w/2, y1=y_h+box_h/2,
+                fillcolor=col_h, line=dict(color="#333", width=1.5))
+            fig.add_annotation(x=x, y=y_h, text=f"<b>h{t+1}</b>",
+                showarrow=False, font=dict(size=12, color="white"))
+
+            # x box
+            fig.add_shape(type="rect", x0=x-box_w/2, y0=y_x-box_h/2,
+                x1=x+box_w/2, y1=y_x+box_h/2,
+                fillcolor=col_x, line=dict(color="#333", width=1))
+            fig.add_annotation(x=x, y=y_x, text=f"x{t+1}",
+                showarrow=False, font=dict(size=11, color="#1a5c43"))
+
+            # y box
+            fig.add_shape(type="rect", x0=x-box_w/2, y0=y_y-box_h/2,
+                x1=x+box_w/2, y1=y_y+box_h/2,
+                fillcolor=col_y, line=dict(color="#333", width=1))
+            fig.add_annotation(x=x, y=y_y, text=f"y{t+1}",
+                showarrow=False, font=dict(size=11, color="#7a4e00"))
+
+            # x → h arrow
+            fig.add_annotation(x=x, y=y_h-box_h/2, ax=x, ay=y_x+box_h/2,
+                xref="x", yref="y", axref="x", ayref="y",
+                showarrow=True, arrowhead=2, arrowwidth=1.5, arrowcolor="#1D9E75")
+
+            # h → y arrow
+            fig.add_annotation(x=x, y=y_y-box_h/2, ax=x, ay=y_h+box_h/2,
+                xref="x", yref="y", axref="x", ayref="y",
+                showarrow=True, arrowhead=2, arrowwidth=1.5, arrowcolor="#EF9F27")
+
+            # h → h+1 arrow
+            if t < n_steps - 1:
+                fig.add_annotation(x=(t+1)*2.0-box_w/2, y=y_h,
+                    ax=x+box_w/2, ay=y_h,
+                    xref="x", yref="y", axref="x", ayref="y",
+                    showarrow=True, arrowhead=2, arrowwidth=2, arrowcolor="#534AB7")
+                fig.add_annotation(x=(x + (t+1)*2.0)/2, y=y_h+0.35,
+                    text="Wₕ (shared)", showarrow=False,
+                    font=dict(size=9, color="#534AB7"))
+
+        # h0 initial state
+        fig.add_shape(type="rect", x0=-2.0-box_w/2, y0=y_h-box_h/2,
+            x1=-2.0+box_w/2, y1=y_h+box_h/2,
+            fillcolor="#ddd", line=dict(color="#999", width=1.5))
+        fig.add_annotation(x=-2.0, y=y_h, text="<b>h₀</b>",
+            showarrow=False, font=dict(size=12, color="#555"))
+        fig.add_annotation(x=-0.0-box_w/2, y=y_h, ax=-2.0+box_w/2, ay=y_h,
+            xref="x", yref="y", axref="x", ayref="y",
+            showarrow=True, arrowhead=2, arrowwidth=2, arrowcolor="#534AB7")
+
+        # Labels on left
+        fig.add_annotation(x=-2.8, y=y_x, text="Inputs xₜ", showarrow=False,
+            font=dict(size=11, color="#1D9E75"))
+        fig.add_annotation(x=-2.8, y=y_h, text="Hidden hₜ", showarrow=False,
+            font=dict(size=11, color="#534AB7"))
+        fig.add_annotation(x=-2.8, y=y_y, text="Outputs yₜ", showarrow=False,
+            font=dict(size=11, color="#EF9F27"))
+
+        fig.update_layout(
+            height=320,
+            xaxis=dict(visible=False, range=[-3.5, (n_steps-1)*2.0+1.5]),
+            yaxis=dict(visible=False, range=[-0.6, 3.7]),
+            plot_bgcolor="white",
+            margin=dict(l=10, r=10, t=20, b=10),
+        )
+        st.plotly_chart(fig, width='stretch')
+        st.caption(f"Highlighted timestep {highlight}. The same weight matrices Wₕ, Wₓ, Wᵧ are reused at every step - "
+                   "this is what 'recurrent' means. h₀ is typically initialised to zeros.")
+
+        st.markdown("""
+        **Key properties of vanilla RNNs:**
+        - ✅ Handles variable-length sequences naturally
+        - ✅ Compact - same weights at every timestep (parameter efficient)
+        - ❌ **Vanishing gradient problem** - gradients shrink exponentially as they
+          flow back through many timesteps, making it hard to learn long-range dependencies
+        - ❌ Sequential computation - each step depends on the previous, so you can't
+          parallelise across timesteps the way Transformers can
+        """)
+
+    # ── TAB 2: LSTM & GRU ─────────────────────────────────────────────────
+    with tab2:
+        st.markdown("### Why vanilla RNNs struggle - and how LSTMs fix it")
+        st.markdown("""
+        When you backpropagate through many timesteps, you multiply gradients together
+        repeatedly. If the weights are small, gradients vanish; if large, they explode.
+        This makes vanilla RNNs forget events from more than ~10 steps ago.
+        """)
+        st.markdown('<div class="formula-box">∂Loss/∂h₁ = ∂Loss/∂hₜ · ∏ₖ diag(1 − hₖ²) · Wₕ'
+                    '<br><small>one factor per timestep: the tanh derivative times the recurrent weights</small></div>',
+                    unsafe_allow_html=True)
+        st.markdown("Multiply t−1 of these factors together: if they are typically **below 1** the gradient shrinks "
+                    "towards 0 (vanishing); if **above 1** it blows up (exploding).")
+
+        st.markdown("---")
+        st.markdown("### LSTM - Long Short-Term Memory")
+        st.markdown("""
+        The LSTM (Hochreiter & Schmidhuber, 1997) adds a **cell state** - a separate
+        memory highway - and three **gates** that control what to remember, what to forget,
+        and what to output. Gates are sigmoid-activated (0 = fully closed, 1 = fully open).
+        """)
+
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            st.markdown("**The four LSTM equations:**")
+            st.markdown('<div class="formula-box">'
+                'fₜ = σ(Wf·[hₜ₋₁, xₜ] + bf)   <small>forget gate</small><br>'
+                'iₜ = σ(Wi·[hₜ₋₁, xₜ] + bi)   <small>input gate</small><br>'
+                'c̃ₜ = tanh(Wc·[hₜ₋₁, xₜ] + bc)  <small>candidate cell</small><br>'
+                'oₜ = σ(Wo·[hₜ₋₁, xₜ] + bo)   <small>output gate</small>'
+                '</div>', unsafe_allow_html=True)
+            st.markdown('<div class="formula-box">'
+                'cₜ = fₜ ⊙ cₜ₋₁ + iₜ ⊙ c̃ₜ   <small>update cell state</small><br>'
+                'hₜ = oₜ ⊙ tanh(cₜ)            <small>new hidden state</small>'
+                '</div>', unsafe_allow_html=True)
+            st.caption("These are the modern LSTM equations. The original 1997 LSTM had no forget gate - it was "
+                       "added by Gers, Schmidhuber & Cummins in 2000.")
+
+        with col2:
+            st.markdown("**Interactive gate demo - what each gate does:**")
+            forget = st.slider("Forget gate fₜ", 0.0, 1.0, 0.8, step=0.05, key="lstm_f")
+            inp    = st.slider("Input gate iₜ",  0.0, 1.0, 0.6, step=0.05, key="lstm_i")
+            out    = st.slider("Output gate oₜ", 0.0, 1.0, 0.9, step=0.05, key="lstm_o")
+            c_prev = st.slider("Previous cell cₜ₋₁", -2.0, 2.0, 1.0, step=0.1, key="lstm_c")
+            c_cand = st.slider("Candidate c̃ₜ (tanh)", -1.0, 1.0, 0.5, step=0.05, key="lstm_cc")
+
+            c_new = forget * c_prev + inp * c_cand
+            h_new = out * np.tanh(c_new)
+
+            st.metric("New cell state cₜ", f"{c_new:.3f}",
+                delta=f"{c_new - c_prev:.3f} from cₜ₋₁")
+            st.metric("New hidden state hₜ", f"{h_new:.3f}")
+
+            if forget < 0.2:
+                st.warning("Forget gate ≈ 0 → nearly all previous memory wiped.")
+            elif forget > 0.9:
+                st.info("Forget gate ≈ 1 → previous cell state passes through almost intact.")
+            if inp < 0.1:
+                st.warning("Input gate ≈ 0 → new candidate ignored.")
+            elif inp > 0.9:
+                st.info("Input gate ≈ 1 → new candidate written strongly.")
+
+        st.markdown("---")
+        st.markdown("### GRU - Gated Recurrent Unit  *(Cho et al., 2014)*")
+        st.markdown("""
+        The GRU simplifies the LSTM by merging the cell state and hidden state into one,
+        and collapsing the forget and input gates into a single **update gate**. Fewer
+        parameters, similar performance, faster to train.
+        """)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown('<div class="formula-box">'
+                'zₜ = σ(Wz·[hₜ₋₁, xₜ])   <small>update gate</small><br>'
+                'rₜ = σ(Wr·[hₜ₋₁, xₜ])   <small>reset gate</small><br>'
+                'h̃ₜ = tanh(W·[rₜ⊙hₜ₋₁, xₜ])  <small>candidate</small><br>'
+                'hₜ = (1−zₜ)⊙hₜ₋₁ + zₜ⊙h̃ₜ  <small>new hidden state</small>'
+                '</div>', unsafe_allow_html=True)
+        with col2:
+            st.markdown("""
+            - **Update gate zₜ** - blend of old and new (replaces forget + input)
+            - **Reset gate rₜ** - how much past hidden state to expose when computing candidate
+            - **No separate cell state** - simpler, 25% fewer parameters than LSTM (3 weight blocks instead of 4)
+            - **When to choose:** GRU for speed/simplicity; LSTM when you need finer
+              control over what to remember long-term
+            """)
+
+    # ── TAB 3: RNN vs Transformer ─────────────────────────────────────────
+    with tab3:
+        st.markdown("### When do RNNs still make sense?")
+        st.markdown("""
+        Transformers have largely replaced RNNs for NLP tasks, but RNNs retain real
+        advantages in certain settings. Here's an honest comparison.
+        """)
+
+        import pandas as pd
+        rows = [
+            ("Parallelism during training",   "❌ Sequential - step t needs step t−1",   "✅ All tokens processed simultaneously"),
+            ("Streaming inference",           "✅ Constant compute and memory per step",  "⚠️ Each new token attends to all previous ones - cost and KV-cache memory grow with context"),
+            ("Memory (context length)",       "❌ Degrades for sequences > ~100 steps",  "✅ Scales to thousands of tokens"),
+            ("Parameter count",               "✅ Compact for small tasks",              "❌ Typically very large"),
+            ("Latency (real-time)",           "✅ Low - constant compute per step",      "⚠️ Grows with context length (KV cache avoids recomputing, but each step still reads all past tokens)"),
+            ("Long-range dependencies",       "⚠️ LSTMs help but still limited",        "✅ Attention reaches any position directly"),
+            ("Time-series (short context)",   "✅ Strong - natural sequential inductive bias", "⚠️ Possible but overkill"),
+            ("NLP at scale",                  "❌ Outperformed by Transformers",         "✅ State of the art"),
+            ("On-device / edge deployment",   "✅ Small footprint",                      "⚠️ Heavier models harder to deploy"),
+        ]
+        df = pd.DataFrame(rows, columns=["Property", "RNN / LSTM / GRU", "Transformer"])
+        st.dataframe(df, width='stretch', hide_index=True)
+
+        st.markdown("---")
+        st.markdown("### Architecture family tree")
+
+        timeline = [
+            ("1990", "Simple RNN\n(Elman)", "#aaa"),
+            ("1997", "LSTM\n(Hochreiter\n& Schmidhuber)", "#534AB7"),
+            ("1997", "Bidirectional\nRNN (Schuster\n& Paliwal)", "#1D9E75"),
+            ("2014", "GRU\n(Cho et al.)", "#534AB7"),
+                        ("2017", "Transformer\n(Vaswani et al.)", "#E24B4A"),
+            ("2023+", "SSMs / Mamba\n(new RNN revival)", "#EF9F27"),
+        ]
+
+        fig_tl = go.Figure()
+        fig_tl.update_layout(
+            height=260,
+            xaxis=dict(visible=False, range=[-0.5, len(timeline)-0.5]),
+            yaxis=dict(visible=False, range=[-1, 3.2]),
+            plot_bgcolor="white",
+            margin=dict(l=10, r=10, t=20, b=10),
+        )
+        for i, (year, name, color) in enumerate(timeline):
+            fig_tl.add_shape(type="circle",
+                x0=i-0.35, y0=0.6, x1=i+0.35, y1=1.4,
+                fillcolor=color, line=dict(color=color))
+            fig_tl.add_annotation(x=i, y=1.0, text=f"<b>{year}</b>",
+                showarrow=False, font=dict(size=9, color="white"))
+            fig_tl.add_annotation(x=i, y=0.15, text=name.replace("\n","<br>"),
+                showarrow=False, font=dict(size=9, color="#333"), align="center")
+            if i < len(timeline)-1:
+                fig_tl.add_shape(type="line", x0=i+0.35, y0=1.0, x1=i+0.65, y1=1.0,
+                    line=dict(color="#aaa", width=2))
+
+        st.plotly_chart(fig_tl, width='stretch')
+        st.caption("Red = Transformer displaced RNNs for most NLP. Orange = modern state-space models "
+                   "(Mamba, RWKV) are revisiting recurrence with linear-time attention alternatives.")
+
+        st.markdown("""
+        **Bottom line:** if you're building a streaming sensor pipeline, a character-level
+        model on a microcontroller, or a small time-series forecaster - RNNs (especially GRUs)
+        are still a solid choice. For language at scale, Transformers win. And watch the SSM
+        space (Mamba, RWKV) - they combine RNN-style streaming with Transformer-quality results.
+        """)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CENTRAL TENDENCY
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "central_tendency":
+    st.title("📊 Central Tendency")
+    st.markdown("""
+    <div class="concept-card">
+    Measures of <b>central tendency</b> summarise a dataset with a single value that
+    represents the centre or most typical value. The choice of measure matters enormously
+    - mean, median and mode each tell a different story, and picking the wrong one can
+    seriously mislead you.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["Mean, median & mode", "Effect of outliers", "When to use which"])
+
+    # ── TAB 1: Definitions & live calculator ─────────────────────────────
+    with tab1:
+        st.markdown("### The three measures - live on your own data")
+
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            raw = st.text_area("Enter numbers (comma-separated)",
+                value="4, 7, 7, 8, 10, 12, 15, 15, 15, 100",
+                height=80, key="ct_raw")
+            default_ct = np.array([4,7,7,8,10,12,15,15,15,100], dtype=float)
+            try:
+                data_ct = np.array([float(x.strip()) for x in raw.split(",") if x.strip()])
+                valid = True
+            except ValueError:
+                data_ct, valid = default_ct, False
+                st.error("Please enter valid numbers separated by commas. Showing the default data.")
+            if valid and len(data_ct) == 0:
+                data_ct, valid = default_ct, False
+                st.error("No numbers entered. Showing the default data.")
+            if valid and not np.all(np.isfinite(data_ct)):
+                data_ct, valid = default_ct, False
+                st.error("'nan' and 'inf' are not real data values - please enter ordinary numbers. "
+                         "Showing the default data.")
+
+            n = len(data_ct)
+            mean_val   = np.mean(data_ct)
+            median_val = np.median(data_ct)
+            # mode: most frequent value(s)
+            vals, counts = np.unique(data_ct, return_counts=True)
+            max_count = counts.max()
+            if max_count == 1 and n > 1:
+                modes = np.array([])          # every value appears once → no meaningful mode
+                mode_str = "none (every value appears once)"
+            else:
+                modes = vals[counts == max_count]
+                mode_str = ", ".join([_vout(m) for m in modes])
+
+            st.markdown(f'<div class="formula-box">'
+                f'<b>Mean</b>   x̄ = Σxᵢ / n = {mean_val:.3f}<br>'
+                f'<b>Median</b>      = middle value = {median_val:.3f}<br>'
+                f'<b>Mode</b>        = most frequent = {mode_str}'
+                f'</div>', unsafe_allow_html=True)
+
+            st.markdown(f"n = {n} values &nbsp;|&nbsp; min = {data_ct.min():.2f} &nbsp;|&nbsp; max = {data_ct.max():.2f}")
+
+        with col2:
+            fig = go.Figure()
+            # Histogram
+            fig.add_trace(go.Histogram(x=data_ct, nbinsx=min(20, n),
+                marker_color="#c5c1f0", marker_line=dict(color="#534AB7", width=1),
+                name="Data", opacity=0.8))
+            # Vertical lines for each measure
+            mode_lines = [(float(m), f"Mode {_vout(m)}", "#EF9F27") for m in modes]
+            for val, label, color in [
+                (mean_val,   f"Mean {mean_val:.2f}",   "#E24B4A"),
+                (median_val, f"Median {median_val:.2f}", "#1D9E75"),
+            ] + mode_lines:
+                fig.add_vline(x=val, line=dict(color=color, width=2.5, dash="dash"),
+                    annotation_text=label, annotation_position="top",
+                    annotation_font=dict(color=color, size=11))
+            fig.update_layout(height=320, plot_bgcolor="white",
+                xaxis_title="Value", yaxis_title="Count",
+                legend=dict(orientation="h", y=1.1),
+                margin=dict(l=20, r=20, t=50, b=40))
+            st.plotly_chart(fig, width='stretch')
+
+        st.markdown("### Formulas")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.markdown("#### Mean (Arithmetic)")
+            st.markdown('<div class="formula-box">x̄ = (x₁ + x₂ + … + xₙ) / n<br><br>= Σxᵢ / n</div>', unsafe_allow_html=True)
+            st.markdown("Sum all values, divide by count. Sensitive to every data point equally.")
+        with col2:
+            st.markdown("#### Median")
+            st.markdown('<div class="formula-box">Sort the data.<br>If n is odd → middle value<br>If n is even → mean of the two middle values</div>', unsafe_allow_html=True)
+            st.markdown("The value that splits the dataset 50/50. Robust to outliers.")
+        with col3:
+            st.markdown("#### Mode")
+            st.markdown('<div class="formula-box">The value (or values) that appear most frequently.<br><br>A dataset can be unimodal, bimodal, or multimodal.</div>', unsafe_allow_html=True)
+            st.markdown("The only measure that works for *unordered* categories (e.g. most common colour). "
+                        "For *ordered* categories (e.g. ratings poor → excellent) the median works too.")
+
+    # ── TAB 2: Effect of outliers ─────────────────────────────────────────
+    with tab2:
+        st.markdown("### How outliers pull the mean but not the median")
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            base = st.slider("Typical values (repeated 9×)", 5, 30, 15, key="ct_base")
+            outlier = st.slider("Outlier value", int(base), int(base)*20, int(base)*8, key="ct_out")
+            include_outlier = st.checkbox("Include outlier", value=True, key="ct_inc")
+
+            dataset = np.array([base]*9 + ([outlier] if include_outlier else []))
+            m_mean   = np.mean(dataset)
+            m_median = np.median(dataset)
+
+            st.metric("Mean",   f"{m_mean:.1f}", delta=f"{m_mean-base:+.1f} from typical" if include_outlier else None)
+            st.metric("Median", f"{m_median:.1f}", delta=f"{m_median-base:+.1f} from typical" if include_outlier else None)
+
+            if include_outlier:
+                pull = abs(m_mean - m_median)
+                st.markdown(f"The outlier pulls the **mean** {pull:.1f} units away from the median.")
+                st.info("Median barely moves - it only cares about rank, not magnitude.")
+
+        with col2:
+            fig = go.Figure()
+            jitter = np.random.default_rng(42).uniform(-0.05, 0.05, len(dataset))
+            fig.add_trace(go.Scatter(x=dataset, y=jitter,
+                mode="markers", marker=dict(size=14, color="#534AB7", opacity=0.7),
+                name="Data points"))
+            fig.add_vline(x=m_mean,   line=dict(color="#E24B4A", width=3, dash="dash"),
+                annotation_text=f"Mean {m_mean:.1f}", annotation_position="top left",
+                annotation_font=dict(color="#E24B4A", size=12))
+            fig.add_vline(x=m_median, line=dict(color="#1D9E75", width=3, dash="dot"),
+                annotation_text=f"Median {m_median:.1f}", annotation_position="top right",
+                annotation_font=dict(color="#1D9E75", size=12))
+            fig.update_layout(height=260, plot_bgcolor="white",
+                xaxis_title="Value", yaxis=dict(visible=False),
+                margin=dict(l=20, r=20, t=60, b=40))
+            st.plotly_chart(fig, width='stretch')
+
+            st.markdown("""
+            **Real-world examples of outlier distortion:**
+            - Average household income in a neighbourhood with one billionaire → mean is misleading, median is honest
+            - Average response time in a web service with occasional 30-second timeouts → use median or p99
+            - Test scores when one student scored 0 due to absence → median better represents the class
+            """)
+
+    # ── TAB 3: When to use which ─────────────────────────────────────────
+    with tab3:
+        st.markdown("### Choosing the right measure")
+
+        import pandas as pd
+        rows = [
+            ("Symmetric, no outliers (e.g. height)", "✅ Mean - uses all data efficiently", "✅ Median - similar result", "⚠️ Mode - may not be unique"),
+            ("Skewed distribution (e.g. income)",    "❌ Distorted by tail",               "✅ Median - robust",         "⚠️ Mode - only shows peak"),
+            ("Outliers present",                     "❌ Pulled toward outliers",           "✅ Median - ignores magnitude", "⚠️ Unaffected but limited"),
+            ("Unordered categories (e.g. colours)",  "❌ Not applicable",                   "❌ Not applicable",          "✅ Mode - only option"),
+            ("Ordered categories (e.g. ratings)",    "❌ Not meaningful",                   "✅ Median - middle rating",  "✅ Mode - most common rating"),
+            ("Reporting 'typical' salary",           "❌ Misleading if skewed",             "✅ Standard practice",       "⚠️ Possible but unusual"),
+            ("ML: imputing missing values",          "✅ Common - preserves mean",          "✅ Robust to outliers",      "✅ For categorical features"),
+            ("ML: loss function centre",             "✅ MSE minimised at mean",            "✅ MAE minimised at median", "-"),
+        ]
+        df = pd.DataFrame(rows, columns=["Situation", "Mean", "Median", "Mode"])
+        st.dataframe(df, width='stretch', hide_index=True)
+
+        st.markdown("---")
+        st.markdown("### Skewness and the mean-median relationship")
+        col1, col2, col3 = st.columns(3)
+        skew_cases = [
+            ("Symmetric", "Mean ≈ Median ≈ Mode", "Normal distribution, balanced data", "#534AB7"),
+            ("Right-skewed\n(positive)", "Usually: Mode < Median < Mean", "Income, house prices, response times - long right tail pulls mean up", "#E24B4A"),
+            ("Left-skewed\n(negative)", "Usually: Mean < Median < Mode", "Age at death in wealthy countries, exam scores with a ceiling - long left tail pulls mean down", "#1D9E75"),
+        ]
+        for col, (name, order, example, color) in zip([col1,col2,col3], skew_cases):
+            with col:
+                st.markdown(f"**{name}**")
+                st.markdown(f'<div class="formula-box" style="border-left:4px solid {color}">{order}</div>', unsafe_allow_html=True)
+                st.caption(example)
+        st.caption("'Usually' because this ordering is a rule of thumb, not a law - it can fail, "
+                   "especially for discrete data or distributions with several peaks.")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DISPERSION
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "dispersion":
+    st.title("📏 Dispersion")
+    st.markdown("""
+    <div class="concept-card">
+    Measures of <b>dispersion</b> describe how spread out data is around its centre.
+    Two datasets can have identical means yet look completely different - dispersion
+    captures that difference. It underpins concepts like variance in the bias-variance
+    tradeoff, standard deviation in normalisation, and IQR in outlier detection.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["Variance & std dev", "Range, IQR & box plot", "Connecting to ML"])
+
+    # ── TAB 1: Variance & std dev ─────────────────────────────────────────
+    with tab1:
+        st.markdown("### Variance and standard deviation - average squared deviation from the mean")
+
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            raw_d = st.text_area("Enter numbers (comma-separated)",
+                value="10, 12, 13, 14, 15, 16, 17, 18, 20, 50",
+                height=80, key="disp_raw")
+            data_d, err_d = _parse_numbers(raw_d, [10,12,13,14,15,16,17,18,20,50])
+            if err_d:
+                st.error(err_d)
+
+            n_d    = len(data_d)
+            mean_d = np.mean(data_d)
+            # Population vs sample
+            pop_var  = np.var(data_d, ddof=0)
+            pop_std  = np.std(data_d, ddof=0)
+            samp_var = np.var(data_d, ddof=1) if n_d >= 2 else np.nan   # ÷(n−1) needs at least 2 values
+            samp_std = np.std(data_d, ddof=1) if n_d >= 2 else np.nan
+
+            kind = st.radio("Formula type", ["Population (÷n)", "Sample (÷n−1)"], horizontal=True, key="disp_kind")
+            var_show = pop_var  if kind.startswith("Population") else samp_var
+            std_show = pop_std  if kind.startswith("Population") else samp_std
+            denom    = "n" if kind.startswith("Population") else "n−1"
+            v_sym, s_sym = ("σ²", "σ") if kind.startswith("Population") else ("s²", "s")
+            if np.isnan(var_show):
+                st.warning("The sample formula divides by n − 1, so it needs at least 2 values. "
+                           "Add more numbers or switch to Population.")
+                var_txt = std_txt = "undefined"
+            else:
+                var_txt, std_txt = f"{var_show:.3f}", f"{std_show:.3f}"
+
+            st.markdown(f'<div class="formula-box">'
+                f'Mean x̄ = {mean_d:.3f}<br><br>'
+                f'Variance {v_sym} = Σ(xᵢ − x̄)² / {denom} = {var_txt}<br>'
+                f'Std Dev  {s_sym}  = √{v_sym} = {std_txt}'
+                f'</div>', unsafe_allow_html=True)
+
+            st.caption("Population formula (÷n, symbols σ², σ) for the full dataset. "
+                       "Sample formula (÷n−1, Bessel's correction, symbols s², s) when estimating from a sample - "
+                       "this makes the *variance* s² unbiased. The standard deviation s = √s² is still "
+                       "slightly biased low, because a square root of an unbiased estimate isn't unbiased.")
+
+        with col2:
+            # Show deviations from mean
+            deviations = data_d - mean_d
+            colors_dev = ["#E24B4A" if d > 1e-12 else ("#1D9E75" if d < -1e-12 else "#888780") for d in deviations]
+
+            fig = go.Figure()
+            xs = list(range(n_d))
+            fig.add_hline(y=mean_d, line=dict(color="#534AB7", width=2, dash="dash"),
+                annotation_text=f"Mean={mean_d:.2f}", annotation_position="right")
+            if not np.isnan(std_show):
+                fig.add_hline(y=mean_d + std_show, line=dict(color="#EF9F27", width=1.5, dash="dot"),
+                    annotation_text=f"+1{s_sym}={mean_d+std_show:.2f}", annotation_position="right")
+                fig.add_hline(y=mean_d - std_show, line=dict(color="#EF9F27", width=1.5, dash="dot"),
+                    annotation_text=f"−1{s_sym}={mean_d-std_show:.2f}", annotation_position="right")
+
+            # Deviation bars
+            for i, (x, y, dev, col) in enumerate(zip(xs, data_d, deviations, colors_dev)):
+                fig.add_shape(type="line", x0=x, y0=mean_d, x1=x, y1=y,
+                    line=dict(color=col, width=2))
+
+            fig.add_trace(go.Scatter(x=xs, y=data_d, mode="markers",
+                marker=dict(size=10, color=colors_dev), showlegend=False))
+
+            fig.update_layout(height=320, plot_bgcolor="white",
+                xaxis_title="Index", yaxis_title="Value",
+                margin=dict(l=20, r=100, t=20, b=40))
+            st.plotly_chart(fig, width='stretch')
+            st.caption("Red points are above the mean, green below, grey exactly on it. "
+                       "Vertical lines show each deviation (xᵢ − x̄). "
+                       "Orange dashed lines mark ±1 standard deviation.")
+
+        st.markdown("### Breakdown: deviation table")
+        import pandas as pd
+        dev_table = pd.DataFrame({
+            "xᵢ": data_d,
+            "xᵢ − x̄": np.round(deviations, 3),
+            "(xᵢ − x̄)²": np.round(deviations**2, 3),
+        })
+        st.dataframe(dev_table, width='stretch', hide_index=True, height=200)
+        st.markdown(f"Sum of (xᵢ − x̄)² = **{np.sum(deviations**2):.3f}**  "
+                    f"÷ {denom} → variance = **{var_txt}** → std dev = **{std_txt}**")
+
+    # ── TAB 2: Range, IQR & box plot ──────────────────────────────────────
+    with tab2:
+        st.markdown("### Range, IQR and the box plot")
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            raw_b = st.text_area("Enter numbers",
+                value="3, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 45",
+                height=80, key="box_raw")
+            data_b, err_b = _parse_numbers(raw_b, [3,7,8,9,10,11,12,13,14,15,16,18,45])
+            if err_b:
+                st.error(err_b)
+
+            data_b_sorted = np.sort(data_b)
+            q1  = np.percentile(data_b, 25)
+            q2  = np.percentile(data_b, 50)
+            q3  = np.percentile(data_b, 75)
+            iqr = q3 - q1
+            rng = data_b.max() - data_b.min()
+            lower_fence = q1 - 1.5 * iqr
+            upper_fence = q3 + 1.5 * iqr
+            outliers_b  = data_b[(data_b < lower_fence) | (data_b > upper_fence)]
+
+            st.markdown('<div class="formula-box">'
+                f'Min = {data_b.min():.1f}<br>'
+                f'Q1  = {q1:.1f}  (25th percentile)<br>'
+                f'Q2  = {q2:.1f}  (median / 50th)<br>'
+                f'Q3  = {q3:.1f}  (75th percentile)<br>'
+                f'Max = {data_b.max():.1f}<br><br>'
+                f'Range = max − min = {rng:.1f}<br>'
+                f'IQR   = Q3 − Q1  = {iqr:.1f}'
+                '</div>', unsafe_allow_html=True)
+
+            if len(outliers_b) > 0:
+                st.warning(f"Outliers (beyond Q1−1.5×IQR or Q3+1.5×IQR): {', '.join(_vout(v) for v in outliers_b)}")
+            else:
+                st.success("No outliers detected by the 1.5×IQR rule.")
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Box(y=data_b, boxpoints="all", jitter=0.3,
+                marker=dict(color="#534AB7", size=8, opacity=0.7),
+                line=dict(color="#534AB7", width=2),
+                fillcolor="#c5c1f0",
+                name="Data"))
+
+            # Annotations for quartiles
+            for val, label in [(q1,"Q1"),(q2,"Q2 (median)"),(q3,"Q3")]:
+                fig.add_annotation(x=0.45, y=val, text=f"  {label}={val:.1f}",
+                    showarrow=False, font=dict(size=11, color="#534AB7"),
+                    xref="paper")
+
+            fig.update_layout(height=380, plot_bgcolor="white",
+                yaxis_title="Value", showlegend=False,
+                margin=dict(l=20, r=120, t=20, b=40))
+            st.plotly_chart(fig, width='stretch')
+
+        st.markdown("""
+        **Reading the box plot:**
+        - **Box** spans Q1 to Q3 - contains the middle 50% of data (the IQR)
+        - **Line inside box** = median (Q2)
+        - **Whiskers** extend to the last point within 1.5×IQR of the box
+        - **Dots beyond whiskers** = outliers by Tukey's rule
+        - **Wide box** = high spread; **narrow box** = concentrated data
+
+        **Range vs IQR:**
+        | | Range | IQR |
+        |---|---|---|
+        | Formula | max − min | Q3 − Q1 |
+        | Sensitive to outliers | ❌ Yes - heavily | ✅ No - ignores top/bottom 25% |
+        | Use when | Quick rough spread | Robust spread for skewed data |
+        """)
+
+    # ── TAB 3: Connecting to ML ───────────────────────────────────────────
+    with tab3:
+        st.markdown("### Why dispersion is central to ML")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("#### Feature normalisation")
+            st.markdown("""
+            Most ML models are sensitive to the scale of features. Dispersion measures
+            define the two most common normalisation strategies:
+            """)
+            st.markdown('<div class="formula-box">'
+                '<b>Z-score (standardisation)</b><br>'
+                'x′ = (x − μ) / σ<br><br>'
+                '<b>Min-max scaling</b><br>'
+                'x′ = (x − min) / (max − min)<br><br>'
+                '<b>Robust scaling</b><br>'
+                'x′ = (x − Q2) / IQR'
+                '</div>', unsafe_allow_html=True)
+            st.caption("Robust scaling uses median and IQR - best when outliers are present.")
+
+        with col2:
+            st.markdown("#### Bias-variance tradeoff")
+            st.markdown("""
+            The **variance** of a model's predictions across different training sets is
+            literally the statistical variance you saw in Tab 1 - it measures how much
+            the model's output fluctuates when trained on different data samples.
+            """)
+            st.markdown('<div class="formula-box">'
+                'Expected Error =<br>'
+                'Bias² + Variance + Irreducible Noise'
+                '</div>', unsafe_allow_html=True)
+            st.caption("High-variance models (deep trees, large nets) overfit - "
+                       "their predictions have high spread across training sets.")
+
+        st.markdown("---")
+        st.markdown("### Interactive: same mean, different spread")
+        st.markdown("Two datasets can have identical central tendency but very different dispersion:")
+
+        spread_a = st.slider("Spread of Dataset A (std dev)", 0.5, 10.0, 1.5, step=0.5, key="disp_a")
+        spread_b = st.slider("Spread of Dataset B (std dev)", 0.5, 10.0, 6.0, step=0.5, key="disp_b")
+
+        rng_d = np.random.default_rng(42)
+        da = rng_d.normal(loc=10, scale=spread_a, size=200)
+        db = rng_d.normal(loc=10, scale=spread_b, size=200)
+
+        fig = go.Figure()
+        fig.add_trace(go.Histogram(x=da, nbinsx=30, name=f"A  σ={spread_a}",
+            marker_color="#534AB7", opacity=0.6))
+        fig.add_trace(go.Histogram(x=db, nbinsx=30, name=f"B  σ={spread_b}",
+            marker_color="#E24B4A", opacity=0.6))
+        fig.add_vline(x=10, line=dict(color="#333", width=2, dash="dash"),
+            annotation_text="Mean=10", annotation_position="top")
+        fig.update_layout(barmode="overlay", height=280, plot_bgcolor="white",
+            xaxis_title="Value", yaxis_title="Count",
+            legend=dict(orientation="h", y=1.1),
+            margin=dict(l=20, r=20, t=40, b=40))
+        st.plotly_chart(fig, width='stretch')
+        st.caption(f"Both distributions have mean = 10. A model that always predicts 10 is right "
+                   f"*on average* for both, but its typical error is about one standard deviation - "
+                   f"roughly {spread_a:g} for A versus {spread_b:g} for B.")
+
+        import pandas as pd
+        summary_df = pd.DataFrame({
+            "Measure": ["Mean", "Std Dev", "Variance", "Range (approx)"],
+            "Dataset A": [f"{np.mean(da):.2f}", f"{np.std(da):.2f}", f"{np.var(da):.2f}", f"{da.max()-da.min():.2f}"],
+            "Dataset B": [f"{np.mean(db):.2f}", f"{np.std(db):.2f}", f"{np.var(db):.2f}", f"{db.max()-db.min():.2f}"],
+        })
+        st.dataframe(summary_df, width='stretch', hide_index=True)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# BAYES' THEOREM & CONDITIONAL PROBABILITY
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "bayes_theorem":
+    st.title("🧪 Bayes' Theorem")
+    st.markdown("""
+    <div class="concept-card">
+    <b>Bayes' theorem</b> tells you how to update a belief (prior) in light of new evidence
+    to get a revised belief (posterior). It is the mathematical backbone of probabilistic
+    reasoning, Naive Bayes classifiers, Bayesian optimisation, and many uncertainty
+    estimates in ML.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["The theorem", "Conditional probability", "Medical test - classic worked example"])
+
+    with tab1:
+        st.markdown("### Bayes' theorem")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown('<div class="formula-box">'
+                'P(A|B) = P(B|A) · P(A) / P(B)'
+                '</div>', unsafe_allow_html=True)
+            st.markdown("""
+            | Term | Name | Meaning |
+            |---|---|---|
+            | P(A) | **Prior** | Your belief in A before seeing B |
+            | P(B\\|A) | **Likelihood** | Probability of evidence B if A is true |
+            | P(B) | **Marginal** | Total probability of seeing B (normaliser) |
+            | P(A\\|B) | **Posterior** | Updated belief in A after seeing B |
+            """)
+            st.markdown('<div class="formula-box">'
+                'Posterior ∝ Likelihood × Prior'
+                '</div>', unsafe_allow_html=True)
+        with col2:
+            st.markdown("#### Intuition: updating beliefs")
+            st.markdown("""
+            Think of it as a three-step process:
+            1. Start with a **prior** - what do you believe before any evidence?
+            2. Observe **evidence** - how likely is that evidence under each hypothesis?
+            3. Multiply and normalise → **posterior** - your new, updated belief.
+
+            What drives the update is the **likelihood ratio** P(B|A) / P(B|¬A) - how much more
+            likely the evidence is if A is true than if it is false:
+            - ratio ≫ 1 → seeing B strongly supports A
+            - ratio ≈ 1 → B is uninformative, belief barely moves
+            - ratio ≪ 1 → seeing B counts against A
+            """)
+            st.markdown("#### Expanded form")
+            st.markdown('<div class="formula-box">'
+                'P(A|B) = P(B|A)·P(A) / [P(B|A)·P(A) + P(B|¬A)·P(¬A)]'
+                '</div>', unsafe_allow_html=True)
+            st.caption("This expanded denominator makes it clear that P(B) is a weighted average "
+                       "of the likelihood under A and under not-A.")
+
+        st.markdown("---")
+        st.markdown("### Interactive: update your belief")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            prior = st.slider("Prior P(A) - initial belief", 0.01, 0.99, 0.3, step=0.01, key="bt_prior")
+            lik_given_a  = st.slider("Likelihood P(B|A) - evidence if A true",  0.01, 0.99, 0.9, step=0.01, key="bt_lika")
+            lik_given_na = st.slider("Likelihood P(B|¬A) - evidence if A false", 0.01, 0.99, 0.2, step=0.01, key="bt_likna")
+
+            pb = lik_given_a * prior + lik_given_na * (1 - prior)
+            posterior = (lik_given_a * prior) / pb
+
+            st.metric("Posterior P(A|B)", f"{posterior:.3f}", delta=f"{posterior-prior:+.3f} from prior")
+            if abs(lik_given_a - lik_given_na) < 1e-9:
+                st.info(f"P(B|A) = P(B|¬A) - the evidence is equally likely either way, so it is "
+                        f"uninformative. Belief stays at {prior:.2f}.")
+            elif posterior > prior:
+                st.success(f"Evidence B supports A - belief rose from {prior:.2f} → {posterior:.2f}")
+            else:
+                st.warning(f"Evidence B undermines A - belief fell from {prior:.2f} → {posterior:.2f}")
+
+        with col2:
+            fig = go.Figure()
+            priors_range = np.linspace(0.01, 0.99, 200)
+            pb_range = lik_given_a * priors_range + lik_given_na * (1 - priors_range)
+            posteriors_range = (lik_given_a * priors_range) / pb_range
+
+            fig.add_trace(go.Scatter(x=priors_range, y=priors_range,
+                mode="lines", line=dict(color="#ccc", width=1.5, dash="dot"),
+                name="No update (prior = posterior)"))
+            fig.add_trace(go.Scatter(x=priors_range, y=posteriors_range,
+                mode="lines", line=dict(color="#534AB7", width=2.5),
+                name="Posterior given evidence B"))
+            fig.add_trace(go.Scatter(x=[prior], y=[posterior],
+                mode="markers", marker=dict(size=14, color="#E24B4A", symbol="star"),
+                name=f"Current: prior={prior:.2f} → post={posterior:.2f}"))
+
+            fig.update_layout(height=350, plot_bgcolor="white",
+                xaxis=dict(title="Prior P(A)", range=[0,1]),
+                yaxis=dict(title="Posterior P(A|B)", range=[0,1]),
+                legend=dict(x=0.01, y=0.99),
+                margin=dict(l=40, r=20, t=20, b=40))
+            st.plotly_chart(fig, width='stretch')
+            st.caption("The purple curve shows how the posterior changes across all possible priors "
+                       "given the same evidence. Grey diagonal = no update (uninformative evidence).")
+
+    with tab2:
+        st.markdown("### Conditional probability - the building block")
+        st.markdown('<div class="formula-box">P(A|B) = P(A ∩ B) / P(B)</div>', unsafe_allow_html=True)
+        st.markdown("""
+        P(A|B) reads: *"probability of A given that B has already happened"*.
+        You restrict your sample space to only the cases where B is true, then ask
+        what fraction of those also have A.
+        """)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("#### Key rules")
+            st.markdown('<div class="formula-box">'
+                '<b>Product rule</b><br>'
+                'P(A ∩ B) = P(A|B) · P(B) = P(B|A) · P(A)<br><br>'
+                '<b>Chain rule</b><br>'
+                'P(A,B,C) = P(A|B,C) · P(B|C) · P(C)<br><br>'
+                '<b>Independence</b><br>'
+                'A ⊥ B  ⟺  P(A|B) = P(A)  ⟺  P(A∩B) = P(A)·P(B)'
+                '</div>', unsafe_allow_html=True)
+        with col2:
+            st.markdown("#### Venn diagram intuition")
+            # Simple Venn diagram
+            theta = np.linspace(0, 2*np.pi, 200)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=np.cos(theta)-0.4, y=np.sin(theta),
+                mode="lines", fill="toself", fillcolor="rgba(83,74,183,0.2)",
+                line=dict(color="#534AB7", width=2), name="Event A"))
+            fig.add_trace(go.Scatter(x=np.cos(theta)+0.4, y=np.sin(theta),
+                mode="lines", fill="toself", fillcolor="rgba(29,158,117,0.2)",
+                line=dict(color="#1D9E75", width=2), name="Event B"))
+            fig.add_annotation(x=-0.8, y=0, text="A only", showarrow=False, font=dict(color="#534AB7"))
+            fig.add_annotation(x=0.8,  y=0, text="B only", showarrow=False, font=dict(color="#1D9E75"))
+            fig.add_annotation(x=0,    y=0, text="A∩B",    showarrow=False, font=dict(color="#333", size=13))
+            fig.update_layout(height=260, plot_bgcolor="white", showlegend=True,
+                xaxis=dict(visible=False, range=[-2,2]),
+                yaxis=dict(visible=False, range=[-1.4,1.4], scaleanchor="x"),
+                margin=dict(l=10,r=10,t=10,b=10))
+            st.plotly_chart(fig, width='stretch')
+            st.caption("P(A|B) = area of overlap / area of B. Conditioning shrinks the sample space to B.")
+
+    with tab3:
+        st.markdown("### Classic example: medical screening test")
+        st.markdown("This is the most important application of Bayes' theorem - "
+                    "and one of the most counterintuitive results in statistics.")
+
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            prevalence   = st.slider("Disease prevalence P(Disease)", 0.001, 0.5, 0.01, step=0.001,
+                format="%.3f", key="bt_prev")
+            sensitivity  = st.slider("Test sensitivity P(+|Disease)", 0.5, 1.0, 0.99, step=0.01, key="bt_sens")
+            specificity  = st.slider("Test specificity P(−|Healthy)", 0.5, 1.0, 0.95, step=0.01, key="bt_spec")
+
+            false_pos_rate = 1 - specificity
+            p_pos = sensitivity * prevalence + false_pos_rate * (1 - prevalence)
+            ppv   = (sensitivity * prevalence) / p_pos   # Positive Predictive Value
+            npv   = (specificity * (1-prevalence)) / (specificity*(1-prevalence) + (1-sensitivity)*prevalence)
+
+            st.markdown(f'<div class="formula-box">'
+                f'P(+|Disease) = {sensitivity:.2f}  (sensitivity)<br>'
+                f'P(+|Healthy) = {false_pos_rate:.2f}  (false positive rate)<br><br>'
+                f'<b>If you test positive:</b><br>'
+                f'P(Disease|+) = <b>{ppv:.1%}</b><br><br>'
+                f'<b>If you test negative:</b><br>'
+                f'P(Healthy|−) = <b>{npv:.1%}</b>'
+                f'</div>', unsafe_allow_html=True)
+
+            if ppv < 0.5:
+                st.warning(f"⚠️ Despite a positive test, there's only a {ppv:.1%} chance of having the disease! "
+                           f"Low prevalence means most positives are false alarms.")
+            else:
+                st.success(f"A positive test means {ppv:.1%} probability of disease.")
+
+        with col2:
+            # Visualise with population of 10,000
+            N = 10000
+            n_sick     = int(round(N * prevalence))
+            n_healthy  = N - n_sick
+            tp = int(round(n_sick    * sensitivity))
+            fn = n_sick    - tp
+            fp = int(round(n_healthy * false_pos_rate))
+            tn = n_healthy - fp
+
+            fig = go.Figure(data=[
+                go.Bar(name="True Positive",  x=["Test +", "Test −"], y=[tp, 0],  marker_color="#1D9E75"),
+                go.Bar(name="False Positive", x=["Test +", "Test −"], y=[fp, 0],  marker_color="#E24B4A"),
+                go.Bar(name="False Negative", x=["Test +", "Test −"], y=[0,  fn], marker_color="#EF9F27"),
+                go.Bar(name="True Negative",  x=["Test +", "Test −"], y=[0,  tn], marker_color="#c5c1f0"),
+            ])
+            fig.update_layout(barmode="stack", height=340, plot_bgcolor="white",
+                title=dict(text=f"Out of {N:,} people tested", font=dict(size=13)),
+                yaxis_title="Count", legend=dict(orientation="h", y=1.18),
+                margin=dict(l=20,r=20,t=60,b=40))
+            st.plotly_chart(fig, width='stretch')
+            st.caption(f"Test + column: {tp:,} true positives vs {fp:,} false positives. "
+                       f"PPV ≈ {tp:,}/{tp+fp:,} = {tp/(tp+fp):.1%} with whole people "
+                       f"(exact formula: {ppv:.1%}).")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CORRELATION & COVARIANCE
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "correlation":
+    st.title("📈 Correlation & Covariance")
+    st.markdown("""
+    <div class="concept-card">
+    <b>Covariance</b> measures whether two variables tend to move together. <b>Correlation</b>
+    normalises covariance to a [−1, 1] scale so you can compare across variables with
+    different units. Both are fundamental to feature selection, PCA, multicollinearity
+    detection, and understanding what your data is telling you.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["Covariance & Pearson r", "Correlation matrix", "Correlation ≠ causation"])
+
+    with tab1:
+        st.markdown("### From covariance to correlation")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown('<div class="formula-box">'
+                'Cov(X,Y) = E[(X−μₓ)(Y−μᵧ)]<br>'
+                '         = Σ(xᵢ−x̄)(yᵢ−ȳ) / (n−1)<br><br>'
+                'r = Cov(X,Y) / (σₓ · σᵧ)<br><br>'
+                'r ∈ [−1, 1]'
+                '</div>', unsafe_allow_html=True)
+        with col2:
+            st.markdown("""
+            | r value | Interpretation |
+            |---|---|
+            | +1.0 | Perfect positive linear relationship |
+            | +0.7 to +1.0 | Strong positive |
+            | +0.3 to +0.7 | Moderate positive |
+            | −0.3 to +0.3 | Weak / no linear relationship |
+            | −0.7 to −0.3 | Moderate negative |
+            | −1.0 to −0.7 | Strong negative |
+            | −1.0 | Perfect negative linear relationship |
+            """)
+
+        st.markdown("---")
+        st.markdown("### Interactive scatter - drag the correlation")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            target_r = st.slider("Target correlation r", -1.0, 1.0, 0.7, step=0.05, key="corr_r")
+            n_pts    = st.slider("Number of points", 20, 200, 80, step=10, key="corr_n")
+            noise_level = np.sqrt(1 - target_r**2)
+            rng = np.random.default_rng(42)
+            x = rng.standard_normal(n_pts)
+            y = target_r * x + noise_level * rng.standard_normal(n_pts)
+            actual_r = np.corrcoef(x, y)[0, 1]
+            cov_val  = np.cov(x, y)[0, 1]          # divides by n−1
+            sd_x, sd_y = np.std(x, ddof=1), np.std(y, ddof=1)   # also n−1, so r = Cov/(σₓσᵧ) checks out exactly
+
+            st.metric("Actual Pearson r", f"{actual_r:.3f}")
+            st.metric("Covariance", f"{cov_val:.3f}")
+            st.caption("Covariance and both σ use n − 1 (sample estimates). Using n for all three gives the "
+                       "same r - the factors cancel - but they must match.")
+            st.markdown(f'<div class="formula-box">'
+                f'x̄ = {np.mean(x):.2f}, σₓ = {sd_x:.2f}<br>'
+                f'ȳ = {np.mean(y):.2f}, σᵧ = {sd_y:.2f}<br>'
+                f'Cov = {cov_val:.3f}<br>'
+                f'r = {cov_val:.3f} / ({sd_x:.3f}·{sd_y:.3f}) = {actual_r:.3f}'
+                f'</div>', unsafe_allow_html=True)
+
+        with col2:
+            color = "#1D9E75" if actual_r > 0.3 else ("#E24B4A" if actual_r < -0.3 else "#EF9F27")
+            # Regression line
+            m, b = np.polyfit(x, y, 1)
+            x_line = np.linspace(x.min(), x.max(), 100)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=x, y=y, mode="markers",
+                marker=dict(size=7, color=color, opacity=0.7), showlegend=False))
+            fig.add_trace(go.Scatter(x=x_line, y=m*x_line+b,
+                mode="lines", line=dict(color="#534AB7", width=2),
+                name=f"Best fit  r={actual_r:.2f}"))
+            fig.update_layout(height=360, plot_bgcolor="white",
+                xaxis_title="X", yaxis_title="Y",
+                legend=dict(x=0.01, y=0.99),
+                margin=dict(l=40,r=20,t=20,b=40))
+            st.plotly_chart(fig, width='stretch')
+
+    with tab2:
+        st.markdown("### Correlation matrix - all pairwise relationships at once")
+        st.markdown("A **correlation matrix** shows Pearson r between every pair of variables. "
+                    "It's the first thing you should look at in any new dataset.")
+
+        # Simulate a 5-variable dataset with known structure
+        rng2 = np.random.default_rng(0)
+        n = 300
+        age    = rng2.normal(40, 10, n)
+        income = 0.6*age + rng2.normal(0, 8, n)
+        spend  = 0.5*income - 0.3*age + rng2.normal(0, 5, n)
+        height = rng2.normal(170, 10, n)
+        noise  = rng2.normal(0, 1, n)
+
+        import pandas as pd
+        df = pd.DataFrame({"Age":age, "Income":income, "Spending":spend, "Height":height, "Noise":noise})
+        corr_mat = df.corr().round(2)
+
+        fig = go.Figure(data=go.Heatmap(
+            z=corr_mat.values, x=corr_mat.columns, y=corr_mat.columns,
+            colorscale="RdBu", zmid=0, zmin=-1, zmax=1,
+            text=corr_mat.values, texttemplate="%{text:.2f}",
+            showscale=True, colorbar=dict(title="r")
+        ))
+        fig.update_layout(height=360, margin=dict(l=10,r=10,t=30,b=10),
+            title=dict(text="Correlation matrix (simulated data)", font=dict(size=13)))
+        st.plotly_chart(fig, width='stretch')
+
+        st.markdown("""
+        **Reading the matrix:**
+        - Diagonal is always 1.0 (a variable perfectly correlates with itself)
+        - Dark blue = strong positive, dark red = strong negative, white ≈ 0
+        - Age and Income are positively correlated (by design). Height and Noise are near-zero with everything.
+
+        **In ML:**
+        - Highly correlated features (|r| > 0.9) → multicollinearity in linear models → remove one
+        - PCA uses the covariance matrix to find uncorrelated principal components
+        - Feature selection: near-zero correlation with the target is a *hint*, not proof a feature is useless -
+          Pearson r only sees **linear** relationships (e.g. y = x² over a symmetric range has r ≈ 0 yet x predicts y perfectly)
+        """)
+
+    with tab3:
+        st.markdown("### Correlation ≠ causation")
+        st.markdown("""
+        A high r between X and Y can arise from four very different situations.
+        Confusing correlation with causation is one of the most common errors in data science.
+        """)
+        col1, col2, col3, col4 = st.columns(4)
+        cases = [
+            ("X causes Y", "X → Y",
+             "Smoking correlates with lung cancer - and smoking really does cause it.",
+             "Direct causation is possible, but it takes strong evidence to establish: ideally a randomised "
+             "experiment, or - as with smoking - decades of consistent studies ruling out other explanations.", "#1D9E75"),
+            ("Y causes X (reverse)", "Y → X",
+             "Fires with more firefighters cause more damage.",
+             "Reverse causation: bigger fires cause both more firefighters to be sent and more damage. "
+             "The firefighters don't cause the damage - the arrow points the other way.", "#EF9F27"),
+            ("Z causes both (confounder)", "Z → X and Z → Y",
+             "Ice cream sales correlate with drownings; children's shoe size correlates with reading ability.",
+             "A lurking confounder drives both: summer heat (more ice cream, more swimming), "
+             "age (bigger feet, better reading).", "#E24B4A"),
+            ("Pure chance", "no link",
+             "Nicolas Cage film releases correlate with pool drownings.",
+             "Spurious correlation: search through enough unrelated data series and some will match by "
+             "coincidence. There is no causal link at all.", "#888780"),
+        ]
+        for col, (title, arrow, example, explain, color) in zip([col1,col2,col3,col4], cases):
+            with col:
+                st.markdown(f"**{title}**")
+                st.markdown(f'<div class="formula-box" style="border-left:4px solid {color}">{arrow}</div>', unsafe_allow_html=True)
+                st.markdown(f"*{example}*")
+                st.caption(explain)
+
+        st.markdown("""
+        **Spearman rank correlation** is a non-parametric alternative to Pearson r - it measures
+        monotonic (not just linear) relationships and is less sensitive to outliers:
+        """)
+        st.markdown('<div class="formula-box">ρ = 1 − 6Σdᵢ² / (n(n²−1))   where dᵢ = rank(xᵢ) − rank(yᵢ)</div>',
+            unsafe_allow_html=True)
+        st.caption("This shortcut is exact only when there are no tied values. With ties, Spearman ρ is computed "
+                   "as Pearson r on the ranks (tied values share their average rank).")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CROSS-VALIDATION
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "cross_validation":
+    st.title("🗂️ Cross-Validation")
+    st.markdown("""
+    <div class="concept-card">
+    Training error always looks better than a model deserves - it's graded on data it has
+    already seen. <b>Cross-validation</b> gets an honest estimate by splitting the data into
+    folds, training on some, and scoring on the rest, then rotating which fold is held out.
+    It's the workhorse behind choosing a model's complexity - the same job <b>AIC/BIC</b> do
+    with a formula instead of a held-out split.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Interactive k-fold", "LOOCV & the bias-variance tradeoff"])
+
+    def _kfold_indices(n, k, seed=0):
+        rng = np.random.RandomState(seed)
+        idx = rng.permutation(n)
+        return np.array_split(idx, k)
+
+    def _cv_curve(x, y, k, degrees, seed=0):
+        folds = _kfold_indices(len(x), k, seed)
+        cv_scores = []
+        for d in degrees:
+            errs = []
+            for i in range(k):
+                val_idx = folds[i]
+                train_idx = np.concatenate([folds[j] for j in range(k) if j != i])
+                c = np.polyfit(x[train_idx], y[train_idx], d)
+                p = np.poly1d(c)
+                errs.append(np.mean((p(x[val_idx]) - y[val_idx]) ** 2))
+            cv_scores.append(np.mean(errs))
+        return np.array(cv_scores), folds
+
+    with tab1:
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            k_cv = st.slider("Number of folds (k)", 2, 10, 5, key="cv_k")
+            fold_preview = st.slider("Fold to preview", 1, k_cv, 1, key="cv_fold_preview")
+            noise_cv = st.slider("Noise", 0.1, 1.0, 0.4, step=0.1, key="cv_noise")
+            n_cv = st.slider("Data points", 15, 40, 24, key="cv_n")
+
+        np.random.seed(7)
+        x_cv = np.sort(np.random.uniform(-3, 3, n_cv))
+        y_cv = np.sin(x_cv) + np.random.normal(0, noise_cv, n_cv)
+
+        degrees = list(range(1, 11))
+        cv_scores, folds = _cv_curve(x_cv, y_cv, k_cv, degrees)
+        train_mses = []
+        for d in degrees:
+            c = np.polyfit(x_cv, y_cv, d)
+            p = np.poly1d(c)
+            train_mses.append(np.mean((p(x_cv) - y_cv) ** 2))
+        best_cv_deg = degrees[int(np.argmin(cv_scores))]
+
+        fold_id = np.empty(n_cv, dtype=int)
+        for i, f in enumerate(folds):
+            fold_id[f] = i
+        val_mask = fold_id == (fold_preview - 1)
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=degrees, y=train_mses, name='Training MSE (all data)',
+                mode='lines+markers', line=dict(color='#888780', width=2, dash='dot')))
+            fig.add_trace(go.Scatter(x=degrees, y=np.clip(cv_scores, 0, 3), name=f'{k_cv}-fold CV MSE',
+                mode='lines+markers', line=dict(color='#534AB7', width=2.5)))
+            fig.add_vline(x=best_cv_deg, line=dict(color='#EF9F27', dash='dash'),
+                annotation_text=f"CV picks degree {best_cv_deg}")
+            fig.update_layout(xaxis_title="Polynomial degree", yaxis_title="MSE",
+                yaxis_range=[0, 2], height=330, legend=dict(orientation='h', y=1.14))
+            st.plotly_chart(fig, width='stretch')
+
+        c1, c2 = st.columns(2)
+        c1.metric("Best degree by CV", best_cv_deg)
+        c2.metric(f"CV MSE at degree {best_cv_deg}", f"{cv_scores[best_cv_deg-1]:.3f}")
+
+        st.markdown(f"### Round {fold_preview} of {k_cv}: which points are held out")
+        fig2 = go.Figure()
+        fig2.add_trace(go.Scatter(x=x_cv[~val_mask], y=y_cv[~val_mask], mode='markers',
+            name='Train folds', marker=dict(color='#534AB7', size=8)))
+        fig2.add_trace(go.Scatter(x=x_cv[val_mask], y=y_cv[val_mask], mode='markers',
+            name=f'Held-out fold {fold_preview}', marker=dict(color='#E24B4A', size=11, symbol='x')))
+        c_prev = np.polyfit(x_cv[~val_mask], y_cv[~val_mask], best_cv_deg)
+        p_prev = np.poly1d(c_prev)
+        x_line = np.linspace(-3.5, 3.5, 200)
+        fig2.add_trace(go.Scatter(x=x_line, y=np.clip(p_prev(x_line), -3, 3),
+            name=f'Fit on train folds (degree {best_cv_deg})', line=dict(color='#1D9E75', width=2)))
+        fig2.update_layout(xaxis_title="x", yaxis_title="y", yaxis_range=[-3, 3],
+            height=320, legend=dict(orientation='h', y=1.14))
+        st.plotly_chart(fig2, width='stretch')
+        st.caption("This fold's held-out points never influence the line shown here - that's "
+                   "what makes the resulting error an honest estimate. Cycle through every "
+                   "fold and average, and you get the CV curve above.")
+
+    with tab2:
+        st.markdown("""
+        **Bias: small k is pessimistic.** A small k (like 2) trains each model on only part of
+        the data, so each one is weaker than the final model will be - the CV estimate is
+        *biased upward*. As k grows towards **Leave-One-Out CV (LOOCV)**, where k = n, each
+        model trains on almost all the data and the bias shrinks towards zero.
+
+        **Variance: it depends on the model.** The classic textbook argument is that LOOCV's n
+        training sets overlap almost completely, so the n trained *models* (and their errors)
+        are highly correlated, and averaging correlated errors gives a *higher-variance*
+        estimate. That does happen for **unstable** models (e.g. deep decision trees), but for
+        smooth, stable models like the polynomials here, LOOCV's variance is often just as low
+        as 10-fold's - research (Kohavi 1995; Bengio & Grandvalet 2004) found no universal rule.
+
+        **So why k = 5 or 10?** By k = 5-10 the bias is already small, it costs only 5-10 fits
+        instead of n, and it stays safe for unstable models where LOOCV can be noisy.
+        """)
+
+        st.markdown("#### LOOCV has a shortcut for linear models")
+        st.markdown("""
+        Refitting a model n times sounds expensive, but for ordinary least squares it never
+        needs to happen - the leave-one-out error at point *i* can be recovered from a
+        **single fit on all the data**, using the same leverage <b>hᵢᵢ</b> from the hat matrix
+        seen in <b>Cook's Distance</b>:
+        """, unsafe_allow_html=True)
+        st.markdown('<div class="formula-box">LOOCV = (1/n) Σᵢ [ eᵢ / (1 − hᵢᵢ) ]²</div>',
+            unsafe_allow_html=True)
+        st.markdown("""
+        A point with high leverage (large hᵢᵢ) gets its residual inflated more when removed -
+        because a high-leverage point pulls the fitted line toward itself, so the line moves
+        further away once that point is gone.
+        """)
+
+        np.random.seed(3)
+        n_demo = 15
+        x_demo = np.random.uniform(-3, 3, n_demo)
+        y_demo = 1.2 * x_demo + 0.4 + np.random.normal(0, 0.5, n_demo)
+        X_demo = np.column_stack([x_demo, np.ones(n_demo)])
+        beta_demo = np.linalg.lstsq(X_demo, y_demo, rcond=None)[0]
+        resid_demo = y_demo - X_demo @ beta_demo
+        H_demo = X_demo @ np.linalg.pinv(X_demo.T @ X_demo) @ X_demo.T
+        h_demo = np.diag(H_demo)
+        naive_errs = []
+        for i in range(n_demo):
+            mask = np.ones(n_demo, dtype=bool); mask[i] = False
+            b = np.linalg.lstsq(X_demo[mask], y_demo[mask], rcond=None)[0]
+            naive_errs.append((y_demo[i] - (b[0]*x_demo[i] + b[1])) ** 2)
+        shortcut_errs = (resid_demo / (1 - h_demo)) ** 2
+        c1, c2 = st.columns(2)
+        c1.metric("LOOCV (n refits, brute force)", f"{np.mean(naive_errs):.4f}")
+        c2.metric("LOOCV (one fit + shortcut formula)", f"{np.mean(shortcut_errs):.4f}")
+        st.caption("Same answer, computed two very different ways - one loop over n models, "
+                   "one line of algebra on a single fit.")
+
+        st.markdown("#### Bias in action: CV estimate vs the true test error")
+
+        @st.cache_data(show_spinner="Simulating 200 datasets…")
+        def _cv_bias_sim(noise, n, reps=200, degree=3):
+            rng_b = np.random.default_rng(1)
+            ks = [2, 5, 10, n]
+            est = {kk: [] for kk in ks}
+            true_err = []
+            for rep in range(reps):
+                xs = np.sort(rng_b.uniform(-3, 3, n))
+                ys = np.sin(xs) + rng_b.normal(0, noise, n)
+                for kk in ks:
+                    est[kk].append(_cv_curve(xs, ys, kk, [degree], seed=rep)[0][0])
+                pf = np.poly1d(np.polyfit(xs, ys, degree))
+                xt = rng_b.uniform(-3, 3, 4000)
+                true_err.append(np.mean((pf(xt) - (np.sin(xt) + rng_b.normal(0, noise, 4000))) ** 2))
+            return ks, [float(np.median(est[kk])) for kk in ks], float(np.mean(true_err))
+
+        ks_b, med_est, true_mse = _cv_bias_sim(noise_cv, n_cv)
+        fig_b = go.Figure()
+        fig_b.add_trace(go.Bar(x=[f"k={kk}" if kk < n_cv else "LOOCV" for kk in ks_b], y=med_est,
+            marker_color=['#E24B4A', '#EF9F27', '#1D9E75', '#534AB7'], name="Typical CV estimate",
+            text=[f"{v:.3f}" for v in med_est], textposition="outside"))
+        fig_b.add_hline(y=true_mse, line=dict(color="#333", dash="dash"),
+            annotation_text=f"true test error {true_mse:.3f}", annotation_position="top right")
+        fig_b.update_layout(xaxis_title="Fold count", yaxis_title="CV estimate of MSE (degree 3)",
+            yaxis_range=[0, max(med_est + [true_mse]) * 1.3], height=300, showlegend=False)
+        st.plotly_chart(fig_b, width='stretch')
+        st.caption(f"Typical (median) CV estimate over 200 simulated datasets with the same noise and "
+                   f"size as tab 1 ({n_cv} points). Small k overestimates the error because each model "
+                   "trains on less data; by k = 5-10 the estimate is already close to the truth.")
+
+        st.markdown("#### Split-to-split variability")
+        ks_demo = [2, 5, 10, n_cv]
+        reps = 30
+        variances = []
+        for kk in ks_demo:
+            scores = []
+            for rep in range(reps):
+                cvs, _ = _cv_curve(x_cv, y_cv, kk, [3], seed=rep)
+                scores.append(cvs[0])
+            variances.append(np.std(scores))
+        fig3 = go.Figure()
+        fig3.add_trace(go.Bar(x=[f"k={kk}" if kk < n_cv else "LOOCV" for kk in ks_demo],
+            y=variances, marker_color=['#E24B4A', '#EF9F27', '#1D9E75', '#534AB7']))
+        fig3.add_annotation(x="LOOCV", y=0, text="0 - only one<br>possible split", showarrow=False,
+            yshift=22, font=dict(color="#534AB7", size=11))
+        fig3.update_layout(xaxis_title="Fold count", yaxis_title="Std. dev. of CV score across random fold splits",
+            height=280)
+        st.plotly_chart(fig3, width='stretch')
+        st.caption("Same dataset, re-split into folds 30 different ways. Small k gives a score that swings "
+                   "depending on how the data happened to be split. LOOCV is exactly 0 because there is "
+                   "only one way to leave out each point in turn - this chart measures split randomness, "
+                   "not the variance across new datasets discussed above.")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# COOK'S DISTANCE
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "cooks_distance":
+    st.title("🎯 Cook's Distance")
+    st.markdown("""
+    <div class="concept-card">
+    <b>Cook's distance</b> measures how much the fitted regression line would change if
+    a single point were removed from the dataset. A point earns a high Cook's distance
+    by combining two things: an unusual <b>x</b> position (<em>leverage</em>) and a
+    <b>large residual</b> (the model fits it badly). Either alone is often harmless -
+    together, they mean one point is quietly steering the whole model.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Interactive influence", "Leverage vs. residual"])
+
+    def _fit_ols(x, y):
+        n = len(x)
+        X_mat = np.column_stack([x, np.ones(n)])
+        beta = np.linalg.lstsq(X_mat, y, rcond=None)[0]
+        y_pred = X_mat @ beta
+        resid = y - y_pred
+        p = X_mat.shape[1]
+        H = X_mat @ np.linalg.pinv(X_mat.T @ X_mat) @ X_mat.T
+        h = np.clip(np.diag(H), 1e-9, 1 - 1e-9)
+        mse = np.sum(resid ** 2) / max(n - p, 1)
+        cooks_d = (resid ** 2 / (p * mse)) * (h / (1 - h) ** 2)
+        return beta, resid, h, cooks_d, mse
+
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            n_cd = st.slider("Number of points", 10, 40, 20, key="cd_n")
+            noise_cd = st.slider("Noise", 0.1, 2.0, 0.6, step=0.1, key="cd_noise")
+            outlier_idx = st.slider("Point to displace", 0, n_cd - 1, 0, key="cd_idx",
+                help="The chosen point is first moved to the right edge (x = 4), on the true line. "
+                     "The two sliders below then push it from there, so they behave the same for every point.")
+            outlier_x_shift = st.slider("Push its x outward", 0.0, 6.0, 0.0, step=0.2, key="cd_xshift",
+                help="Increases leverage - how extreme this point's x position is")
+            outlier_y_shift = st.slider("Push its y away from the line", 0.0, 8.0, 0.0, step=0.2, key="cd_yshift",
+                help="Increases the residual - how badly the point is fit")
+
+        np.random.seed(7)
+        x_cd = np.random.uniform(-4, 4, n_cd)
+        y_cd = 1.2 * x_cd + 0.5 + np.random.normal(0, noise_cd, n_cd)
+        # x-shift pushes the point to the right edge and beyond (pure leverage control);
+        # y-shift is then applied relative to the true line at its new x (pure residual
+        # control) - this keeps both sliders monotonic no matter where the point started.
+        x_cd[outlier_idx] = 4.0 + outlier_x_shift
+        y_cd[outlier_idx] = 1.2 * x_cd[outlier_idx] + 0.5 + outlier_y_shift
+
+        beta_full, resid_full, h_full, cooks_full, mse_full = _fit_ols(x_cd, y_cd)
+
+        mask = np.ones(n_cd, dtype=bool)
+        mask[outlier_idx] = False
+        beta_loo = np.linalg.lstsq(
+            np.column_stack([x_cd[mask], np.ones(mask.sum())]), y_cd[mask], rcond=None)[0]
+
+        with col2:
+            fig = go.Figure()
+            colors = np.where(np.arange(n_cd) == outlier_idx, "#E24B4A", "#534AB7")
+            sizes = np.where(np.arange(n_cd) == outlier_idx, 13, 7)
+            fig.add_trace(go.Scatter(x=x_cd, y=y_cd, mode='markers', name='Data',
+                marker=dict(color=colors, size=sizes)))
+            x_fit = np.linspace(min(x_cd.min(), -5), max(x_cd.max(), 5), 100)
+            fig.add_trace(go.Scatter(x=x_fit, y=beta_full[0] * x_fit + beta_full[1],
+                name=f'With all points: y={beta_full[0]:.2f}x + {beta_full[1]:.2f}',
+                line=dict(color='#534AB7', width=2.5)))
+            fig.add_trace(go.Scatter(x=x_fit, y=beta_loo[0] * x_fit + beta_loo[1],
+                name=f'Without flagged point: y={beta_loo[0]:.2f}x + {beta_loo[1]:.2f}',
+                line=dict(color='#E24B4A', width=2, dash='dash')))
+            fig.update_layout(xaxis_title="x", yaxis_title="y",
+                height=360, legend=dict(orientation='h', y=1.16))
+            st.plotly_chart(fig, width='stretch')
+
+        thresh = 4 / n_cd
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Cook's D (flagged point)", f"{cooks_full[outlier_idx]:.3f}")
+        c2.metric("Leverage hᵢᵢ", f"{h_full[outlier_idx]:.3f}")
+        c3.metric("Residual", f"{resid_full[outlier_idx]:+.2f}")
+        c4.metric("Rule-of-thumb cutoff (4/n)", f"{thresh:.3f}")
+
+        fig_bar = go.Figure()
+        bar_colors = np.where(cooks_full > thresh, "#E24B4A", "#534AB7")
+        fig_bar.add_trace(go.Bar(x=[f"P{i}" for i in range(n_cd)], y=cooks_full,
+            marker_color=bar_colors, name="Cook's D"))
+        fig_bar.add_hline(y=thresh, line=dict(color="#EF9F27", dash="dot"),
+            annotation_text="4/n cutoff", annotation_position="top left")
+        fig_bar.update_layout(xaxis_title="Point", yaxis_title="Cook's distance", height=280)
+        st.plotly_chart(fig_bar, width='stretch')
+        n_flag = int((cooks_full > thresh).sum())
+        st.caption(f"{n_flag} point{'s' if n_flag != 1 else ''} above the 4/n line. 4/n is a *screening* rule: "
+                   "even in clean data a couple of ordinary points usually exceed it, so a red bar means "
+                   "'take a closer look', not 'remove this point'. The stricter classic threshold is D > 1 - "
+                   "a point above 1 moves the fitted line substantially on its own.")
+
+    with tab2:
+        st.markdown("""
+        Cook's distance is really a **combination of two ingredients**:
+        """)
+        st.markdown('<div class="formula-box">Dᵢ = eᵢ² / (p·MSE) · hᵢᵢ / (1−hᵢᵢ)²</div>',
+            unsafe_allow_html=True)
+        st.markdown("""
+        - **eᵢ** - the residual at point *i* (how far off the prediction is)
+        - **hᵢᵢ** - the *leverage* of point *i* (how extreme its x-value is; from the diagonal
+          of the hat matrix **H = X(XᵀX)⁻¹Xᵀ**)
+        - **p** - number of fitted parameters (2 for simple linear regression: slope + intercept)
+
+        A point needs **both** a sizeable residual **and** high leverage to get a large
+        Cook's distance - that's why it catches influence that plain residual plots miss.
+        """)
+
+        lev_cut = 2 * 2 / n_cd                    # 2p/n with p = 2
+        res_cut = 2 * np.sqrt(mse_full)           # |residual| > 2·√MSE ≈ 2 standard deviations
+        abs_res = np.abs(resid_full)
+        x_max = max(h_full.max(), lev_cut * 1.6) * 1.1
+        y_max = max(abs_res.max(), res_cut * 1.6) * 1.1
+
+        fig_q = go.Figure()
+        fig_q.add_trace(go.Scatter(
+            x=h_full, y=abs_res, mode='markers',
+            marker=dict(size=8 + 60 * cooks_full / (cooks_full.max() + 1e-9),
+                        color=cooks_full, colorscale='RdPu', showscale=True,
+                        colorbar=dict(title="Cook's D", thickness=12),
+                        line=dict(color=np.where(np.arange(n_cd) == outlier_idx, "#E24B4A", "rgba(0,0,0,0)"),
+                                  width=np.where(np.arange(n_cd) == outlier_idx, 3, 0))),
+            text=[f"P{i}: D={cooks_full[i]:.3f}" for i in range(n_cd)],
+            hoverinfo='text'))
+        fig_q.add_annotation(x=h_full[outlier_idx], y=abs_res[outlier_idx],
+            text=f"<b>P{outlier_idx}</b> (flagged)", font=dict(color="#E24B4A", size=12),
+            showarrow=True, arrowcolor="#E24B4A", ax=30, ay=-25)
+        fig_q.add_vline(x=lev_cut, line=dict(color="#999", dash="dot"),
+            annotation_text="leverage cutoff (2p/n)", annotation_position="top")
+        fig_q.add_hline(y=res_cut, line=dict(color="#999", dash="dot"),
+            annotation_text="residual cutoff (2·√MSE)", annotation_position="right")
+        for qx, qy, label, col_q in [
+            (lev_cut / 2,                   res_cut / 2,                  "Low leverage,<br>low residual",   "#999"),
+            ((lev_cut + x_max) / 2,         res_cut / 2,                  "High leverage,<br>low residual",  "#999"),
+            (lev_cut / 2,                   (res_cut + y_max) / 2,        "Low leverage,<br>high residual",  "#999"),
+            ((lev_cut + x_max) / 2,         (res_cut + y_max) / 2,        "High leverage,<br>high residual - danger", "#E24B4A"),
+        ]:
+            fig_q.add_annotation(x=qx, y=qy, text=label, showarrow=False,
+                font=dict(color=col_q, size=11), opacity=0.8)
+        fig_q.update_layout(xaxis_title="Leverage hᵢᵢ", yaxis_title="|Residual|",
+            xaxis=dict(range=[0, x_max]), yaxis=dict(range=[0, y_max]),
+            height=400)
+        st.plotly_chart(fig_q, width='stretch')
+        st.caption("Bubble size and color both track Cook's distance. The dotted lines split the plot into "
+                   "four quadrants; the dangerous one is top right - high leverage **and** a bad fit. "
+                   "Push the x-shift and y-shift sliders in the first tab and watch the flagged point "
+                   "(red outline) move into that corner.")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# AIC / BIC
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "aic_bic":
+    st.title("🧮 AIC & BIC")
+    st.markdown("""
+    <div class="concept-card">
+    The <b>Akaike</b> and <b>Bayesian Information Criteria</b> score a model on two things
+    at once: how well it fits the data, and how many parameters it needed to get there.
+    Adding parameters always makes the in-sample fit look better - AIC/BIC add a penalty
+    for that, so the model with the <em>lowest</em> score is the best trade-off, not just
+    the best fit. They're the formal, single-number version of the eyeball test in
+    <b>Overfitting & Underfitting</b>.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["Interactive model selection", "Formula & AIC vs. BIC"])
+
+    def _aic_bic(y_true, y_pred, k, n):
+        # k counts every estimated parameter: the d+1 polynomial coefficients AND the noise variance σ²
+        rss = max(np.sum((y_true - y_pred) ** 2), 1e-10)
+        aic = n * np.log(rss / n) + 2 * k
+        bic = n * np.log(rss / n) + k * np.log(n)
+        aicc = aic + 2 * k * (k + 1) / (n - k - 1) if n - k - 1 > 0 else np.inf   # small-sample correction
+        return aic, bic, aicc
+
+    with tab1:
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            sel_degree = st.slider("Selected polynomial degree", 1, 10, 3, key="aicbic_deg")
+            noise_ab = st.slider("Noise", 0.1, 1.0, 0.4, step=0.1, key="aicbic_noise")
+            n_train_ab = st.slider("Training points", 15, 35, 20, key="aicbic_n")
+
+        np.random.seed(7)
+        x_tr = np.sort(np.random.uniform(-3, 3, n_train_ab))
+        y_tr = np.sin(x_tr) + np.random.normal(0, noise_ab, n_train_ab)
+
+        degrees = list(range(1, 11))
+        aics, bics, aiccs = [], [], []
+        for d in degrees:
+            k = d + 2   # d+1 coefficients + σ²
+            c = np.polyfit(x_tr, y_tr, d)
+            pp = np.poly1d(c)
+            a, b, ac = _aic_bic(y_tr, pp(x_tr), k, n_train_ab)
+            aics.append(a); bics.append(b); aiccs.append(ac)
+
+        best_aic_deg  = degrees[int(np.argmin(aics))]
+        best_bic_deg  = degrees[int(np.argmin(bics))]
+        best_aicc_deg = degrees[int(np.argmin(aiccs))]
+
+        with col2:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=degrees, y=aics, name='AIC',
+                mode='lines+markers', line=dict(color='#534AB7', width=2.5)))
+            fig.add_trace(go.Scatter(x=degrees, y=bics, name='BIC',
+                mode='lines+markers', line=dict(color='#E24B4A', width=2.5)))
+            fig.add_trace(go.Scatter(x=degrees, y=aiccs, name='AICc',
+                mode='lines+markers', line=dict(color='#1D9E75', width=2.5, dash='dash')))
+            fig.add_vline(x=sel_degree, line=dict(color='#EF9F27', dash='dash'),
+                annotation_text=f"Selected: degree {sel_degree}")
+            fig.add_trace(go.Scatter(x=[best_aic_deg], y=[aics[best_aic_deg - 1]],
+                mode='markers', marker=dict(color='#534AB7', size=14, symbol='star'),
+                name=f'AIC minimum (degree {best_aic_deg})'))
+            fig.add_trace(go.Scatter(x=[best_bic_deg], y=[bics[best_bic_deg - 1]],
+                mode='markers', marker=dict(color='#E24B4A', size=14, symbol='star'),
+                name=f'BIC minimum (degree {best_bic_deg})'))
+            fig.add_trace(go.Scatter(x=[best_aicc_deg], y=[aiccs[best_aicc_deg - 1]],
+                mode='markers', marker=dict(color='#1D9E75', size=14, symbol='star'),
+                name=f'AICc minimum (degree {best_aicc_deg})'))
+            fig.update_layout(xaxis_title="Polynomial degree", yaxis_title="Score (lower is better)",
+                height=360, legend=dict(orientation='h', y=1.16))
+            st.plotly_chart(fig, width='stretch')
+
+        k_sel = sel_degree + 2
+        c_sel = np.polyfit(x_tr, y_tr, sel_degree)
+        pp_sel = np.poly1d(c_sel)
+        aic_sel, bic_sel, aicc_sel = _aic_bic(y_tr, pp_sel(x_tr), k_sel, n_train_ab)
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Selected AIC", f"{aic_sel:.1f}")
+        c2.metric("Selected BIC", f"{bic_sel:.1f}")
+        c3.metric("Selected AICc", f"{aicc_sel:.1f}")
+        c4, c5, c6 = st.columns(3)
+        c4.metric("Best degree by AIC", best_aic_deg)
+        c5.metric("Best degree by BIC", best_bic_deg)
+        c6.metric("Best degree by AICc", best_aicc_deg)
+        st.caption("Only differences between models matter - the absolute score (even a negative one) has no meaning on its own.")
+
+        if best_aicc_deg < best_aic_deg:
+            st.warning(f"**Small-sample warning:** with only {n_train_ab} points, plain AIC picks degree "
+                       f"{best_aic_deg} ({best_aic_deg + 2} parameters) - it is overfitting. AICc corrects for "
+                       f"the small sample and picks degree {best_aicc_deg}. Plain AIC and BIC assume n is much "
+                       "larger than k; use AICc when n/k is below about 40.")
+        else:
+            st.info(f"**AIC picks degree {best_aic_deg}, BIC picks degree {best_bic_deg}, AICc picks degree "
+                    f"{best_aicc_deg}.** BIC's heavier penalty means it never chooses a more complex model "
+                    "than AIC once n ≥ 8.")
+
+    with tab2:
+        st.markdown("Both criteria trade off **fit** against **complexity**, but weigh the penalty differently:")
+        st.markdown('<div class="formula-box">AIC = 2k − 2ln(L̂)  &nbsp;=&nbsp;  n·ln(RSS/n) + 2k + constant</div>',
+            unsafe_allow_html=True)
+        st.markdown('<div class="formula-box">BIC = k·ln(n) − 2ln(L̂)  &nbsp;=&nbsp;  n·ln(RSS/n) + k·ln(n) + constant</div>',
+            unsafe_allow_html=True)
+        st.markdown('<div class="formula-box">AICc = AIC + 2k(k+1) / (n − k − 1)  &nbsp;&nbsp;<small>(small-sample correction)</small></div>',
+            unsafe_allow_html=True)
+        st.markdown("""
+        - **k** - number of estimated parameters. For a degree-*d* polynomial with Gaussian noise,
+          k = d + 2: the d + 1 coefficients plus the noise variance σ²
+        - **n** - number of training observations
+        - **L̂** - the model's maximised likelihood; for ordinary least squares with
+          Gaussian errors this reduces to the RSS-based approximation shown above
+        - **RSS** - residual sum of squares on the training data
+
+        - **constant** - the same for every model fitted to the same data, so it cancels when you
+          compare models. Only *differences* in AIC/BIC matter.
+
+        The only difference between AIC and BIC is the penalty term: **2k** for AIC versus **k·ln(n)** for BIC.
+        **AICc** adds an extra penalty that grows sharply as k approaches n. It matters for small
+        samples (rule of thumb: n/k below about 40) and fades away as n grows, becoming plain AIC.
+        """)
+
+        ns = np.arange(2, 500)
+        aic_penalty = np.full_like(ns, 2, dtype=float)
+        bic_penalty = np.log(ns)
+        fig2 = go.Figure()
+        fig2.add_trace(go.Scatter(x=ns, y=aic_penalty, name='AIC penalty per parameter (2)',
+            line=dict(color='#534AB7', width=2.5)))
+        fig2.add_trace(go.Scatter(x=ns, y=bic_penalty, name='BIC penalty per parameter (ln n)',
+            line=dict(color='#E24B4A', width=2.5)))
+        fig2.add_vline(x=np.e**2, line=dict(color='#888780', dash='dot'),
+            annotation_text="n ≈ 7.4: BIC overtakes AIC")
+        fig2.update_layout(xaxis_title="n (training size)", yaxis_title="Penalty per extra parameter",
+            height=300, legend=dict(orientation='h', y=1.14))
+        st.plotly_chart(fig2, width='stretch')
+        st.caption("Once a dataset has more than about 8 points, BIC's ln(n) penalty exceeds "
+                   "AIC's flat penalty of 2 - and keeps growing. That's why BIC tends to favour "
+                   "sparser models than AIC as the sample gets larger, especially useful when "
+                   "comparing models with very different parameter counts. For a penalty applied "
+                   "directly inside training rather than after the fact, see **Regularization**.")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# HYPOTHESIS TESTING
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "hypothesis_testing":
+    st.title("🧪 Hypothesis Testing")
+    st.markdown("""
+    <div class="concept-card">
+    <b>Hypothesis testing</b> is a formal framework for deciding whether an observed
+    effect in data is real or just random noise. It underlies A/B testing, evaluating
+    whether one model is genuinely better than another, and validating that a feature
+    actually improves your pipeline.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["p-values & significance", "t-test interactive", "Type I & II errors"])
+
+    with tab1:
+        st.markdown("### The hypothesis testing framework")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("""
+            **The two hypotheses:**
+            - **H₀ (null)** - the boring default: no effect, no difference
+            - **H₁ (alternative)** - what you're trying to show: there IS an effect
+
+            **The p-value:**
+            > *"If H₀ were true, what is the probability of seeing data at least this extreme?"*
+
+            A small p-value means the data would be very surprising under H₀ - evidence against it.
+            """)
+            st.markdown('<div class="formula-box">'
+                'p-value = P(data at least this extreme | H₀ true)<br><br>'
+                'Reject H₀ if  p < α<br>'
+                'Common choice: α = 0.05'
+                '</div>', unsafe_allow_html=True)
+        with col2:
+            st.markdown("""
+            **What p-value is NOT:**
+            - ❌ "Probability that H₀ is true" - it's not
+            - ❌ "Probability your result is a false alarm" - also not
+            - ❌ A measure of effect size or practical importance
+
+            **What it IS:**
+            - ✅ A tail probability under H₀
+            - ✅ Compared against a threshold α you choose in advance: p < α → reject H₀
+            - ✅ Heavily influenced by sample size - large n → tiny p even for tiny effects
+            """)
+            st.markdown('<div class="formula-box">'
+                'Statistical significance ≠ practical significance<br>'
+                'Always report effect size alongside p-value'
+                '</div>', unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.markdown("### Visualising the p-value")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            z_stat = st.slider("Test statistic z", -4.0, 4.0, 2.1, step=0.1, key="ht_z")
+            tail   = st.radio("Test type", ["Two-tailed", "One-tailed (right)"], key="ht_tail")
+            alpha  = st.select_slider("Significance level α", options=[0.01, 0.05, 0.1], value=0.05, key="ht_alpha")
+            from scipy import stats as scipy_stats
+            if tail == "Two-tailed":
+                p_val = 2 * (1 - scipy_stats.norm.cdf(abs(z_stat)))
+                crit  = scipy_stats.norm.ppf(1 - alpha/2)
+            else:
+                p_val = 1 - scipy_stats.norm.cdf(z_stat)
+                crit  = scipy_stats.norm.ppf(1 - alpha)
+            reject = p_val < alpha
+            st.metric("p-value", f"{p_val:.4f}")
+            st.metric("Critical value", f"±{crit:.3f}" if tail=="Two-tailed" else f"{crit:.3f}")
+            if reject:
+                st.success(f"p={p_val:.4f} < α={alpha} → Reject H₀")
+            else:
+                st.warning(f"p={p_val:.4f} ≥ α={alpha} → Fail to reject H₀")
+
+        with col2:
+            x_range = np.linspace(-4.5, 4.5, 500)
+            y_norm  = scipy_stats.norm.pdf(x_range)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=x_range, y=y_norm,
+                mode="lines", line=dict(color="#534AB7", width=2.5), name="N(0,1) under H₀"))
+
+            # Shade rejection region(s)
+            if tail == "Two-tailed":
+                for sign in [-1, 1]:
+                    mask = x_range * sign > crit
+                    fig.add_trace(go.Scatter(
+                        x=np.concatenate([[sign*crit], x_range[mask], [x_range[mask][-1]]]),
+                        y=np.concatenate([[0], y_norm[mask], [0]]),
+                        fill="toself", fillcolor="rgba(226,75,74,0.25)",
+                        line=dict(color="rgba(0,0,0,0)"), showlegend=False))
+            else:
+                mask = x_range > crit
+                fig.add_trace(go.Scatter(
+                    x=np.concatenate([[crit], x_range[mask], [x_range[mask][-1]]]),
+                    y=np.concatenate([[0], y_norm[mask], [0]]),
+                    fill="toself", fillcolor="rgba(226,75,74,0.25)",
+                    line=dict(color="rgba(0,0,0,0)"), name=f"Rejection region α={alpha}"))
+
+            # Test statistic line
+            fig.add_vline(x=z_stat, line=dict(color="#E24B4A", width=2.5),
+                annotation_text=f"z={z_stat:.1f}", annotation_position="top right",
+                annotation_font=dict(color="#E24B4A"))
+            if tail == "Two-tailed":
+                fig.add_vline(x=-z_stat, line=dict(color="#E24B4A", width=1.5, dash="dot"))
+
+            fig.update_layout(height=320, plot_bgcolor="white",
+                xaxis_title="z statistic", yaxis_title="Density",
+                legend=dict(x=0.01, y=0.99),
+                margin=dict(l=40,r=20,t=20,b=40))
+            st.plotly_chart(fig, width='stretch')
+            st.caption("Red shaded = rejection region (probability = α). "
+                       "If your test statistic falls in the red zone, p < α.")
+
+    with tab2:
+        st.markdown("### One-sample t-test - is this mean different from a target?")
+        st.markdown('<div class="formula-box">'
+            't = (x̄ − μ₀) / (s / √n)     df = n − 1'
+            '</div>', unsafe_allow_html=True)
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            mu0     = st.number_input("Null hypothesis mean μ₀", value=100.0, step=1.0, key="tt_mu0")
+            raw_tt  = st.text_area("Sample data (comma-separated)",
+                value="102, 108, 99, 105, 111, 103, 107, 98, 110, 106",
+                height=80, key="tt_raw")
+            alpha_t = st.select_slider("α", options=[0.01, 0.05, 0.1], value=0.05, key="tt_alpha")
+            default_tt = np.array([102,108,99,105,111,103,107,98,110,106], dtype=float)
+            sample, err_tt = _parse_numbers(raw_tt, default_tt)
+            if err_tt:
+                st.error(err_tt)
+            elif len(sample) < 2:
+                st.error("A t-test needs at least 2 values (s divides by n − 1). Showing the default data.")
+                sample = default_tt
+            elif np.std(sample, ddof=1) == 0:
+                st.error("All values are identical, so s = 0 and t = (x̄ − μ₀) / (s/√n) is undefined. "
+                         "Showing the default data.")
+                sample = default_tt
+
+            n_s    = len(sample)
+            xbar   = np.mean(sample)
+            s      = np.std(sample, ddof=1)
+            t_stat = (xbar - mu0) / (s / np.sqrt(n_s))
+            p_t    = 2 * (1 - scipy_stats.t.cdf(abs(t_stat), df=n_s-1))
+            crit_t = scipy_stats.t.ppf(1 - alpha_t/2, df=n_s-1)
+
+            st.markdown(f'<div class="formula-box">'
+                f'n={n_s}, x̄={xbar:.2f}, s={s:.2f}<br>'
+                f't = ({xbar:.2f} − {mu0}) / ({s:.2f}/√{n_s})<br>'
+                f't = {t_stat:.3f},  df = {n_s-1}<br>'
+                f'p-value = {p_t:.4f}'
+                f'</div>', unsafe_allow_html=True)
+            if p_t < alpha_t:
+                st.success(f"Reject H₀ - mean significantly different from {mu0} (p={p_t:.4f})")
+            else:
+                st.warning(f"Fail to reject H₀ - no significant difference from {mu0} (p={p_t:.4f})")
+
+        with col2:
+            x_t = np.linspace(-5, 5, 500)
+            y_t = scipy_stats.t.pdf(x_t, df=n_s-1)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=x_t, y=y_t,
+                mode="lines", line=dict(color="#534AB7", width=2), name=f"t(df={n_s-1})"))
+            for sign in [-1, 1]:
+                mask = x_t * sign > crit_t
+                fig.add_trace(go.Scatter(
+                    x=np.concatenate([[sign*crit_t], x_t[mask], [x_t[mask][-1]]]),
+                    y=np.concatenate([[0], y_t[mask], [0]]),
+                    fill="toself", fillcolor="rgba(226,75,74,0.2)",
+                    line=dict(color="rgba(0,0,0,0)"), showlegend=False))
+            fig.add_vline(x=t_stat, line=dict(color="#E24B4A", width=2.5),
+                annotation_text=f"t={t_stat:.2f}", annotation_font=dict(color="#E24B4A"))
+            fig.update_layout(height=320, plot_bgcolor="white",
+                xaxis_title="t statistic", yaxis_title="Density",
+                legend=dict(x=0.01, y=0.99),
+                margin=dict(l=40,r=20,t=20,b=40))
+            st.plotly_chart(fig, width='stretch')
+
+    with tab3:
+        st.markdown("### Type I and Type II errors - the two ways to be wrong")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("""
+            |  | H₀ True (no effect) | H₀ False (effect exists) |
+            |---|---|---|
+            | **Reject H₀** | ❌ Type I error (α) | ✅ Correct (Power = 1−β) |
+            | **Fail to reject H₀** | ✅ Correct | ❌ Type II error (β) |
+            """)
+            st.markdown("""
+            - **Type I error (false positive)** - you conclude there's an effect when there isn't.
+              Rate controlled by α (your significance threshold).
+            - **Type II error (false negative)** - you miss a real effect.
+              Rate = β; statistical **power** = 1−β.
+            - Lowering α (stricter threshold) reduces Type I but increases Type II.
+            - Increasing sample size n reduces Type II errors (β) - the primary way to increase power.
+              The Type I rate stays at α whatever n is, because you set it.
+            """)
+        with col2:
+            st.markdown("#### Interactive: trade-off between α and power")
+            effect_size = st.slider("True effect size (Cohen's d)", 0.1, 2.0, 0.5, step=0.1, key="ht_es")
+            n_power     = st.slider("Sample size n", 5, 200, 40, step=5, key="ht_n")
+            alpha_p     = st.select_slider("α", options=[0.01, 0.05, 0.1], value=0.05, key="ht_ap")
+
+            st.caption("Power is computed with a z-test approximation - close to the t-test for n ≳ 30.")
+            # Power of one-sample z-test
+            se = 1 / np.sqrt(n_power)
+            z_crit_p = scipy_stats.norm.ppf(1 - alpha_p/2)
+            power = (1 - scipy_stats.norm.cdf(z_crit_p - effect_size/se) +
+                     scipy_stats.norm.cdf(-z_crit_p - effect_size/se))
+
+            st.metric("Statistical power (1−β)", f"{power:.1%}")
+            st.metric("Type II error rate β",    f"{1-power:.1%}")
+            if power < 0.5:
+                st.error("Very low power - you're likely to miss the effect. Increase n or effect size.")
+            elif power < 0.8:
+                st.warning("Power below the conventional 0.8 threshold - consider a larger sample.")
+            else:
+                st.success("Good power - the study is likely to detect the effect if it exists.")
+
+        st.markdown("---")
+        st.markdown("""
+        **In ML context:**
+        - **A/B testing** a new model: Type I = shipping a model that isn't actually better;
+          Type II = rejecting a model that is better
+        - **Feature selection** with statistical tests: Type I = including a useless feature;
+          Type II = excluding a useful one
+        - **Multiple comparisons problem**: testing 20 features at α=0.05 → if none truly have an effect,
+          expect ~1 false positive by chance → use Bonferroni correction (α/m) or FDR control
+        """)
+        st.markdown('<div class="formula-box">'
+            'Bonferroni correction: use α* = α / m<br>'
+            'where m = number of simultaneous tests'
+            '</div>', unsafe_allow_html=True)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SAMPLING & ESTIMATION
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "sampling_estimation":
+    st.title("🎯 Sampling & Estimation")
+    st.markdown("""
+    <div class="concept-card">
+    When you can't measure a whole population, you take a <b>sample</b> and use it to
+    <em>estimate</em> population parameters. <b>Standard error</b> quantifies how uncertain
+    that estimate is; the <b>Central Limit Theorem</b> explains why it works; and
+    <b>confidence intervals</b> turn the estimate into a range you can communicate.
+    These three ideas are the engine behind every model evaluation metric you report.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["Standard error", "Central Limit Theorem", "Confidence intervals"])
+
+    # ── TAB 1: Standard Error ─────────────────────────────────────────────
+    with tab1:
+        st.markdown("### Standard error - uncertainty of an estimate")
+        st.markdown("""
+        The **standard deviation** describes spread in your *data*.
+        The **standard error** describes uncertainty in your *estimate of the mean* -
+        how much would the sample mean jump around if you drew a new sample?
+        """)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown('<div class="formula-box">'
+                'SE = σ / √n<br><br>'
+                'or, when σ unknown (usual case):<br><br>'
+                'SE = s / √n'
+                '</div>', unsafe_allow_html=True)
+            st.markdown("""
+            | Symbol | Meaning |
+            |---|---|
+            | σ | Population std dev (rarely known) |
+            | s | Sample std dev (Bessel-corrected, ÷n−1) |
+            | n | Sample size |
+            | SE | Std dev of the *sampling distribution of x̄* |
+            """)
+        with col2:
+            st.markdown("""
+            **Key intuitions:**
+            - SE shrinks as **1/√n** - doubling n only cuts SE to about 71% (÷√2); you need **4× n** to halve it
+            - SE is NOT the std dev of your data - it's how precisely you know the *mean*
+            - Every statistic has its own SE: SE of proportion = √(p(1−p)/n), SE of regression coefficient = s/√(Σ(x−x̄)²)
+            - SE is the denominator of every t-statistic: t = (x̄ − μ₀) / SE
+            """)
+            st.markdown('<div class="formula-box">'
+                'std dev → spread of individual data points<br>'
+                'std error → spread of sample means across repeated samples'
+                '</div>', unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.markdown("### Interactive: how SE shrinks with sample size")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            pop_std = st.slider("Population std dev σ", 1.0, 30.0, 15.0, step=1.0, key="se_sigma")
+            n_se    = st.slider("Sample size n", 1, 500, 30, step=1, key="se_n")
+            se_val  = pop_std / np.sqrt(n_se)
+
+            st.metric("Standard Error", f"{se_val:.3f}")
+            st.markdown(f'<div class="formula-box">'
+                f'SE = {_vin(pop_std)} / √{n_se} = {se_val:.3f}'
+                f'</div>', unsafe_allow_html=True)
+
+            st.markdown("**To halve SE, n must quadruple:**")
+            for factor in [1, 2, 4, 9, 16]:
+                se_f = pop_std / np.sqrt(n_se * factor)
+                st.markdown(f"n × {factor:2d} → SE = {se_f:.3f}  ({se_f/se_val:.0%} of original)")
+
+        with col2:
+            ns = np.arange(1, 501)
+            ses = pop_std / np.sqrt(ns)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=ns, y=ses, mode="lines",
+                line=dict(color="#534AB7", width=2.5), name="SE = σ/√n"))
+            fig.add_trace(go.Scatter(x=[n_se], y=[se_val], mode="markers",
+                marker=dict(size=14, color="#E24B4A", symbol="star"),
+                name=f"n={n_se}, SE={se_val:.2f}"))
+            fig.add_hline(y=pop_std, line=dict(color="#ccc", width=1.5, dash="dot"),
+                annotation_text="σ (n=1)", annotation_position="right")
+            fig.update_layout(height=360, plot_bgcolor="white",
+                xaxis_title="Sample size n", yaxis_title="Standard Error",
+                legend=dict(x=0.6, y=0.99),
+                margin=dict(l=40, r=60, t=20, b=40))
+            st.plotly_chart(fig, width='stretch')
+            st.caption("The diminishing returns of larger samples - SE follows a 1/√n curve. "
+                       "Early gains (n: 1→10) are huge; gains from n=400→500 are tiny.")
+
+        st.markdown("---")
+        st.markdown("### SE in ML model evaluation")
+        st.markdown("""
+        When you report model accuracy on a test set of n examples, that accuracy is a
+        sample mean of n binary outcomes (correct/incorrect). It has a standard error:
+        """)
+        col1, col2 = st.columns(2)
+        with col1:
+            acc = st.slider("Reported accuracy p̂", 0.5, 0.99, 0.85, step=0.01, key="se_acc")
+            n_eval = st.slider("Test set size n", 50, 5000, 500, step=50, key="se_neval")
+            se_acc = np.sqrt(acc * (1 - acc) / n_eval)
+            st.markdown(f'<div class="formula-box">'
+                f'SE = √(p̂(1−p̂)/n)<br>'
+                f'   = √({acc}·{1-acc:.2f}/{n_eval})<br>'
+                f'   = {se_acc:.4f}'
+                f'</div>', unsafe_allow_html=True)
+            st.metric("±95% margin", f"±{1.96*se_acc:.3f}")
+            ci_lo_acc, ci_hi_acc = max(0.0, acc - 1.96*se_acc), min(1.0, acc + 1.96*se_acc)
+            st.markdown(f"True accuracy is roughly **{ci_lo_acc:.3f} – {ci_hi_acc:.3f}** (95% CI)")
+            if acc + 1.96*se_acc > 1:
+                st.caption(f"The simple formula gives an upper bound of {acc + 1.96*se_acc:.3f} - above 100%, so it "
+                           "is capped at 1. This 'Wald' interval is unreliable near 0% or 100%; the Wilson "
+                           "interval is the usual better choice there.")
+        with col2:
+            st.markdown(f"""
+            At n={n_eval} examples, your reported accuracy of {acc:.0%} has SE = {se_acc:.4f}.
+
+            This means two models reporting **{acc:.0%}** and **{acc+2*se_acc:.1%}** on the same
+            test set may not actually be different - the gap is within noise.
+
+            **Rule of thumb:** to measure one model's accuracy to within **±Δ** (95% confidence),
+            you need roughly n ≈ (1.96/Δ)² · p̂(1−p̂) test examples.
+
+            *Comparing two models* needs more: about twice as many for two independent test sets
+            (both estimates are noisy), and more again for good power. On the *same* test set, a paired
+            test such as McNemar's, which looks only at the examples where the models disagree, is more efficient.
+            """)
+            delta_needed = 0.01
+            n_needed = int((1.96 / delta_needed)**2 * acc * (1 - acc))
+            st.markdown(f'<div class="formula-box">'
+                f'To measure accuracy to within ±1% at p={acc:.0%}:<br>'
+                f'n ≈ {n_needed:,} test examples needed'
+                f'</div>', unsafe_allow_html=True)
+
+    # ── TAB 2: Central Limit Theorem ──────────────────────────────────────
+    with tab2:
+        st.markdown("### Central Limit Theorem - why everything becomes normal")
+        st.markdown("""
+        The **CLT** states: regardless of the shape of the population distribution - as long as
+        its variance is finite - the distribution of sample means approaches a **normal distribution**
+        as n grows, with mean μ and standard deviation SE = σ/√n.
+        """)
+        st.markdown('<div class="formula-box">'
+            'x̄ ≈ N(μ, σ²/n)  for large n<br><br>'
+            'regardless of the shape of the population (if σ² is finite)'
+            '</div>', unsafe_allow_html=True)
+        st.caption("Heavy-tailed distributions with infinite variance, like the Cauchy, never settle into a "
+                   "normal distribution - their sample mean stays as wild as a single observation.")
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            dist_type = st.selectbox("Population distribution", 
+                ["Uniform", "Exponential", "Bimodal", "Skewed (log-normal)"], key="clt_dist")
+            n_clt     = st.slider("Sample size n", 1, 100, 5, step=1, key="clt_n")
+            n_sims    = st.slider("Number of simulations", 200, 3000, 1000, step=100, key="clt_sims")
+
+            rng_clt = np.random.default_rng(0)
+            if dist_type == "Uniform":
+                pop = rng_clt.uniform(0, 1, 100000)
+            elif dist_type == "Exponential":
+                pop = rng_clt.exponential(1, 100000)
+            elif dist_type == "Bimodal":
+                pop = np.concatenate([rng_clt.normal(2, 0.5, 50000),
+                                      rng_clt.normal(8, 0.5, 50000)])
+            else:
+                pop = rng_clt.lognormal(0, 1, 100000)
+
+            # Draw n_sims samples of size n and compute means
+            sample_means = [np.mean(rng_clt.choice(pop, n_clt, replace=False)) for _ in range(n_sims)]
+            sample_means = np.array(sample_means)
+
+            pop_mu  = np.mean(pop)
+            pop_sig = np.std(pop)
+            se_clt  = pop_sig / np.sqrt(n_clt)
+
+            st.metric("Population mean μ",  f"{pop_mu:.3f}")
+            st.metric("Expected SE = σ/√n", f"{se_clt:.3f}")
+            st.metric("Observed std of means", f"{np.std(sample_means):.3f}")
+
+        with col2:
+            fig = go.Figure()
+            # Population histogram (background, for comparison)
+            fig.add_trace(go.Histogram(x=pop[:2000], nbinsx=50,
+                histnorm="probability density", opacity=0.3,
+                marker_color="#ccc", name="Population dist"))
+            # Sample means histogram
+            fig.add_trace(go.Histogram(x=sample_means, nbinsx=50,
+                histnorm="probability density", opacity=0.7,
+                marker_color="#534AB7", name=f"Distribution of x̄ (n={n_clt})"))
+            # Normal overlay
+            x_norm = np.linspace(sample_means.min(), sample_means.max(), 300)
+            from scipy import stats as scipy_stats
+            y_norm = scipy_stats.norm.pdf(x_norm, pop_mu, se_clt)
+            fig.add_trace(go.Scatter(x=x_norm, y=y_norm, mode="lines",
+                line=dict(color="#E24B4A", width=2.5),
+                name=f"N(μ={pop_mu:.2f}, SE={se_clt:.2f})"))
+            # zoom: keep the sample means fully visible, cut off the population's far tail
+            x_lo_c = min(sample_means.min(), np.percentile(pop, 0.5))
+            x_hi_c = max(sample_means.max(), np.percentile(pop, 97.5))
+            pad_c = 0.03 * (x_hi_c - x_lo_c)
+            fig.update_layout(height=380, plot_bgcolor="white",
+                xaxis_title="Value", yaxis_title="Density",
+                xaxis=dict(range=[x_lo_c - pad_c, x_hi_c + pad_c]),
+                legend=dict(x=0.01, y=0.99),
+                margin=dict(l=40, r=20, t=20, b=40))
+            st.plotly_chart(fig, width='stretch')
+            st.caption(f"Grey = population ({dist_type}), shown up to its 97.5th percentile. Blue = {n_sims} sample "
+                       f"means of size n={n_clt}. Red curve = theoretical N(μ, σ²/n). Increase n to watch the blue "
+                       "bars become more bell-shaped.")
+
+        st.markdown("""
+        **Why the CLT matters in ML:**
+        - Justifies using the normal distribution to build confidence intervals around any sample mean
+        - Explains why train/val loss averages over mini-batches follow predictable distributions
+        - When the normal approximation is doubtful (small n, very skewed data), **bootstrap** and
+          **permutation tests** are the go-to alternatives - they don't rely on the CLT
+        - Rule of thumb: n ≳ 30 is enough for most distributions; strongly skewed ones need larger n
+        """)
+
+    # ── TAB 3: Confidence Intervals ───────────────────────────────────────
+    with tab3:
+        st.markdown("### Confidence intervals - putting a range on your estimate")
+        st.markdown("""
+        A **confidence interval** is a range computed from sample data that, under repeated
+        sampling, contains the true population parameter a specified percentage of the time.
+        """)
+        st.markdown('<div class="formula-box">'
+            'CI = x̄  ±  t* · (s/√n)     t* from the t-distribution with n − 1 df<br><br>'
+            'Large n: t* → z* = 1.96 (95%) or 2.576 (99%)<br>'
+            'Small n: t* is bigger - e.g. 2.201 for 95% with n = 12'
+            '</div>', unsafe_allow_html=True)
+
+        st.markdown("""
+        > ⚠️ **Common misinterpretation:** a 95% CI does NOT mean "95% probability the true
+        > mean is in this interval." The true mean is fixed - it's either in the interval or not.
+        > What it means: if you repeated the experiment 100 times, ~95 of those intervals
+        > would contain the true mean.
+        """)
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            raw_ci = st.text_area("Sample data",
+                value="14, 18, 11, 13, 16, 20, 15, 12, 17, 19, 13, 16",
+                height=80, key="ci_raw")
+            conf_level = st.select_slider("Confidence level", 
+                options=[0.90, 0.95, 0.99], value=0.95, key="ci_conf")
+            default_ci = np.array([14,18,11,13,16,20,15,12,17,19,13,16], dtype=float)
+            data_ci, err_ci = _parse_numbers(raw_ci, default_ci)
+            if err_ci:
+                st.error(err_ci)
+            elif len(data_ci) < 2:
+                st.error("A confidence interval needs at least 2 values (s divides by n − 1). Showing the default data.")
+                data_ci = default_ci
+            elif np.std(data_ci, ddof=1) == 0:
+                st.error("All values are identical, so s = 0 and the interval has zero width - "
+                         "there's no spread to estimate. Showing the default data.")
+                data_ci = default_ci
+
+            n_ci   = len(data_ci)
+            mean_ci = np.mean(data_ci)
+            s_ci   = np.std(data_ci, ddof=1)
+            se_ci  = s_ci / np.sqrt(n_ci)
+            t_crit = scipy_stats.t.ppf((1 + conf_level) / 2, df=n_ci - 1)
+            margin = t_crit * se_ci
+            lo, hi = mean_ci - margin, mean_ci + margin
+
+            st.markdown(f'<div class="formula-box">'
+                f'n={n_ci}, x̄={mean_ci:.3f}<br>'
+                f's={s_ci:.3f}, SE={se_ci:.3f}<br>'
+                f't*={t_crit:.3f}  (df={n_ci-1})<br><br>'
+                f'{conf_level:.0%} CI:<br>'
+                f'[{lo:.3f},  {hi:.3f}]<br>'
+                f'margin = ±{margin:.3f}'
+                f'</div>', unsafe_allow_html=True)
+
+        with col2:
+            # Simulate many CIs to show coverage
+            n_trials = 100
+            true_mu  = mean_ci  # use sample mean as stand-in for true μ
+            rng_ci   = np.random.default_rng(7)
+            sim_data = rng_ci.normal(true_mu, s_ci, (n_trials, n_ci))
+            means_sim = sim_data.mean(axis=1)
+            ses_sim   = sim_data.std(axis=1, ddof=1) / np.sqrt(n_ci)
+            t_c       = scipy_stats.t.ppf((1 + conf_level) / 2, df=n_ci-1)
+            los_sim   = means_sim - t_c * ses_sim
+            his_sim   = means_sim + t_c * ses_sim
+            covers    = (los_sim <= true_mu) & (his_sim >= true_mu)
+            coverage  = covers.mean()
+
+            fig = go.Figure()
+            for i in range(n_trials):
+                color = "#1D9E75" if covers[i] else "#E24B4A"
+                fig.add_trace(go.Scatter(
+                    x=[los_sim[i], his_sim[i]], y=[i, i],
+                    mode="lines", line=dict(color=color, width=1.5),
+                    showlegend=False))
+            fig.add_vline(x=true_mu, line=dict(color="#534AB7", width=2),
+                annotation_text=f"True μ={true_mu:.2f}",
+                annotation_font=dict(color="#534AB7"))
+            fig.update_layout(height=400, plot_bgcolor="white",
+                xaxis_title="Value", yaxis_title="Simulation trial",
+                margin=dict(l=40, r=20, t=30, b=40),
+                title=dict(
+                    text=f"{n_trials} simulated {conf_level:.0%} CIs - {covers.sum()} contain true μ ({coverage:.0%})",
+                    font=dict(size=12)))
+            st.plotly_chart(fig, width='stretch')
+            st.caption("Green = interval contains true μ. Red = it misses. "
+                       f"With {conf_level:.0%} confidence level, expect ~{conf_level:.0%} to be green.")
+
+        st.markdown("---")
+        st.markdown("### Width of CI and what controls it")
+        col1, col2, col3 = st.columns(3)
+        factors = [
+            ("↑ Confidence level", "Wider CI", "More certainty requires a bigger net", "#EF9F27"),
+            ("↑ Sample size n",    "Narrower CI", "More data → smaller SE → tighter estimate", "#1D9E75"),
+            ("↑ Std dev s",        "Wider CI", "More variable data → more uncertain mean", "#E24B4A"),
+        ]
+        for col, (factor, effect, reason, color) in zip([col1,col2,col3], factors):
+            with col:
+                st.markdown(f"**{factor}**")
+                st.markdown(f'<div class="formula-box" style="border-left:4px solid {color}">{effect}</div>',
+                    unsafe_allow_html=True)
+                st.caption(reason)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# RAG PIPELINE
+# ═══════════════════════════════════════════════════════════════════════════
+elif section == "rag":
+    st.title("📚 RAG Pipeline")
+    st.markdown("""
+    <div class="concept-card">
+    <b>Retrieval-Augmented Generation (RAG)</b> grounds an LLM's responses in external
+    knowledge by retrieving relevant documents at query time and injecting them into the
+    prompt. Instead of relying solely on weights learned during training, the model can
+    access up-to-date, domain-specific, or proprietary information - without retraining.
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["The pipeline", "Retrieval - how similarity search works", "RAG vs fine-tuning"])
+
+    # ── TAB 1: Pipeline flow diagram ─────────────────────────────────────
+    with tab1:
+        st.markdown("### End-to-end RAG process flow")
+
+        # Draw the pipeline as an interactive Plotly diagram
+        stages = [
+            ("1. User\nQuery",         0.5,  4.0, "#534AB7", "The user's natural-language question"),
+            ("2. Embed\nQuery",        2.2,  4.0, "#534AB7", "Query → dense vector via embedding model\n(e.g. text-embedding-ada-002)"),
+            ("3. Vector\nSearch",      4.0,  4.0, "#1D9E75", "Cosine similarity against all document\nvectors in the vector store"),
+            ("4. Top-k\nChunks",       5.8,  4.0, "#1D9E75", "Retrieve the k most similar\ndocument chunks"),
+            ("5. Build\nPrompt",       7.6,  4.0, "#EF9F27", "Inject retrieved chunks into\nthe LLM prompt as context"),
+            ("6. LLM\nGenerate",       9.4,  4.0, "#E24B4A", "LLM generates answer\ngrounded in retrieved context"),
+            ("Vector\nStore",          4.0,  1.8, "#1D9E75", "Pre-built index of document\nvectors (offline step)"),
+            ("Document\nIngestion",    2.2,  1.8, "#888",    "Chunk → embed → store\n(offline indexing pipeline)"),
+        ]
+
+        fig = go.Figure()
+        fig.update_layout(
+            xaxis=dict(visible=False, range=[-0.3, 10.8]),
+            yaxis=dict(visible=False, range=[0.5, 5.5]),
+            height=380, plot_bgcolor="white",
+            margin=dict(l=30, r=30, t=10, b=10),
+        )
+
+        box_w, box_h = 1.3, 0.65
+        # Main pipeline arrows
+        for i in range(5):
+            x0 = stages[i][1] + box_w/2
+            x1 = stages[i+1][1] - box_w/2
+            fig.add_annotation(x=x1, y=4.0, ax=x0, ay=4.0,
+                xref="x", yref="y", axref="x", ayref="y",
+                showarrow=True, arrowhead=3, arrowwidth=2, arrowcolor="#555")
+
+        # Vector store arrow up to search
+        fig.add_annotation(x=4.0, y=4.0-box_h/2, ax=4.0, ay=1.8+box_h/2,
+            xref="x", yref="y", axref="x", ayref="y",
+            showarrow=True, arrowhead=2, arrowwidth=1.5, arrowcolor="#1D9E75")
+
+        # Document ingestion arrow to vector store
+        fig.add_annotation(x=4.0-box_w/2, y=1.8, ax=2.2+box_w/2, ay=1.8,
+            xref="x", yref="y", axref="x", ayref="y",
+            showarrow=True, arrowhead=2, arrowwidth=1.5, arrowcolor="#888")
+
+        # Draw boxes
+        for label, cx, cy, color, tooltip in stages:
+            is_offline = cy < 3.0
+            fig.add_shape(type="rect",
+                x0=cx-box_w/2, y0=cy-box_h/2, x1=cx+box_w/2, y1=cy+box_h/2,
+                fillcolor=color if not is_offline else "white",
+                line=dict(color=color, width=2, dash="dot" if is_offline else "solid"),
+                opacity=0.85)
+            fig.add_annotation(x=cx, y=cy,
+                text=f"<b>{label}</b>", showarrow=False,
+                font=dict(size=10, color="white" if not is_offline else color),
+                align="center")
+
+        # Labels
+        fig.add_annotation(x=5.2, y=5.3, text="<b>Query-time (online)</b>",
+            showarrow=False, font=dict(size=11, color="#555"))
+        fig.add_annotation(x=3.1, y=2.55, text="<b>Indexing (offline)</b>",
+            showarrow=False, font=dict(size=11, color="#888"))
+        fig.add_shape(type="rect", x0=-0.2, y0=3.2, x1=10.7, y1=5.0,
+            fillcolor="rgba(83,74,183,0.04)", line=dict(color="#ccc", width=1))
+        fig.add_shape(type="rect", x0=0.9, y0=0.9, x1=5.5, y1=2.55,
+            fillcolor="rgba(136,136,136,0.05)", line=dict(color="#ccc", width=1, dash="dot"))
+
+        st.plotly_chart(fig, width='stretch')
+
+        # Stage-by-stage detail
+        selected_stage = st.selectbox("Zoom into a stage", [
+            "1. User Query",
+            "2. Embed Query",
+            "3. Vector Search",
+            "4. Top-k Chunks",
+            "5. Build Prompt",
+            "6. LLM Generate",
+            "Offline: Document Ingestion & Indexing",
+        ], key="rag_stage")
+
+        details = {
+            "1. User Query": (
+                "The user asks a natural-language question - no special syntax needed.",
+                'Example: *"What were the key findings of the Q3 2024 earnings report?"*',
+                "The query can be a question, a keyword, or even a sentence fragment. RAG works with all of them.",
+            ),
+            "2. Embed Query": (
+                "The query is converted into a dense vector using the **same embedding model** used to index the documents.",
+                '<div class="formula-box">query_vec = embed_model(query)  → ℝᵈ</div>',
+                "Critical: query and documents **must use the same embedding model** - mismatched models break similarity search.",
+            ),
+            "3. Vector Search": (
+                "The query vector is compared against all stored document vectors using cosine similarity (or dot product for normalised vectors).",
+                '<div class="formula-box">score(q, dᵢ) = q · dᵢ / (‖q‖ · ‖dᵢ‖)</div>',
+                "Modern vector databases (Pinecone, Weaviate, pgvector, FAISS) do this in milliseconds even over millions of vectors using approximate nearest-neighbour (ANN) algorithms.",
+            ),
+            "4. Top-k Chunks": (
+                "The k documents/chunks with the highest similarity scores are retrieved.",
+                "Typical k = 3–10. Too few → missing context. Too many → prompt bloat and distraction.",
+                "A **reranker** (e.g. cross-encoder) is sometimes applied as a second-pass to reorder the top-k by relevance before injection.",
+            ),
+            "5. Build Prompt": (
+                "Retrieved chunks are injected into the LLM prompt as context, typically before the user question.",
+                "```\nSYSTEM: You are a helpful assistant. Use the context below to answer.\n\nCONTEXT:\n[chunk 1]...\n[chunk 2]...\n\nQUESTION: {user_query}\nANSWER:\n```",
+                "Prompt design matters enormously - instruct the model to cite sources, say 'I don't know' if context is insufficient, and not to hallucinate beyond the context.",
+            ),
+            "6. LLM Generate": (
+                "The LLM generates an answer conditioned on both the retrieved context and its parametric knowledge.",
+                "A well-designed RAG system instructs the model to **prefer the retrieved context** over its training knowledge - reducing hallucination.",
+                "Post-generation, a **faithfulness check** can verify whether the answer is grounded in the retrieved chunks (e.g. via an LLM-as-judge).",
+            ),
+            "Offline: Document Ingestion & Indexing": (
+                "Before RAG can work, documents must be pre-processed: **chunk** → **embed** → **store**.",
+                "**Chunking strategy** is critical: too small = lost context; too large = irrelevant noise mixed in. Common approaches: fixed-size with overlap, sentence-aware, or semantic chunking.",
+                "The resulting vector index is stored in a vector database and updated whenever documents are added or changed - unlike fine-tuning, this requires no model retraining.",
+            ),
+        }
+        title, formula_or_example, note = details[selected_stage]
+        st.markdown(f"**{title}**")
+        if formula_or_example.startswith('<'):
+            st.markdown(formula_or_example, unsafe_allow_html=True)
+        elif formula_or_example.startswith('```'):
+            st.code(formula_or_example.strip('`\n').replace('```\n','').replace('\n```',''), language="text")
+        else:
+            st.markdown(formula_or_example)
+        st.caption(note)
+
+    # ── TAB 2: How retrieval works ────────────────────────────────────────
+    with tab2:
+        st.markdown("### Retrieval - similarity search in embedding space")
+        st.markdown("""
+        The heart of RAG is finding the documents most semantically similar to the query.
+        This is exactly **cosine similarity in embedding space** - the same operation
+        covered in the Embeddings and Vector Spaces concepts.
+        """)
+        st.markdown('<div class="formula-box">score(q, d) = (q · d) / (‖q‖ · ‖d‖)  ∈ [−1, 1]</div>',
+            unsafe_allow_html=True)
+
+        # Simulate a toy retrieval scenario
+        st.markdown("### Interactive: toy document retrieval")
+        st.markdown("Simulated 2D embeddings - in practice these are 768–3072 dimensional.")
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            query_topic = st.selectbox("Query topic", [
+                "machine learning", "cooking recipes", "financial markets",
+                "climate change", "sports results"
+            ], key="rag_query")
+            top_k = st.slider("Top-k to retrieve", 1, 5, 3, key="rag_k")
+            threshold = st.slider("Similarity threshold", 0.0, 1.0, 0.3, step=0.05, key="rag_thresh")
+
+        # Toy document embeddings clustered by topic
+        docs = {
+            "ML paper: transformers":        (np.array([0.8,  0.6]),  "machine learning"),
+            "ML blog: neural networks":      (np.array([0.9,  0.5]),  "machine learning"),
+            "ML tutorial: gradient descent": (np.array([0.7,  0.7]),  "machine learning"),
+            "Recipe: pasta carbonara":       (np.array([-0.7, 0.6]),  "cooking recipes"),
+            "Recipe: chocolate cake":        (np.array([-0.8, 0.5]),  "cooking recipes"),
+            "Finance: stock market outlook": (np.array([0.2, -0.9]),  "financial markets"),
+            "Finance: interest rates":       (np.array([0.1, -0.8]),  "financial markets"),
+            "Climate: CO2 emissions":        (np.array([-0.5,-0.7]),  "climate change"),
+            "Sports: Premier League":        (np.array([0.3,  0.9]),  "sports results"),
+            "Sports: Olympics 2024":         (np.array([0.4,  0.85]), "sports results"),
+        }
+        query_centroids = {
+            "machine learning":   np.array([0.82, 0.58]),
+            "cooking recipes":    np.array([-0.73, 0.55]),
+            "financial markets":  np.array([0.15, -0.87]),
+            "climate change":     np.array([-0.48, -0.73]),
+            "sports results":     np.array([0.34, 0.90]),
+        }
+        q_vec = query_centroids[query_topic] + np.random.default_rng(7).normal(0, 0.04, 2)
+        q_vec = q_vec / np.linalg.norm(q_vec)
+
+        # Compute similarities
+        sims = {}
+        for doc_name, (dvec, topic) in docs.items():
+            dvec_n = dvec / np.linalg.norm(dvec)
+            sims[doc_name] = float(np.dot(q_vec, dvec_n))
+
+        ranked = sorted(sims.items(), key=lambda x: -x[1])
+        retrieved = [(name, score) for name, score in ranked[:top_k] if score >= threshold]
+
+        with col1:
+            st.markdown("**Similarity scores (ranked):**")
+            for name, score in ranked:
+                bar_len = int(max(0, score) * 20)
+                bar = "█" * bar_len
+                retrieved_flag = "✅" if (name, score) in retrieved else "  "
+                st.markdown(f"{retrieved_flag} `{score:+.2f}` {bar}  \n&nbsp;&nbsp;&nbsp;&nbsp;*{name}*")
+
+        with col2:
+            fig = go.Figure()
+            topic_colors = {
+                "machine learning": "#534AB7", "cooking recipes": "#1D9E75",
+                "financial markets": "#E24B4A", "climate change": "#EF9F27",
+                "sports results": "#D4537E"
+            }
+            retrieved_names = {n for n, _ in retrieved}
+
+            for doc_name, (dvec, topic) in docs.items():
+                dvec_n = dvec / np.linalg.norm(dvec)
+                is_ret = doc_name in retrieved_names
+                fig.add_trace(go.Scatter(
+                    x=[dvec_n[0]], y=[dvec_n[1]], mode="markers+text",
+                    marker=dict(
+                        size=18 if is_ret else 10,
+                        color=topic_colors[topic],
+                        symbol="star" if is_ret else "circle",
+                        line=dict(color="#333", width=1.5 if is_ret else 0.5),
+                    ),
+                    text=[doc_name.split(":")[0]], textposition="top center",
+                    textfont=dict(size=9),
+                    showlegend=False,
+                ))
+                # Line from origin to point
+                fig.add_trace(go.Scatter(
+                    x=[0, dvec_n[0]], y=[0, dvec_n[1]], mode="lines",
+                    line=dict(color=topic_colors[topic], width=1, dash="dot"),
+                    showlegend=False, opacity=0.4
+                ))
+
+            # Query vector
+            fig.add_annotation(x=q_vec[0], y=q_vec[1], ax=0, ay=0,
+                xref="x", yref="y", axref="x", ayref="y",
+                showarrow=True, arrowhead=3, arrowwidth=3, arrowcolor="#222",
+                text="<b>Query</b>", font=dict(color="#222", size=12))
+
+            # Unit circle
+            theta_c = np.linspace(0, 2*np.pi, 200)
+            fig.add_trace(go.Scatter(x=np.cos(theta_c), y=np.sin(theta_c),
+                mode="lines", line=dict(color="#eee", width=1), showlegend=False))
+
+            fig.update_layout(
+                height=430,
+                xaxis=dict(range=[-1.3,1.3], zeroline=True, zerolinecolor="#eee",
+                           scaleanchor="y", title="dim 1"),
+                yaxis=dict(range=[-1.3,1.3], zeroline=True, zerolinecolor="#eee", title="dim 2"),
+                plot_bgcolor="white", showlegend=False,
+                margin=dict(l=40, r=20, t=20, b=40),
+            )
+            st.plotly_chart(fig, width='stretch')
+            st.caption("Stars = retrieved documents. Black arrow = query vector. "
+                       "Cosine similarity = angle between query and each document vector.")
+
+        if retrieved:
+            st.success(f"Retrieved {len(retrieved)} document(s) above threshold {threshold:.2f}: "
+                       + " | ".join(f"*{n}* ({s:.2f})" for n,s in retrieved))
+        else:
+            st.warning(f"No documents above threshold {threshold:.2f}. Lower the threshold or change the query.")
+
+        st.markdown("---")
+        st.markdown("### Key retrieval design decisions")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.markdown("**Chunking**")
+            st.markdown("""
+            - Fixed-size (e.g. 512 tokens, 50-token overlap)
+            - Sentence / paragraph aware
+            - Semantic chunking (split at topic boundaries)
+            - Smaller chunks → more precise retrieval; larger → more context per hit
+            """)
+        with col2:
+            st.markdown("**Embedding model**")
+            st.markdown("""
+            - Must match at index and query time
+            - General: `text-embedding-3-large`, `BGE`, `E5`
+            - Domain-specific models outperform general ones on specialist corpora
+            - Dimension 768–3072; higher → richer but slower
+            """)
+        with col3:
+            st.markdown("**Search algorithm**")
+            st.markdown("""
+            - Exact: brute-force cosine (small corpora)
+            - ANN: HNSW, IVF, ScaNN (millions of vectors)
+            - Hybrid: sparse (BM25 keyword) + dense (embedding) - often best
+            - Reranker as second-pass improves precision
+            """)
+
+    # ── TAB 3: RAG vs fine-tuning ─────────────────────────────────────────
+    with tab3:
+        st.markdown("### RAG vs fine-tuning - when to use which")
+        st.markdown("""
+        Both RAG and fine-tuning can improve an LLM's performance on a specific task,
+        but they solve different problems. Choosing wrong is expensive.
+        """)
+
+        import pandas as pd
+        rows = [
+            ("Knowledge type",        "Factual, retrievable documents",         "Style, format, reasoning patterns"),
+            ("Knowledge freshness",   "✅ Update index, no retraining",         "❌ Retrain to add new knowledge"),
+            ("Data required",         "Document corpus (unstructured OK)",      "High-quality prompt-completion pairs"),
+            ("Cost",                  "✅ Low - embedding + vector DB",         "❌ High - GPU training time"),
+            ("Latency",               "⚠️ Adds retrieval step (~50–200ms)",     "✅ No retrieval overhead"),
+            ("Hallucination risk",    "✅ Lower - answer grounded in docs",     "❌ Higher - relies on memorisation"),
+            ("Auditability",          "✅ Can cite source chunks",              "❌ Knowledge baked into weights"),
+            ("Handles novel queries", "✅ Retrieves relevant docs dynamically", "⚠️ Only what was in training data"),
+            ("Private data",          "✅ Keep data in your own vector DB",     "⚠️ Data used in training run"),
+            ("Adapting tone/style",   "❌ Doesn't change model behaviour",     "✅ Strong - model learns the style"),
+            ("Domain reasoning",      "⚠️ Depends on base model capability",   "✅ Model learns domain-specific logic"),
+        ]
+        df = pd.DataFrame(rows, columns=["Dimension", "RAG", "Fine-tuning"])
+        st.dataframe(df, width='stretch', hide_index=True)
+
+        st.markdown("---")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("### When RAG is the right choice")
+            st.markdown("""
+            - Your knowledge base changes frequently (product docs, news, regulations)
+            - You need to cite sources or show your work
+            - You have proprietary data that can't leave your infrastructure
+            - You want to add knowledge without touching the model
+            - Your queries are diverse and hard to anticipate at training time
+            - Budget is constrained - indexing is cheap, training is not
+
+            **Common RAG stacks:** LangChain / LlamaIndex + pgvector / Pinecone / Weaviate + OpenAI / Anthropic
+            """)
+        with col2:
+            st.markdown("### When fine-tuning is the right choice")
+            st.markdown("""
+            - You need the model to adopt a specific **tone, format, or persona** consistently
+            - The task requires **domain-specific reasoning** the base model doesn't have
+            - You want faster inference without a retrieval round-trip
+            - Your knowledge is **stable** and well-captured in training examples
+            - You want to **distil** a large model's capability into a smaller one
+            - The base model frequently makes the same **systematic errors** on your task
+
+            **Common fine-tuning approaches:** LoRA / QLoRA, full fine-tune, RLHF, DPO
+            """)
+
+        st.markdown("---")
+        st.markdown("### Advanced RAG patterns")
+        patterns = [
+            ("Naive RAG", "Query → retrieve → generate. Simple but suffers when query is vague."),
+            ("HyDE", "Generate a hypothetical answer first, embed that, then retrieve. Improves recall for abstract queries."),
+            ("RAG Fusion", "Expand query into multiple sub-queries, retrieve for each, fuse results. Better coverage."),
+            ("Agentic RAG", "LLM decides when and what to retrieve - can issue multiple retrieval calls in a ReAct loop."),
+            ("GraphRAG", "Documents represented as a knowledge graph; retrieval traverses relationships, not just similarity."),
+        ]
+        for name, desc in patterns:
+            with st.expander(f"**{name}**"):
+                st.markdown(desc)

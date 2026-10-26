@@ -6181,7 +6181,7 @@ elif section == "react_loop":
                  "🧠", "#534AB7"),
                 ("Action",  'get_weather(location="Sofia, Bulgaria")',
                  "🔧", "#EF9F27"),
-                ("Observation", '{"temp": 12, "condition": "rainy", "wind_mph": 15}',
+                ("Observation", '{"temp_c": 12, "condition": "rainy", "wind_kmh": 24}',
                  "👁️", "#1D9E75"),
                 ("Thought", "It is cold and rainy. I should recommend a waterproof jacket and layers.",
                  "🧠", "#534AB7"),
@@ -6199,17 +6199,17 @@ elif section == "react_loop":
                  "🧠", "#534AB7"),
                 ("Action",  'calculator(expression="1000 * (1 + 0.05/12) ** (12*3)")',
                  "🔧", "#EF9F27"),
-                ("Observation", '{"result": 1161.62}',
+                ("Observation", '{"result": 1161.47}',
                  "👁️", "#1D9E75"),
-                ("Thought", "The result is $1161.62. Now I should look up the current savings rate to compare.",
+                ("Thought", "The result is $1161.47. Now I should look up current savings rates to compare.",
                  "🧠", "#534AB7"),
                 ("Action",  'search_web(query="average savings account interest rate 2025")',
                  "🔧", "#EF9F27"),
-                ("Observation", "Average savings rate is around 4.5% APY as of 2025.",
+                ("Observation", "Top high-yield savings accounts pay around 4-4.5% APY.",
                  "👁️", "#1D9E75"),
                 ("Thought", "I can now provide a complete answer comparing both options.",
                  "🧠", "#534AB7"),
-                ("Final Answer", "$1000 grows to $1161.62 at 5% over 3 years. This beats the average 4.5% APY savings rate.",
+                ("Final Answer", "$1000 grows to $1161.47 at 5% (compounded monthly) over 3 years. That beats the 4-4.5% APY of top high-yield savings accounts.",
                  "✅", "#E24B4A"),
             ],
             "Research and write a short report": [
@@ -6268,6 +6268,7 @@ elif section == "react_loop":
                 st.caption(f"▶ {remaining} more step{'s' if remaining>1 else ''} to go - drag the slider")
             else:
                 st.success("✅ Agent completed the task!")
+            st.caption("Tool outputs here are illustrative examples, not live data.")
 
         # metrics
         steps_shown = steps[:step_idx]
@@ -6293,7 +6294,7 @@ elif section == "react_loop":
             (2, 6,   "🧠 REASON\n(Thought)", "#FFF8E1", "#B8860B", 12),
             (8, 6,   "🔧 ACT\n(Tool call)", "#FFF3E0", "#E65100", 12),
             (5, 3.5, "👁️ OBSERVE\n(Result)", "#E8F5E9", "#1B5E20", 12),
-            (5, 1,   "✅ FINAL\nANSWER", "#FFEBEE", "#B71C1C", 12),
+            (2, 1.4, "✅ FINAL\nANSWER", "#FFEBEE", "#B71C1C", 12),
         ]
         for x, y, label, fill, border, fsize in nodes:
             w, h = 1.5, 0.8
@@ -6303,29 +6304,26 @@ elif section == "react_loop":
                 fig.add_annotation(x=x, y=y + 0.2 - di*0.45, text=line,
                     showarrow=False, font=dict(size=fsize, color=border))
 
+        # (from x, from y) → (to x, to y), label, label position
         arrows = [
-            (5, 7.7, 5, 6.8, "Start"),
-            (3.5, 6, 6.5, 6, "decide action"),
-            (8, 5.2, 6.5, 4.3, "tool result"),
-            (3.5, 4.3, 2, 5.2, "re-reason"),
-            (5, 2.7, 5, 1.8, "done?"),
-            (3.4, 3.5, 1.5, 3.5, ""),
-            (1.5, 3.5, 1.5, 6, ""),
-            (1.5, 6, 0.5, 6, "loop back"),
+            (4.0, 7.7, 2.8, 6.85, "start",          (3.0, 7.5)),
+            (3.5, 6.0, 6.45, 6.0, "decide action",  (5.0, 6.35)),
+            (8.0, 5.2, 6.2, 4.35, "tool result",    (7.6, 4.6)),
+            (3.8, 4.3, 2.6, 5.15, "re-reason",      (2.75, 4.55)),
+            (1.4, 5.2, 1.4, 2.25, "enough info?",   (0.85, 3.7)),
         ]
-        for x0,y0,x1,y1,lbl in arrows:
-            fig.add_shape(type="line", x0=x0,y0=y0,x1=x1,y1=y1,
-                line=dict(color="#888", width=1.5))
-            if lbl:
-                mx,my = (x0+x1)/2,(y0+y1)/2
-                fig.add_annotation(x=mx,y=my,text=lbl,showarrow=False,
-                    font=dict(size=9,color="#555"),
-                    bgcolor="rgba(255,255,255,0.7)",borderpad=1)
+        for x0, y0, x1, y1, lbl, (lx, ly) in arrows:
+            fig.add_annotation(x=x1, y=y1, ax=x0, ay=y0,
+                xref="x", yref="y", axref="x", ayref="y", text="",
+                showarrow=True, arrowhead=2, arrowsize=1.3, arrowwidth=2, arrowcolor="#666")
+            fig.add_annotation(x=lx, y=ly, text=lbl, showarrow=False,
+                font=dict(size=10, color="#444"),
+                bgcolor="rgba(255,255,255,0.8)", borderpad=1)
 
         st.plotly_chart(fig, width='stretch')
         st.markdown("""
-        The agent loops through **Reason → Act → Observe** until it decides it has enough
-        information to produce a final answer. Each iteration gives it new grounding from
+        The agent loops through **Reason → Act → Observe** until, in a Reason step, it decides it
+        has enough information to produce a final answer. Each iteration gives it new grounding from
         the real world via tools.
         """)
 
