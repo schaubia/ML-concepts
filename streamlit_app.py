@@ -10428,7 +10428,7 @@ elif section == "rag":
         # Draw the pipeline as an interactive Plotly diagram
         stages = [
             ("1. User\nQuery",         0.5,  4.0, "#534AB7", "The user's natural-language question"),
-            ("2. Embed\nQuery",        2.2,  4.0, "#534AB7", "Query → dense vector via embedding model\n(e.g. text-embedding-ada-002)"),
+            ("2. Embed\nQuery",        2.2,  4.0, "#534AB7", "Query → dense vector via embedding model\n(e.g. text-embedding-3-small)"),
             ("3. Vector\nSearch",      4.0,  4.0, "#1D9E75", "Cosine similarity against all document\nvectors in the vector store"),
             ("4. Top-k\nChunks",       5.8,  4.0, "#1D9E75", "Retrieve the k most similar\ndocument chunks"),
             ("5. Build\nPrompt",       7.6,  4.0, "#EF9F27", "Inject retrieved chunks into\nthe LLM prompt as context"),
@@ -10487,7 +10487,15 @@ elif section == "rag":
         fig.add_shape(type="rect", x0=0.9, y0=0.9, x1=5.5, y1=2.55,
             fillcolor="rgba(136,136,136,0.05)", line=dict(color="#ccc", width=1, dash="dot"))
 
+        # invisible markers so each box shows its description on hover
+        fig.add_trace(go.Scatter(
+            x=[sg[1] for sg in stages], y=[sg[2] for sg in stages], mode="markers",
+            marker=dict(size=40, color="rgba(0,0,0,0)"),
+            hovertext=[f"<b>{sg[0].replace(chr(10), ' ')}</b><br>{sg[4].replace(chr(10), '<br>')}" for sg in stages],
+            hoverinfo="text", showlegend=False))
+
         st.plotly_chart(fig, width='stretch')
+        st.caption("Hover over a box to see what that stage does.")
 
         # Stage-by-stage detail
         selected_stage = st.selectbox("Zoom into a stage", [
@@ -10569,28 +10577,26 @@ elif section == "rag":
                 "climate change", "sports results"
             ], key="rag_query")
             top_k = st.slider("Top-k to retrieve", 1, 5, 3, key="rag_k")
-            threshold = st.slider("Similarity threshold", 0.0, 1.0, 0.3, step=0.05, key="rag_thresh")
+            threshold = st.slider("Similarity threshold", 0.0, 1.0, 0.5, step=0.05, key="rag_thresh")
 
         # Toy document embeddings clustered by topic
+        # Five topics spread evenly around the circle (72° apart); documents sit within ±8° of their topic
+        _ang = lambda deg: np.array([np.cos(np.deg2rad(deg)), np.sin(np.deg2rad(deg))])
+        topic_angle = {"machine learning": 30, "sports results": 102, "cooking recipes": 174,
+                       "climate change": 246, "financial markets": 318}
         docs = {
-            "ML paper: transformers":        (np.array([0.8,  0.6]),  "machine learning"),
-            "ML blog: neural networks":      (np.array([0.9,  0.5]),  "machine learning"),
-            "ML tutorial: gradient descent": (np.array([0.7,  0.7]),  "machine learning"),
-            "Recipe: pasta carbonara":       (np.array([-0.7, 0.6]),  "cooking recipes"),
-            "Recipe: chocolate cake":        (np.array([-0.8, 0.5]),  "cooking recipes"),
-            "Finance: stock market outlook": (np.array([0.2, -0.9]),  "financial markets"),
-            "Finance: interest rates":       (np.array([0.1, -0.8]),  "financial markets"),
-            "Climate: CO2 emissions":        (np.array([-0.5,-0.7]),  "climate change"),
-            "Sports: Premier League":        (np.array([0.3,  0.9]),  "sports results"),
-            "Sports: Olympics 2024":         (np.array([0.4,  0.85]), "sports results"),
+            "ML paper: transformers":        (_ang(22),  "machine learning"),
+            "ML blog: neural networks":      (_ang(30),  "machine learning"),
+            "ML tutorial: gradient descent": (_ang(38),  "machine learning"),
+            "Recipe: pasta carbonara":       (_ang(168), "cooking recipes"),
+            "Recipe: chocolate cake":        (_ang(180), "cooking recipes"),
+            "Finance: stock market outlook": (_ang(312), "financial markets"),
+            "Finance: interest rates":       (_ang(324), "financial markets"),
+            "Climate: CO2 emissions":        (_ang(246), "climate change"),
+            "Sports: Premier League":        (_ang(97),  "sports results"),
+            "Sports: Olympics 2024":         (_ang(107), "sports results"),
         }
-        query_centroids = {
-            "machine learning":   np.array([0.82, 0.58]),
-            "cooking recipes":    np.array([-0.73, 0.55]),
-            "financial markets":  np.array([0.15, -0.87]),
-            "climate change":     np.array([-0.48, -0.73]),
-            "sports results":     np.array([0.34, 0.90]),
-        }
+        query_centroids = {k: _ang(v) for k, v in topic_angle.items()}
         q_vec = query_centroids[query_topic] + np.random.default_rng(7).normal(0, 0.04, 2)
         q_vec = q_vec / np.linalg.norm(q_vec)
 
@@ -10662,8 +10668,10 @@ elif section == "rag":
                 margin=dict(l=40, r=20, t=20, b=40),
             )
             st.plotly_chart(fig, width='stretch')
-            st.caption("Stars = retrieved documents. Black arrow = query vector. "
-                       "Cosine similarity = angle between query and each document vector.")
+            st.caption("Stars = retrieved documents. Black arrow = query vector. Cosine similarity = the "
+                       "cosine of the angle between the query and each document: 1 = same direction, 0 = 90° apart. "
+                       "Neighbouring topics here are 72° apart (similarity ≈ 0.3); in real embeddings with hundreds "
+                       "of dimensions, unrelated topics are close to orthogonal (≈ 0), which 2D can only approximate.")
 
         if retrieved:
             st.success(f"Retrieved {len(retrieved)} document(s) above threshold {threshold:.2f}: "
