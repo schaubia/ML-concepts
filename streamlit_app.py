@@ -6899,8 +6899,9 @@ elif section == "multi_agent":
                     ("SEO Agent",       "📈", "Optimises keywords, meta tags, structure",          "#E24B4A"),
                     ("Publisher Agent", "🚀", "Formats and publishes to CMS",                     "#D4537E"),
                 ],
-                "flow": ["Research Agent","Writer Agent","Editor Agent","SEO Agent","Publisher Agent"],
-                "parallel": ["Research Agent"],
+                "deps": {"Research Agent": [], "Writer Agent": ["Research Agent"],
+                         "Editor Agent": ["Writer Agent"], "SEO Agent": ["Writer Agent"],
+                         "Publisher Agent": ["Editor Agent", "SEO Agent"]},
             },
             "Software engineering pipeline": {
                 "orchestrator": "Engineering Orchestrator",
@@ -6911,8 +6912,8 @@ elif section == "multi_agent":
                     ("Review Agent",    "🔍", "Performs code review and security checks",         "#E24B4A"),
                     ("Deploy Agent",    "🚀", "Runs CI/CD pipeline and deploys to staging",       "#D4537E"),
                 ],
-                "flow": ["Planner Agent","Coder Agent","Test Agent","Review Agent","Deploy Agent"],
-                "parallel": ["Coder Agent","Test Agent"],
+                "deps": {"Planner Agent": [], "Coder Agent": ["Planner Agent"], "Test Agent": ["Planner Agent"],
+                         "Review Agent": ["Coder Agent", "Test Agent"], "Deploy Agent": ["Review Agent"]},
             },
             "Data analysis pipeline": {
                 "orchestrator": "Analysis Orchestrator",
@@ -6923,8 +6924,9 @@ elif section == "multi_agent":
                     ("ML Agent",        "🤖", "Trains and evaluates predictive models",           "#E24B4A"),
                     ("Report Agent",    "📄", "Generates charts, tables and narrative report",   "#D4537E"),
                 ],
-                "flow": ["Ingestion Agent","Cleaning Agent","Stats Agent","ML Agent","Report Agent"],
-                "parallel": ["Stats Agent","ML Agent"],
+                "deps": {"Ingestion Agent": [], "Cleaning Agent": ["Ingestion Agent"],
+                         "Stats Agent": ["Cleaning Agent"], "ML Agent": ["Cleaning Agent"],
+                         "Report Agent": ["Stats Agent", "ML Agent"]},
             },
         }
 
@@ -6932,70 +6934,86 @@ elif section == "multi_agent":
         with col1:
             pipeline_choice = st.selectbox("Pipeline", list(PIPELINES.keys()))
             pipeline = PIPELINES[pipeline_choice]
-            active_step = st.slider("Simulate execution step",
-                0, len(pipeline["workers"]), 2)
+            workers = pipeline["workers"]
+            deps_ma = pipeline["deps"]
+            # round = 1 + the latest round of anything it depends on; agents in the same round run together
+            rnd = {}
+            def _round(nm):
+                if nm not in rnd:
+                    rnd[nm] = 1 + max((_round(d) for d in deps_ma[nm]), default=0)
+                return rnd[nm]
+            for nm, *_ in workers: _round(nm)
+            n_rounds = max(rnd.values())
+            active_step = st.slider("Simulate execution round", 0, n_rounds, 1,
+                help="0 = nothing has run yet. Agents in the same round run at the same time.")
             st.markdown(f"**Orchestrator:** {pipeline['orchestrator']}")
             st.markdown("**Worker agents:**")
-            for i, (name, icon, desc, col_w) in enumerate(pipeline["workers"]):
-                status = "✅ done" if i < active_step else "⏳ waiting" if i == active_step else "⬜ queued"
-                par = " ⚡parallel" if name in pipeline["parallel"] else ""
+            for name, icon, desc, col_w in workers:
+                r = rnd[name]
+                status = "✅ done" if r <= active_step else "▶ running" if r == active_step + 1 else "⏳ waiting"
+                same = [n.replace(" Agent", "") for n, *_ in workers if n != name and rnd[n] == r]
+                par = f" ⚡ parallel with {', '.join(same)}" if same else ""
+                after = f"after {', '.join(d.replace(' Agent','') for d in deps_ma[name])}" if deps_ma[name] else "starts first"
                 st.markdown(f'<span style="color:{col_w}">●</span> **{icon} {name}** {status}{par}<br>'
-                            f'<small style="color:#666">{desc}</small>', unsafe_allow_html=True)
+                            f'<small style="color:#666">{desc} · round {r}, {after}</small>', unsafe_allow_html=True)
 
         with col2:
             fig = go.Figure()
-            fig.update_layout(xaxis=dict(visible=False, range=[-0.5, len(pipeline["workers"])+0.5]),
-                yaxis=dict(visible=False, range=[-1, 4]),
-                height=400, plot_bgcolor="white",
+            fig.update_layout(xaxis=dict(visible=False, range=[0.3, n_rounds + 0.7]),
+                yaxis=dict(visible=False, range=[-1.3, 5.0]),
+                height=420, plot_bgcolor="white",
                 margin=dict(l=10,r=10,t=10,b=10))
 
-            # orchestrator at top
-            fig.add_shape(type="rect", x0=len(pipeline["workers"])/2-1.2, y0=3.0,
-                x1=len(pipeline["workers"])/2+1.2, y1=3.8,
+            ox = (1 + n_rounds) / 2
+            fig.add_shape(type="rect", x0=ox-1.1, y0=3.9, x1=ox+1.1, y1=4.7,
                 fillcolor="#f3f0ff", line=dict(color="#534AB7", width=2.5))
-            fig.add_annotation(x=len(pipeline["workers"])/2, y=3.4,
-                text=f"<b>🎯 {pipeline['orchestrator']}</b>",
+            fig.add_annotation(x=ox, y=4.3, text=f"<b>🎯 {pipeline['orchestrator']}</b>",
                 showarrow=False, font=dict(size=11, color="#534AB7"))
 
-            workers = pipeline["workers"]
-            xs = np.linspace(0.5, len(workers)-0.5, len(workers))
-            for i, (name, icon, desc, col_w) in enumerate(workers):
-                x = xs[i]
-                is_done = i < active_step
-                is_active = i == active_step
+            # positions: x = round, agents sharing a round stacked vertically
+            pos_ma = {}
+            for r in range(1, n_rounds + 1):
+                names = [n for n, *_ in workers if rnd[n] == r]
+                for j, nm in enumerate(names):
+                    pos_ma[nm] = (r, 1.5 + (j - (len(names) - 1) / 2) * 1.9)
+
+            for name, icon, desc, col_w in workers:
+                x, y = pos_ma[name]
+                r = rnd[name]
+                is_done, is_active = r <= active_step, r == active_step + 1
                 fill = "#d4edda" if is_done else "#fff3cd" if is_active else "#f8f9fa"
-                border = col_w
-                lw = 3 if is_active else 2
-                fig.add_shape(type="rect", x0=x-0.45, y0=0.8, x1=x+0.45, y1=2.2,
-                    fillcolor=fill, line=dict(color=border, width=lw))
-                fig.add_annotation(x=x, y=1.7, text=f"{icon}",
-                    showarrow=False, font=dict(size=16))
-                short_name = name.replace(" Agent","")
-                fig.add_annotation(x=x, y=1.2, text=f"<b>{short_name}</b>",
+                fig.add_shape(type="rect", x0=x-0.36, y0=y-0.7, x1=x+0.36, y1=y+0.7,
+                    fillcolor=fill, line=dict(color=col_w, width=3 if is_active else 2))
+                fig.add_annotation(x=x, y=y+0.28, text=icon, showarrow=False, font=dict(size=16))
+                fig.add_annotation(x=x, y=y-0.18, text=f"<b>{name.replace(' Agent','')}</b>",
                     showarrow=False, font=dict(size=9, color=col_w))
-                status_icon = "✅" if is_done else "⚡" if is_active else "⬜"
-                fig.add_annotation(x=x, y=0.95, text=status_icon,
+                fig.add_annotation(x=x, y=y-0.48, text="✅" if is_done else "▶" if is_active else "⏳",
                     showarrow=False, font=dict(size=10))
+                # orchestrator dispatches to every worker
+                fig.add_shape(type="line", x0=ox, y0=3.9, x1=x, y1=y+0.7,
+                    line=dict(color="#ccc", width=1, dash="dot"))
+                # dependency arrows: dependency → this agent
+                for d in deps_ma[name]:
+                    x0, y0 = pos_ma[d]
+                    fig.add_annotation(x=x-0.36, y=y, ax=x0+0.36, ay=y0,
+                        xref="x", yref="y", axref="x", ayref="y", text="",
+                        showarrow=True, arrowhead=2, arrowwidth=1.6, arrowcolor=col_w)
+                fig.add_annotation(x=x, y=-1.0, text=f"round {r}", showarrow=False,
+                    font=dict(size=9, color="#888"))
 
-                # line from orchestrator to worker
-                fig.add_shape(type="line", x0=len(workers)/2, y0=3.0,
-                    x1=x, y1=2.2, line=dict(color="#aaa", width=1, dash="dot"))
-
-                # arrows between sequential workers
-                if i < len(workers)-1 and workers[i][0] not in pipeline["parallel"]:
-                    fig.add_shape(type="line", x0=x+0.45, y0=1.5,
-                        x1=xs[i+1]-0.45, y1=1.5,
-                        line=dict(color=col_w, width=1.5))
-
-            # result arrow back up
-            fig.add_shape(type="line",
-                x0=xs[-1], y0=2.2, x1=len(workers)/2, y1=3.0,
-                line=dict(color="#1D9E75", width=2, dash="dash"))
-            fig.add_annotation(x=len(workers)/2+0.8, y=2.6, text="result",
-                showarrow=False, font=dict(size=9, color="#1D9E75"))
+            if active_step == n_rounds:
+                lx, ly = pos_ma[workers[-1][0]]
+                fig.add_annotation(x=ox+0.6, y=3.9, ax=lx, ay=ly+0.7,
+                    xref="x", yref="y", axref="x", ayref="y", text="",
+                    showarrow=True, arrowhead=2, arrowwidth=2, arrowcolor="#1D9E75")
+                fig.add_annotation(x=(ox+0.6+lx)/2 + 0.25, y=(3.9+ly+0.7)/2, text="result",
+                    showarrow=False, font=dict(size=9, color="#1D9E75"))
 
             st.plotly_chart(fig, width='stretch')
-            st.caption("⚡ = parallel workers. Drag the slider to watch the pipeline execute.")
+            st.caption(f"Agents in the same column run at the same time. {len(workers)} agents finish in "
+                       f"{n_rounds} rounds instead of {len(workers)} one after another.")
+            if active_step == n_rounds:
+                st.success("✅ All agents done - the orchestrator returns the result to the user.")
 
     with tab2:
         st.markdown("### How agents communicate")
