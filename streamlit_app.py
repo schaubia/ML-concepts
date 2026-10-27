@@ -6775,9 +6775,12 @@ elif section == "agent_memory":
                     showarrow=False, font=dict(size=10, color=border))
 
         for x0,y0,x1,y1 in [(5,8.3,5,7.9),(3.5,7.2,2,5.7),(6.5,7.2,8,5.7),
-                              (2,4.3,4,3.7),(8,4.3,6,3.7),(5,2.3,5,1.5)]:
-            fig.add_shape(type="line",x0=x0,y0=y0,x1=x1,y1=y1,
-                line=dict(color="#aaa",width=1.5))
+                              (2,4.3,4,3.7),(8,4.3,6,3.7),(5,2.3,5,1.2)]:
+            fig.add_annotation(x=x1, y=y1, ax=x0, ay=y0,
+                xref="x", yref="y", axref="x", ayref="y", text="",
+                showarrow=True, arrowhead=2, arrowwidth=1.5, arrowcolor="#999")
+        fig.add_annotation(x=5, y=0.8, text="<b>Answer</b>", showarrow=False,
+            font=dict(size=11, color="#B71C1C"))
         st.plotly_chart(fig, width='stretch')
 
     with tab2:
@@ -6808,34 +6811,51 @@ elif section == "agent_memory":
             for i, doc in enumerate(DOCS):
                 st.markdown(f"<small>Doc {i+1}: {doc[:55]}…</small>", unsafe_allow_html=True)
 
-        # simple TF-IDF-like scoring
-        query_words = set(query_rag.lower().split())
-        scores = []
-        for doc in DOCS:
-            doc_words = set(doc.lower().split())
-            overlap = len(query_words & doc_words)
-            # bonus for key phrase matches
-            bonus = sum(2 for w in query_words if any(w in dw for dw in doc_words))
-            scores.append(overlap + bonus * 0.3)
-
-        scores_arr = np.array(scores, dtype=float)
-        scores_norm = scores_arr / (scores_arr.max() + 1e-9)
-        top_idx = np.argsort(scores_arr)[::-1]
+        # TF-IDF + cosine similarity
+        _STOP = {"a","an","the","is","are","was","what","how","why","does","do","did","i","me","my","to","of",
+                 "in","on","for","and","or","it","its","this","that","can","by","with","be","work","works",
+                 "explain","tell","about","you","use","uses","using"}
+        def _tok(text):
+            words = _re.findall(r"[a-z0-9]+", text.lower())
+            return [w[:-1] if len(w) > 3 and w.endswith("s") and not w.endswith("ss") else w   # tunes → tune
+                    for w in words if w not in _STOP]
+        doc_toks = [_tok(d) for d in DOCS]
+        vocab = sorted({w for toks in doc_toks for w in toks})
+        widx = {w: i for i, w in enumerate(vocab)}
+        df_cnt = np.zeros(len(vocab))
+        for toks in doc_toks:
+            for w in set(toks): df_cnt[widx[w]] += 1
+        idf = np.log((1 + len(DOCS)) / (1 + df_cnt)) + 1
+        def _vec(toks):
+            v = np.zeros(len(vocab))
+            for w in toks:
+                if w in widx: v[widx[w]] += 1
+            v *= idf
+            nrm = np.linalg.norm(v)
+            return v / nrm if nrm else v
+        D_mat = np.array([_vec(tk) for tk in doc_toks])
+        q_toks = _tok(query_rag)
+        scores_norm = D_mat @ _vec(q_toks)                 # cosine similarity, 0 to 1
+        top_idx = np.argsort(-scores_norm, kind="stable")
+        retrieved = [i for i in top_idx[:top_k] if scores_norm[i] > 0]
 
         with col2:
             fig = go.Figure(go.Bar(
                 x=[f"Doc {i+1}" for i in range(len(DOCS))],
                 y=scores_norm,
-                marker_color=['#534AB7' if i in top_idx[:top_k] else '#AFA9EC'
+                marker_color=['#534AB7' if i in retrieved else '#AFA9EC'
                               for i in range(len(DOCS))],
                 text=[f"{s:.2f}" for s in scores_norm],
                 textposition='outside'))
-            fig.update_layout(yaxis_title="Similarity score", height=300,
-                yaxis_range=[0,1.3], showlegend=False)
+            fig.update_layout(yaxis_title="Cosine similarity", height=300,
+                yaxis_range=[0,1.15], showlegend=False)
             st.plotly_chart(fig, width='stretch')
 
+            st.caption("Words used for matching: " + (", ".join(q_toks) if q_toks else "none (only filler words)"))
             st.markdown(f"**Top {top_k} retrieved documents:**")
-            for rank, idx in enumerate(top_idx[:top_k]):
+            if not retrieved:
+                st.info("**No relevant documents** - every document scores 0 for this query.")
+            for rank, idx in enumerate(retrieved):
                 st.markdown(f"""
                 <div style="background:#eeedfe;border-left:3px solid #534AB7;
                             padding:0.5rem 0.8rem;border-radius:0 6px 6px 0;margin-bottom:6px">
@@ -6843,8 +6863,13 @@ elif section == "agent_memory":
                     <small>{DOCS[idx]}</small>
                 </div>
                 """, unsafe_allow_html=True)
-        st.caption("Real RAG uses dense vector embeddings (cosine similarity). "
-                   "This demo uses simple keyword overlap for illustration.")
+            n_zero = sum(1 for i in top_idx[:top_k] if scores_norm[i] == 0)
+            if retrieved and n_zero:
+                st.caption(f"{n_zero} of the top {top_k} scored 0 and are left out as not relevant.")
+        st.caption("This demo uses TF-IDF: documents score by shared words, with rare words counting more. "
+                   "Real RAG uses dense embeddings, which capture meaning - so 'cheaply' can match "
+                   "'efficiently' even with no shared word. Vector search always returns k results, "
+                   "however poor, so real systems also set a minimum similarity threshold.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
