@@ -7055,8 +7055,9 @@ elif section == "reflection":
     it <b>critiques its own output</b> against the goal, then <b>revises</b>. Instead of a single
     forward pass, the agent loops through <b>Generate → Critique → Revise</b> until the result is
     good enough or a step budget runs out. This is the core idea behind methods like
-    <b>Self-Refine</b> and <b>Reflexion</b>, and it's one of the most reliable ways to improve
-    agent output quality without any extra training.
+    <b>Self-Refine</b> and <b>Reflexion</b>, and it's a widely used way to improve
+    agent output quality without any extra training - especially when the critique can check
+    against something external (tests, tools, sources).
     </div>
     """, unsafe_allow_html=True)
 
@@ -7079,6 +7080,8 @@ elif section == "reflection":
                 ("Revise", "Hi Maria, saw the new billing API your team shipped last week - the webhook retry logic "
                  "was clever. We built a tool that cuts integration time like that in half. Worth a 15-min call Thursday?",
                  "✏️", "#1D9E75", 93),
+                ("Critique", "Specific, personal, one clear ask - good enough. Stop.",
+                 "🔍", "#E24B4A", None),
             ],
             "Summarise a technical incident report": [
                 ("Draft", "The system had an error and it was fixed after some investigation.",
@@ -7093,6 +7096,8 @@ elif section == "reflection":
                 ("Revise", "A misconfigured cache TTL caused a 12-minute outage for EU-region API requests (8% of "
                  "traffic); rolled back and added a canary check. Prevention: TTL changes now require staged rollout.",
                  "✏️", "#1D9E75", 96),
+                ("Critique", "Cause, impact, scope, fix and prevention are all there - good enough. Stop.",
+                 "🔍", "#E24B4A", None),
             ],
             "Solve a word problem": [
                 ("Draft", "A train travels 60 miles in 1.5 hours, so its speed is 60/1.5... about 45 mph.",
@@ -7105,6 +7110,8 @@ elif section == "reflection":
                  "🔍", "#E24B4A", None),
                 ("Revise", "60 ÷ 1.5 = 40 mph. Check: 40 mph × 1.5 h = 60 miles ✓. Answer: 40 mph.",
                  "✏️", "#1D9E75", 99),
+                ("Critique", "Correct and verified - good enough. Stop.",
+                 "🔍", "#E24B4A", None),
             ],
         }
 
@@ -7140,7 +7147,7 @@ elif section == "reflection":
             if step_idx < n_steps:
                 st.caption(f"▶ {n_steps - step_idx} more step{'s' if n_steps-step_idx>1 else ''} to go")
             else:
-                st.success("✅ Converged to a high-quality final answer")
+                st.success("✅ The critic judged the answer good enough - the loop stops here")
 
         # quality trajectory chart
         scores_shown = [(i+1, s[4]) for i, s in enumerate(steps[:step_idx]) if s[4] is not None]
@@ -7155,6 +7162,7 @@ elif section == "reflection":
                 yaxis=dict(title="Quality score", range=[0, 100]),
                 height=280, margin=dict(l=40, r=20, t=40, b=40))
             st.plotly_chart(fig, width='stretch')
+            st.caption("Scores are illustrative - in practice they'd come from a rubric, tests, or an evaluator model.")
 
     with tab2:
         st.markdown("### The generate → critique → revise cycle")
@@ -7165,38 +7173,40 @@ elif section == "reflection":
             margin=dict(l=20, r=20, t=20, b=20))
 
         nodes = [
-            (2, 7, "✍️ GENERATE\n(Draft answer)", "#EDE9FE", "#534AB7", 12),
-            (8, 7, "🔍 CRITIQUE\n(Self-evaluate)", "#FDECEA", "#B71C1C", 12),
-            (5, 3, "✏️ REVISE\n(Improve draft)", "#E8F5E9", "#1B5E20", 12),
-            (5, 0.7, "✅ Good enough?\nStop.", "#FFF8E1", "#8A6D00", 11),
+            (1.6, 8.6, "✍️ GENERATE\n(Draft answer)", "#EDE9FE", "#534AB7", 12),
+            (5.0, 5.5, "🔍 CRITIQUE\n(Self-evaluate)", "#FDECEA", "#B71C1C", 12),
+            (5.0, 1.6, "✏️ REVISE\n(Improve draft)", "#E8F5E9", "#1B5E20", 12),
+            (8.5, 5.5, "✅ STOP\n(Final answer)", "#FFF8E1", "#8A6D00", 11),
         ]
         for x, y, label, fill, border, fsize in nodes:
-            w, h = 1.6, 0.8
+            w, h = 1.4, 0.8
             fig.add_shape(type="rect", x0=x-w, y0=y-h, x1=x+w, y1=y+h,
                 fillcolor=fill, line=dict(color=border, width=2.5), layer="below")
             for di, line in enumerate(label.split("\n")):
                 fig.add_annotation(x=x, y=y + 0.2 - di*0.45, text=line,
                     showarrow=False, font=dict(size=fsize, color=border))
 
+        # (from) → (to), label, label position
         arrows = [
-            (3.6, 7, 6.4, 7, "draft"),
-            (8, 6.2, 6, 3.8, "critique"),
-            (4, 3.8, 2, 6.2, "loop back if not done"),
-            (5, 2.2, 5, 1.5, "check"),
+            (2.4, 7.8, 4.0, 6.3, "draft",         (2.75, 6.8)),
+            (4.4, 4.7, 4.4, 2.4, "needs work",    (3.55, 3.55)),
+            (5.6, 2.4, 5.6, 4.7, "check again",   (6.5, 3.55)),
+            (6.4, 5.5, 7.1, 5.5, "good enough",   (6.75, 6.15)),
         ]
-        for x0, y0, x1, y1, lbl in arrows:
-            fig.add_shape(type="line", x0=x0, y0=y0, x1=x1, y1=y1,
-                line=dict(color="#888", width=1.5))
-            if lbl:
-                mx, my = (x0+x1)/2, (y0+y1)/2
-                fig.add_annotation(x=mx, y=my, text=lbl, showarrow=False,
-                    font=dict(size=9, color="#555"),
-                    bgcolor="rgba(255,255,255,0.7)", borderpad=1)
+        for x0, y0, x1, y1, lbl, (lx, ly) in arrows:
+            fig.add_annotation(x=x1, y=y1, ax=x0, ay=y0,
+                xref="x", yref="y", axref="x", ayref="y", text="",
+                showarrow=True, arrowhead=2, arrowsize=1.2, arrowwidth=2, arrowcolor="#777")
+            fig.add_annotation(x=lx, y=ly, text=lbl, showarrow=False,
+                font=dict(size=10, color="#444"),
+                bgcolor="rgba(255,255,255,0.8)", borderpad=1)
 
         st.plotly_chart(fig, width='stretch')
+        st.caption("The revised draft goes back to the critic, and the critic decides when to stop. "
+                   "Real systems also cap the number of rounds.")
 
         st.markdown("### Why reflection improves output")
-        cols = st.columns(3)
+        cols = st.columns(4)
         with cols[0]:
             st.markdown("**🎯 Separates generation from evaluation**")
             st.caption("Critiquing is often an easier task than producing the right answer the "
@@ -7209,6 +7219,12 @@ elif section == "reflection":
             st.markdown("**🧯 Catches errors before the user sees them**")
             st.caption("Factual slips, weak arguments, or arithmetic mistakes get caught and "
                        "fixed internally instead of shipping in the final answer.")
+        with cols[3]:
+            st.markdown("**⚠️ Limits**")
+            st.caption("Critique works best when grounded in something external: running the code, a "
+                       "calculator, retrieved sources. A model checking its own reasoning alone often misses "
+                       "its own mistakes - and can even 'fix' a correct answer into a wrong one "
+                       "(Huang et al., 2023).")
 
         st.markdown("### Common variants")
         variants = [
